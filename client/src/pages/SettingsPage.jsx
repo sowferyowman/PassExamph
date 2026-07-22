@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FaCheckCircle, FaGoogle, FaMobileAlt, FaSave, FaUserCircle } from "react-icons/fa";
+import { changePassword, updateProfile } from "../api/authApi";
+import { FaCheckCircle, FaMobileAlt, FaSave, FaUserCircle } from "react-icons/fa";
 import { getCurrentUser, updateCurrentStudentProfile } from "../services/storage";
 
 export default function SettingsPage() {
@@ -7,13 +8,15 @@ export default function SettingsPage() {
   const [form, setForm] = useState({
     name: currentUser?.name || "",
     nickname: currentUser?.nickname || "",
-    smsNumber: currentUser?.smsNumber || ""
+    smsNumber: currentUser?.smsNumber || "",
+    recoveryEmail: currentUser?.recoveryEmail || currentUser?.email || ""
   });
   const [message, setMessage] = useState("");
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
   const normalizedSms = form.smsNumber.replace(/[\s()-]/g, "");
   const smsIsValid = !normalizedSms || /^\+?\d{10,15}$/.test(normalizedSms);
 
-  function saveSettings(event) {
+  async function saveSettings(event) {
     event.preventDefault();
     if (!smsIsValid) {
       setMessage("Enter a valid mobile number before saving.");
@@ -22,8 +25,10 @@ export default function SettingsPage() {
     updateCurrentStudentProfile({
       name: form.name.trim(),
       nickname: form.nickname.trim(),
-      smsNumber: form.smsNumber.trim()
+      smsNumber: form.smsNumber.trim(),
+      recoveryEmail: form.recoveryEmail.trim()
     });
+    try { await updateProfile({ name: form.name.trim(), nickname: form.nickname.trim(), phoneNumber: form.smsNumber.trim(), recoveryEmail: form.recoveryEmail.trim() }); } catch (error) { setMessage(error.response?.data?.error || "Profile saved locally, but changes could not be synced."); return; }
     setMessage("Settings saved. Your profile has been updated.");
   }
 
@@ -35,7 +40,7 @@ export default function SettingsPage() {
       <header className="page-header">
         <p className="page-eyebrow">Account</p>
         <h1 className="page-title">Settings</h1>
-        <p className="page-description">Manage the profile, recovery information, and connected service already supported by your account.</p>
+        <p className="page-description">Manage the profile and recovery information.</p>
       </header>
 
       <form onSubmit={saveSettings} className="grid gap-6 lg:grid-cols-[1fr_22rem]">
@@ -58,42 +63,27 @@ export default function SettingsPage() {
           </div>
 
           <div className="card-section">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-500">Security</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">Change Password</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Current password" type="password" value={passwordForm.currentPassword} onChange={(value) => setPasswordForm({ ...passwordForm, currentPassword: value })} placeholder="Current password" /><Field label="New password" type="password" value={passwordForm.newPassword} onChange={(value) => setPasswordForm({ ...passwordForm, newPassword: value })} placeholder="At least 8 characters" /></div>
+            <button type="button" onClick={async () => { try { await changePassword(passwordForm); setPasswordForm({ currentPassword: "", newPassword: "" }); setMessage("Password changed. Please sign in again on your next session."); } catch (error) { setMessage(error.response?.data?.error || "Could not change password."); } }} className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">Update Password</button>
+          </div>
+
+          <div className="card-section">
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-primary">
                 <FaMobileAlt />
               </div>
               <div>
-                <p className="text-xs font-black uppercase tracking-wider text-slate-500">Recovery</p>
-                <h2 className="text-xl font-black text-slate-950">Recovery Number</h2>
+                <h2 className="text-xl font-black text-slate-950">Recovery Services</h2>
               </div>
             </div>
-            <Field label="Mobile number" value={form.smsNumber} onChange={(smsNumber) => setForm((current) => ({ ...current, smsNumber }))} placeholder="+639123456789" className="mt-5" type="tel" autoComplete="tel" invalid={!smsIsValid} helper="Use 10–15 digits, optionally starting with +. This stores recovery information only; SMS recovery is not enabled in this MVP." />
+            <Field label="Mobile number" value={form.smsNumber} onChange={(smsNumber) => setForm((current) => ({ ...current, smsNumber }))} placeholder="+63**********" className="mt-5" type="tel" autoComplete="tel" invalid={!smsIsValid} />
+            <Field label="Gmail address" value={form.recoveryEmail} onChange={(recoveryEmail) => setForm((current) => ({ ...current, recoveryEmail }))} placeholder="@gmail.com" className="mt-5" type="email" autoComplete="email" />
           </div>
         </section>
 
         <aside className="space-y-6">
-          <div className="card-section">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-600">
-                  <FaGoogle />
-                </div>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-wider text-slate-500">Connected Services</p>
-                  <h2 className="text-lg font-black text-slate-950">Google Sign-In</h2>
-                </div>
-              </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-black ${currentUser?.isGoogleLinked ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                {currentUser?.isGoogleLinked ? "Linked" : "Not Linked"}
-              </span>
-            </div>
-            <p className="mt-4 text-sm font-semibold leading-6 text-slate-500">
-              {currentUser?.isGoogleLinked
-                ? "This profile was created or accessed through Google Sign-In."
-                : "This account is not currently associated with Google Sign-In."}
-            </p>
-          </div>
-
           <div className="card-section">
             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Profile setup</p>
             <h2 className="mt-1 text-lg font-black text-slate-950">Setup checklist</h2>
@@ -101,7 +91,7 @@ export default function SettingsPage() {
               <ChecklistItem complete={Boolean(form.name.trim())} label="Name added" />
               <ChecklistItem complete={Boolean(form.nickname.trim())} label="Display name or nickname added" />
               <ChecklistItem complete={Boolean(form.smsNumber.trim()) && smsIsValid} label="Recovery number added" />
-              <ChecklistItem complete={Boolean(currentUser?.isGoogleLinked)} label="Google account linked (optional)" />
+              <ChecklistItem complete={Boolean(form.recoveryEmail.trim())} label="Recovery email added" />
             </div>
           </div>
 

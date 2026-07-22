@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, FaPlay } from "react-icons/fa";
+import { FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, FaPlay, FaHourglassHalf, FaCheckCircle } from "react-icons/fa";
+import { scoreEssay } from "../api/aiApi";
 import ExamShell from "../features/exam/ExamShell";
 import ResultsView from "../features/exam/ResultsView";
 import {
@@ -8,7 +9,8 @@ import {
   getExamBlueprints,
   getStudentDashboard,
   saveExamAttemptForStudent,
-  scoreBlueprintAttempt
+  scoreBlueprintAttempt,
+  updateLatestEssayReview
 } from "../services/storage";
 
 function createEmptyResponses(sections) {
@@ -48,7 +50,10 @@ export default function ExamPage({ historyOnly = false }) {
       try {
         const user = getCurrentUser();
         const dashboard = getStudentDashboard(user?.email);
-        setHistoryData({ exams: dashboard.exams || [] });
+        setHistoryData({ exams: (dashboard.exams || []).map((exam) => ({
+          ...exam,
+          status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed")
+        })) });
 
         if (historyOnly) {
           setPhase("history");
@@ -148,7 +153,7 @@ export default function ExamPage({ historyOnly = false }) {
     );
   }, [activeQuestion, activeSection, responses]);
 
-  const submitAttempt = useCallback(() => {
+  const submitAttempt = useCallback(async () => {
     try {
       const finalQuestionMetrics = recordActiveQuestionTime();
       setPhase("submitting");
@@ -156,7 +161,21 @@ export default function ExamPage({ historyOnly = false }) {
       const scoredResults = scoreBlueprintAttempt(blueprint, responses, { questionMetrics: finalQuestionMetrics });
       const durationSeconds = startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / 1000)) : 0;
       const nextDashboard = saveExamAttemptForStudent(user, blueprint, responses, scoredResults, { durationSeconds, questionMetrics: finalQuestionMetrics });
-      setHistoryData({ exams: nextDashboard.exams || [] });
+      const essays = nextDashboard.attempts?.[0]?.essayResponses || [];
+      if (essays.length) {
+        await Promise.all(essays.map(async (essay) => {
+          try {
+            const scored = await scoreEssay({ response: essay.response, rubric: essay.rubric, points: blueprint.sections[essay.sectionIndex].questions[essay.questionIndex].points || 1 });
+            if (Number.isFinite(Number(scored.score))) {
+              updateLatestEssayReview(user.email, essay.id, { aiScore: Number(scored.score), status: "ai_graded" });
+            }
+          } catch (error) {
+            console.warn("Essay AI scoring unavailable; kept pending review.", error);
+          }
+        }));
+      }
+      const latestDashboard = getStudentDashboard(user.email);
+      setHistoryData({ exams: latestDashboard.exams || nextDashboard.exams || [] });
       setResults(scoredResults);
       setPhase("results");
     } catch (err) {
@@ -520,15 +539,16 @@ function ExamHistorySection({ exams, dark = false }) {
                     </span>
                   </td>
                   <td className={`px-6 py-4 text-lg font-black ${dark ? "text-blue-400" : "text-blue-600"}`}>
-                    {exam.score}%
+                    {exam.status === "Pending Review" ? "—" : `${exam.score}%`}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
-                      dark 
-                        ? "bg-blue-950 border-blue-900 text-slate-300" 
-                        : "bg-slate-100 border-slate-200 text-slate-600"
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
+                      exam.status === "Pending Review"
+                        ? "border-amber-700/40 bg-amber-500/10 text-amber-400"
+                        : "border-emerald-700/40 bg-emerald-500/10 text-emerald-400"
                     }`}>
-                      {exam.status}
+                      {exam.status === "Pending Review" ? <FaHourglassHalf /> : <FaCheckCircle />}
+                      {exam.status || "Analyzed"}
                     </span>
                   </td>
                 </tr>

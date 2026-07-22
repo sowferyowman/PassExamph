@@ -7,6 +7,7 @@ const EXAMS_DATA_KEY = "examsData";
 const STUDY_PLAN_KEY = "studyPlanData";
 const REVIEWERS_KEY = "reviewersData";
 const DRILL_BANK_KEY = "drillBankData";
+const DRILL_SESSIONS_KEY = "drillSessionsData";
 const DASHBOARD_KEY = "acet_dashboard_data";
 const LEGACY_FORUM_KEY = "acet_forum_threads";
 const FORUM_KEY = "forumPosts";
@@ -29,7 +30,7 @@ const defaultUsers = [
     email: "student1@exams.ph",
     password: "123",
     role: "student",
-    name: "Stanley Mejia"
+    name: "Stanly Mejia"
   }
 ];
 
@@ -50,7 +51,7 @@ const defaultUserAccounts = [
   {
     id: "student-default",
     username: "student1",
-    name: "Stanley Mejia",
+    name: "Stanly Mejia",
     nickname: "Stan",
     email: "student1@exams.ph",
     password: "123",
@@ -144,6 +145,57 @@ const studyPlanData = [
         <p><b>Pacing:</b> Use a three-pass model. Pass 1 captures direct wins. Pass 2 handles medium problems with visible structure. Pass 3 is for time-intensive traps. Marking and moving is a skill, not a surrender.</p>
         <p><b>Final drill:</b> Complete mixed sets with a visible timer, then review not only wrong answers but also slow correct answers. Slow correctness is still a risk in a grueling entrance test.</p>
       </article>`
+  }
+];
+
+const reviewerBlueprintSeed = [
+  {
+    id: "reviewer_math_foundations",
+    title: "Mathematics: Professor's Core Reasoning Course",
+    subjectCategory: "Mathematics",
+    focusAreas: ["Functions", "Algebra", "Geometry", "Word Problems"],
+    modules: [
+      { id: "math_module_01", title: "Reading Algebra as Structure", content: "Algebra is not a collection of tricks; it is a language for preserving relationships. Before manipulating an expression, identify what is fixed, what is changing, and what the question actually asks you to find. When you move a term across an equality, explain the operation to yourself rather than relying on visual habit. This discipline prevents sign errors and exposes impossible answer choices. In advanced items, factor before expanding, look for common structure, and use substitution only after domain restrictions are understood. A strong solver writes fewer lines because each line represents a deliberate claim." },
+      { id: "math_module_02", title: "Functions, Composition, and Domain", content: "A function assigns one output to each permitted input. Treat the domain as part of the definition, not as a footnote. For a composition such as f(g(x)), calculate the inner function first, then substitute its output into the outer rule. Logarithms require positive arguments; square roots require nonnegative radicands; denominators may never equal zero. Many difficult questions are testing whether you notice these boundaries. When an inverse is involved, reverse the operations in order and verify by composing both ways. A numerical answer without a valid domain is not a complete solution." },
+      { id: "math_module_03", title: "Geometry Through Theorem Triggers", content: "Geometry becomes manageable when diagrams are translated into theorem triggers. A tangent is perpendicular to the radius at the point of contact. Opposite angles in a cyclic quadrilateral sum to 180 degrees. Similar triangles preserve corresponding ratios and scale areas by the square of the side ratio. Parallel lines create equal alternate interior angles and proportional intercepts. Mark every given fact on the diagram, then state the theorem that connects it to the requested quantity. Do not trust a drawing's appearance; trust only the relationships supplied or proved." },
+      { id: "math_module_04", title: "Word Problems and Quantitative Judgment", content: "Word problems reward organization more than speed. Translate the story into a table of quantities, units, rates, and changes. For work problems, add rates rather than times. For mixtures, track the amount of pure substance. For discounts, apply each percentage to the current price, not the original price. Estimate before calculating so that a misplaced decimal cannot survive unnoticed. If an answer choice is far outside the scale implied by the story, eliminate it immediately. Finish by checking units and asking whether the direction of change makes sense." }
+    ]
+  },
+  {
+    id: "reviewer_english_mastery",
+    title: "English: Professor's Reading and Expression Seminar",
+    subjectCategory: "English",
+    focusAreas: ["Critical Reading", "Grammar", "Syntax", "Analogy"],
+    modules: [
+      { id: "english_module_01", title: "Argument, Evidence, and Main Claim", content: "Academic reading is an act of reconstruction. Identify the author's central claim, the reasons offered for it, and the evidence that makes those reasons credible. Contrast markers such as however, although, and yet often signal the author's real position. A choice can be factually true and still be wrong if it is not supported by the passage or if it is too broad. Prefer the answer that captures the passage's scope and qualification. When asked for evidence, return to the exact sentence function: definition, example, contrast, consequence, or conclusion." },
+      { id: "english_module_02", title: "Grammar as Meaning and Control", content: "Grammar is not merely correction; it controls who acts, when an action occurs, and how ideas relate. For subject-verb agreement, strip away interrupting prepositional phrases and locate the true subject. For pronouns, check that the antecedent is singular or plural as required and that only one reasonable noun can be intended. Dangling modifiers occur when the opening phrase logically describes a person or object that does not immediately follow. Read the sentence literally, then revise so the intended actor is unmistakable." },
+      { id: "english_module_03", title: "Syntax, Concision, and Parallelism", content: "The strongest revision preserves meaning while improving structure. Parallel items should share the same grammatical form: nouns with nouns, verbs with verbs, and clauses with clauses. Remove inflated phrases when a precise word does the work. Do not choose an option simply because it sounds formal; check whether it changes tense, agency, emphasis, or logical connection. Read each candidate aloud in your mind and compare the complete sentence, not only the underlined fragment. Clear writing is economical because the reader should not have to repair it." },
+      { id: "english_module_04", title: "Analogies and Relationship Precision", content: "An analogy is solved by naming the relationship before looking at the options. Ask whether the pair expresses tool-to-purpose, degree, cause-to-effect, part-to-whole, category membership, or another precise connection. Then state the first pair as a sentence and test every option against the same sentence pattern. Surface association is a trap: two words may share a topic but not a relationship. The correct choice preserves direction as well as meaning. If the relationship can be reversed without changing the sentence, it is probably too vague." }
+    ]
+  },
+  {
+    id: "reviewer_logic_mastery",
+    title: "Logical Reasoning: Formal Thinking and Pattern Analysis",
+    subjectCategory: "Logical Reasoning",
+    focusAreas: ["Syllogisms", "Conditionals", "Venn Diagrams", "Patterns"],
+    modules: [
+      { id: "logic_module_01", title: "Quantifiers and Syllogistic Scope", content: "Translate quantifier language before judging a conclusion. All means containment; no means exclusion; some means existence of at least one instance. The statement 'not all A are B' means that at least one A is not B, while 'not all A are not B' means at least one A is B. These are existence claims, not universal claims. Draw only the circles and marks that the premises require. A conclusion is necessary only when every allowed arrangement satisfies it; a merely possible conclusion is weaker." },
+      { id: "logic_module_02", title: "Conditional Logic and Contrapositives", content: "In an implication, If P then Q, P is sufficient for Q and Q is necessary for P. The valid contrapositive is If not Q then not P. Do not reverse the statement into If Q then P, and do not negate only one side. Words such as only, unless, and except change direction and should be rewritten symbolically. When evaluating an argument, identify the trigger, the result, and whether the conclusion claims more than the premise supplies. Precision is more reliable than intuition." },
+      { id: "logic_module_03", title: "Venn Diagrams and Fallacy Control", content: "A diagram is a model of permitted relationships, not a picture of what seems likely. Universal statements constrain entire sets; particular statements place at least one element but do not determine the rest of the set. From 'all scholars are readers' and 'some readers are poets,' you cannot conclude that any scholar is a poet. Mark required overlaps and exclusions, then test each answer against the diagram. Reject choices that convert some into all, possibility into certainty, or correlation into identity." },
+      { id: "logic_module_04", title: "Sequences, Spatial Transformations, and Working Memory", content: "For patterns, separate the moving features instead of trying to recognize the whole image at once. Track position, orientation, shading, size, and count in separate columns. Numerical sequences often alternate two operations, so compare odd terms with odd terms and even terms with even terms. For spatial items, record rotations clockwise or counterclockwise and distinguish reflection from rotation. Write a short transformation chain. The goal is not to imagine faster; it is to reduce memory load through a stable notation." }
+    ]
+  },
+  {
+    id: "reviewer_gk_mastery",
+    title: "General Knowledge: Context, Civics, and Social Analysis",
+    subjectCategory: "General Knowledge",
+    focusAreas: ["Economics", "Civics", "Media Literacy", "Society"],
+    modules: [
+      { id: "gk_module_01", title: "Economics Through Cause and Effect", content: "Economic questions are best answered by tracing incentives and constraints. Inflation reduces purchasing power when prices rise faster than nominal income. A supply shock shifts the supply curve and can raise prices even when demand is unchanged. Opportunity cost is the value of the best alternative forgone, not merely the money paid. When evaluating a policy, distinguish immediate effects from long-run effects and identify who gains, who bears the cost, and what behavior may change." },
+      { id: "gk_module_02", title: "Civics, Institutions, and Accountability", content: "Civic knowledge requires knowing both the institution and the power being exercised. Separation of powers prevents one branch from concentrating authority. Judicial review concerns the compatibility of government action with constitutional limits. Transparency gives citizens access to information, while accountability adds the expectation that officials explain and answer for decisions. Read institutional questions carefully: a plausible public benefit does not identify the correct constitutional principle unless the mechanism matches." },
+      { id: "gk_module_03", title: "Media Literacy and Source Evaluation", content: "Reliable knowledge is evaluated by provenance, evidence, method, and date. An official statistics release is stronger for a current figure than an anonymous post, but even official information must be read for definitions and measurement limits. Separate a claim from the evidence offered for it. Watch for misleading graphs, cherry-picked time periods, emotional language, and unsupported causal leaps. The responsible reader asks what would count as disconfirming evidence and whether the source has a reason to distort the presentation." },
+      { id: "gk_module_04", title: "Society, Policy Tradeoffs, and Systems Thinking", content: "Social questions rarely have a single isolated effect. Migration can support household consumption through remittances while also creating dependency or labor-market concerns. Renewable energy can reduce emissions while requiring storage and grid investment. A fare subsidy may improve access while increasing fiscal pressure. Strong answers acknowledge the relevant tradeoff without collapsing into 'all benefits' or 'all costs.' Build a four-part chain: policy, affected group, intended gain, and possible consequence." }
+    ]
   }
 ];
 
@@ -286,6 +338,42 @@ const examsData = examBlueprintSeed.map((exam) => ({
   }))
 }));
 
+// A ready-to-use practice bank mirrors every published mock exam item, but carries
+// drill-specific labels so recommendations can route students to the exact weak skill.
+const drillBankSeed = examBlueprintSeed.flatMap((exam) => exam.questions.map(([id, subject, subCategory, weaknessTag, questionText, options, correctAnswer]) => ({
+  id: `drill_${id}`,
+  type: "multiple_choice",
+  stem: questionText,
+  choiceOpts: options,
+  answerIdx: correctAnswer,
+  subjectTitle: subject,
+  category: subject,
+  diagnosticSubcategory: subCategory,
+  diagnosticSkillTag: weaknessTag,
+  weaknessTag,
+  explanation: `Review ${subCategory}: ${weaknessTag}. The best answer is ${options[correctAnswer]}.`,
+  sourceExam: exam.title,
+  points: 1,
+  status: "published"
+})));
+
+const essayExamSeed = {
+  id: "exam_essay_demo_001",
+  title: "ACET Essay Review Demo: Education and Society",
+  description: "A demonstration exam for paragraph responses, rubric guidance, and Pending Review scoring.",
+  duration: 30,
+  points: 10,
+  status: "published",
+  sections: [{
+    subjectTitle: "Writing and Critical Thinking",
+    allottedTimeSec: 1800,
+    questions: [
+      { id: "essay_demo_mcq_001", type: "multiple_choice", stem: "Which feature makes an argument strongest?", choiceOpts: ["A clear claim supported by relevant evidence", "A long introduction with no evidence", "Several unrelated opinions", "A conclusion that changes the topic"], answerIdx: 0, correctAnswers: [], correctText: "", points: 2, diagnosticSubcategory: "Argument Structure", diagnosticSkillTag: "Evidence Selection" },
+      { id: "essay_demo_paragraph_001", type: "paragraph", stem: "In 250–400 words, explain one way education can improve a community while also creating a challenge that policymakers must address. Use a clear claim, one concrete example, and a reasoned conclusion.", choiceOpts: [], answerIdx: 0, correctAnswers: [], correctText: "", rubric: "Look for a clear claim, accurate explanation of a community benefit, a realistic challenge or tradeoff, a relevant example, organized reasoning, and a concluding insight. Score for reasoning and evidence, not exact wording.", points: 8, diagnosticSubcategory: "Essay Reasoning", diagnosticSkillTag: "Claim Evidence Tradeoff" }
+    ]
+  }]
+};
+
 function readJson(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -298,6 +386,27 @@ function readJson(key, fallback) {
 
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+  if (typeof window !== "undefined" && !SERVER_AUTH_KEYS?.has?.(key)) {
+    fetch(`/api/data/legacy/${encodeURIComponent(key)}`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }).catch(() => {});
+  }
+}
+
+const SERVER_AUTH_KEYS = new Set([USERS_KEY, USER_ACCOUNTS_KEY, SESSION_KEY, CURRENT_ACTIVE_USER_KEY]);
+export async function migrateLocalStorageToServer() {
+  const user = readJson(CURRENT_ACTIVE_USER_KEY, readJson(SESSION_KEY, null));
+  if (!user?.email) return { migrated: 0 };
+  const records = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key || SERVER_AUTH_KEYS.has(key) || key.startsWith("acet_auth_migrated_")) continue;
+    const value = readJson(key, undefined);
+    if (value !== undefined) records.push({ namespace: "legacy", key, value });
+  }
+  if (!records.length) return { migrated: 0 };
+  const response = await fetch("/api/data/migrate", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records }) });
+  if (!response.ok) throw new Error("Data migration failed");
+  localStorage.setItem(`acet_auth_migrated_${user.email}`, new Date().toISOString());
+  return response.json();
 }
 
 export function initializeLocalStorage() {
@@ -320,8 +429,12 @@ export function initializeLocalStorage() {
   if (!localStorage.getItem(STUDY_PLAN_KEY)) writeJson(STUDY_PLAN_KEY, studyPlanData);
   if (!localStorage.getItem(EXAMS_KEY)) writeJson(EXAMS_KEY, transformExamsDataToBlueprints(readJson(EXAMS_DATA_KEY, examsData)));
   if (!readJson(EXAMS_KEY, []).length) writeJson(EXAMS_KEY, transformExamsDataToBlueprints(readJson(EXAMS_DATA_KEY, examsData)));
-  if (!localStorage.getItem(REVIEWERS_KEY)) writeJson(REVIEWERS_KEY, []);
-  if (!localStorage.getItem(DRILL_BANK_KEY)) writeJson(DRILL_BANK_KEY, []);
+  const storedBlueprints = readJson(EXAMS_KEY, []);
+  if (!storedBlueprints.some((exam) => exam.id === essayExamSeed.id)) writeJson(EXAMS_KEY, [...storedBlueprints, essayExamSeed]);
+  const storedReviewers = readJson(REVIEWERS_KEY, null);
+  if (!Array.isArray(storedReviewers) || storedReviewers.length === 0) writeJson(REVIEWERS_KEY, reviewerBlueprintSeed.map((reviewer) => ({ ...reviewer, status: "published", createdAt: "2026-07-22T00:00:00.000Z" })));
+  const storedDrills = readJson(DRILL_BANK_KEY, null);
+  if (!Array.isArray(storedDrills) || storedDrills.length === 0) writeJson(DRILL_BANK_KEY, drillBankSeed);
   if (!localStorage.getItem(DASHBOARD_KEY)) writeJson(DASHBOARD_KEY, {});
   if (!localStorage.getItem(REVIEWER_PROGRESS_KEY)) writeJson(REVIEWER_PROGRESS_KEY, {});
   if (!localStorage.getItem(FORUM_KEY)) writeJson(FORUM_KEY, []);
@@ -399,6 +512,7 @@ export function loginUser(identifier, password) {
     id: user.id,
     username: user.username,
     email: user.email,
+    recoveryEmail: user.recoveryEmail || "",
     role: user.role,
     name: user.name,
     nickname: user.nickname,
@@ -531,6 +645,7 @@ function setCurrentActiveUser(user) {
     id: user.id,
     username: user.username,
     email: user.email,
+    recoveryEmail: user.recoveryEmail || "",
     role: user.role || "student",
     name: user.name || "",
     nickname: user.nickname || "",
@@ -677,6 +792,22 @@ export function publishReviewerBlueprint(reviewer) {
   return nextReviewer;
 }
 
+export function setAuthenticatedUser(user) {
+  return setCurrentActiveUser(user);
+}
+
+export function updateReviewerBlueprint(reviewerId, updates) {
+  const updated = getReviewerBlueprints().map((reviewer) => reviewer.id === reviewerId ? { ...reviewer, ...updates, id: reviewerId, status: "published" } : reviewer);
+  writeJson(REVIEWERS_KEY, updated);
+  return updated.find((reviewer) => reviewer.id === reviewerId);
+}
+
+export function deleteReviewerBlueprint(reviewerId) {
+  const next = getReviewerBlueprints().filter((reviewer) => reviewer.id !== reviewerId);
+  writeJson(REVIEWERS_KEY, next);
+  return next;
+}
+
 // ============================================
 // NEW ADMIN FUNCTIONS FOR EXAM MANAGEMENT
 // ============================================
@@ -786,6 +917,18 @@ export function publishDrillQuestion(question) {
   return nextQuestion;
 }
 
+export function updateDrillQuestion(drillId, updates) {
+  const updated = getDrillBankQuestions().map((question) => question.id === drillId ? { ...question, ...updates, id: drillId, status: "published" } : question);
+  writeJson(DRILL_BANK_KEY, updated);
+  return updated.find((question) => question.id === drillId);
+}
+
+export function deleteDrillQuestion(drillId) {
+  const next = getDrillBankQuestions().filter((question) => question.id !== drillId);
+  writeJson(DRILL_BANK_KEY, next);
+  return next;
+}
+
 export function getDashboardStore() {
   initializeLocalStorage();
   return readJson(DASHBOARD_KEY, {});
@@ -810,7 +953,7 @@ export function saveStudentDashboard(email, dashboard) {
 
 export function createEmptyDashboard(email) {
   return {
-    student: { email, displayName: "Stanley Mejia" },
+    student: { email, displayName: "Stanly Mejia" },
     hasDashboardData: false,
     stats: [
       { label: "Latest Mock Score", value: "0%", detail: "No completed exam attempts yet", accent: "blue" },
@@ -843,7 +986,7 @@ function normalizeDashboardAnalytics(dashboard, email) {
   const latestAttempt = attemptsForChart[0];
   const progression = chronologicalAttempts.map((attempt, index) => ({
     label: attempt.examTitle || attempt.name || `Mock ${index + 1}`,
-    score: Number(attempt.finalPct ?? attempt.score ?? 0),
+    score: attempt.hasPendingEssays ? null : Number(attempt.finalPct ?? attempt.score ?? 0),
     takenAt: attempt.takenAt || "",
     examTitle: attempt.examTitle || attempt.name || `Mock ${index + 1}`
   }));
@@ -863,13 +1006,13 @@ function normalizeDashboardAnalytics(dashboard, email) {
 
   return {
     ...dashboard,
-    student: dashboard.student || { email, displayName: "Stanley Mejia" },
+    student: dashboard.student || { email, displayName: "Stanly Mejia" },
     hasDashboardData: exams.length > 0 || attemptsForChart.length > 0 || Boolean(dashboard.hasDashboardData),
     stats: [
       {
         label: "Latest Mock Score",
-        value: latestAttempt ? `${Number(latestAttempt.finalPct ?? latestAttempt.score ?? 0)}%` : "0%",
-        detail: latestAttempt ? `Scored from ${latestAttempt.examTitle || latestAttempt.name || "completed mock exam"}` : "No completed exam attempts yet",
+        value: latestAttempt?.hasPendingEssays ? "Pending Review" : latestAttempt ? `${Number(latestAttempt.finalPct ?? latestAttempt.score ?? 0)}%` : "0%",
+        detail: latestAttempt?.hasPendingEssays ? "Essay responses awaiting approval" : latestAttempt ? `Scored from ${latestAttempt.examTitle || latestAttempt.name || "completed mock exam"}` : "No completed exam attempts yet",
         accent: "blue"
       },
       {
@@ -926,8 +1069,22 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   const durationSeconds = Number(meta.durationSeconds || 0);
   const earnedMockPoints = calculateAttemptPoints(results.finalPct, durationSeconds);
 
+  const essayResponses = (blueprint.sections || []).flatMap((section, sectionIndex) =>
+    (section.questions || []).flatMap((question, questionIndex) => {
+      if (question.type !== "paragraph" && question.type !== "essay") return [];
+      return [{
+        id: crypto.randomUUID(), sectionIndex, questionIndex,
+        questionId: question.id || null,
+        response: String(responses?.[sectionIndex]?.[questionIndex] || ""),
+        points: Math.max(1, Number(question.points || 1)),
+        rubric: question.rubric || "", aiScore: null, finalScore: null,
+        status: "pending_review"
+      }];
+    })
+  );
+  const reviewStatus = essayResponses.length ? "Pending Review" : "Analyzed";
   const exams = [
-    { name: blueprint.title, takenAt, score: results.finalPct, status: "Analyzed" },
+    { name: blueprint.title, takenAt, score: results.finalPct, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
     ...currentDashboard.exams
   ];
 
@@ -941,14 +1098,17 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       earnedMockPoints,
       durationSeconds,
       subjectScores: results.subjectScores,
-      itemDiagnostics: results.itemDiagnostics || []
+      itemDiagnostics: results.itemDiagnostics || [],
+      essayResponses,
+      status: reviewStatus,
+      hasPendingEssays: essayResponses.length > 0
     },
     ...(currentDashboard.attempts || [])
   ];
 
   const progression = [...attempts].reverse().map((attempt, index) => ({
     label: attempt.examTitle || `Mock ${index + 1}`,
-    score: Number(attempt.finalPct || 0),
+    score: attempt.hasPendingEssays ? null : Number(attempt.finalPct || 0),
     takenAt: attempt.takenAt,
     examTitle: attempt.examTitle || `Mock ${index + 1}`
   }));
@@ -975,7 +1135,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     ...currentDashboard,
     hasDashboardData: true,
     stats: [
-      { label: "Latest Mock Score", value: `${results.finalPct}%`, detail: `Scored from ${blueprint.title}`, accent: "blue" },
+      { label: "Latest Mock Score", value: results.hasEssays ? "Pending Review" : `${results.finalPct}%`, detail: results.hasEssays ? "Essay responses awaiting approval" : `Scored from ${blueprint.title}`, accent: "blue" },
       { label: "Total Tests Taken", value: String(exams.length), detail: `${exams.length} completed mock exam${exams.length === 1 ? "" : "s"}`, accent: "purple" },
       { label: "Leaderboard Placement", value: placement.rank ? `#${placement.rank}` : "-", detail: placement.total ? `Out of ${placement.total} students` : "No ranked students yet", accent: "indigo" },
       { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exams, reviewers, and badges", accent: "teal" }
@@ -1046,10 +1206,13 @@ export function scoreBlueprintAttempt(blueprint, responses, meta = {}) {
       const correctItem = isCorrectAnswer(question, response);
       sectionTotal += 1;
       total += 1;
-      sectionTotalPoints += points;
-      totalPoints += points;
+      const isEssay = question.type === "paragraph" || question.type === "essay";
+      if (!isEssay) {
+        sectionTotalPoints += points;
+        totalPoints += points;
+      }
 
-      if (correctItem) {
+      if (correctItem === true) {
         sectionCorrect += 1;
         correct += 1;
         sectionEarnedPoints += points;
@@ -1079,7 +1242,9 @@ export function scoreBlueprintAttempt(blueprint, responses, meta = {}) {
 
   const finalPct = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
   const weaknesses = subjectScores.filter((subject) => subject.total > 0 && subject.pct < 80).map((subject) => ({ ...subject, topicFocus: subject.title }));
-  return { finalPct, correct, total, earnedPoints, totalPoints, targetScore: Math.min(100, finalPct + 12), subjectScores, weaknesses, itemDiagnostics };
+  const essayQuestions = blueprint.sections.flatMap((section) => section.questions.filter((question) => question.type === "paragraph" || question.type === "essay"));
+  const hasEssays = essayQuestions.length > 0;
+  return { finalPct, correct, total, earnedPoints, totalPoints, targetScore: Math.min(100, finalPct + 12), subjectScores, weaknesses, itemDiagnostics, hasEssays, essayCount: essayQuestions.length, status: hasEssays ? "Pending Review" : "Analyzed" };
 }
 
 export function getWeaknessAnalysis(email, threshold = 75) {
@@ -1130,7 +1295,26 @@ export function scoreDrillAttempt(questions, responses) {
     if (isCorrect) correct += 1;
     return { question, response: responses[index], isCorrect, explanation: question.explanation || buildExplanation(question) };
   });
-  return { correct, total: questions.length, pct: questions.length ? Math.round((correct / questions.length) * 100) : 0, items };
+  let streak = 0;
+  let bestStreak = 0;
+  items.forEach((item) => {
+    streak = item.isCorrect ? streak + 1 : 0;
+    bestStreak = Math.max(bestStreak, streak);
+  });
+  return { correct, total: questions.length, pct: questions.length ? Math.round((correct / questions.length) * 100) : 0, points: correct * 10 + bestStreak * 5, bestStreak, items };
+}
+
+export function getDrillSessions(email) {
+  initializeLocalStorage();
+  const sessions = readJson(DRILL_SESSIONS_KEY, {});
+  return Array.isArray(sessions[email]) ? sessions[email] : [];
+}
+
+export function saveDrillSession(email, session) {
+  const sessions = readJson(DRILL_SESSIONS_KEY, {});
+  const next = [{ ...session, id: session.id || crypto.randomUUID(), savedAt: new Date().toISOString() }, ...(sessions[email] || [])].slice(0, 25);
+  writeJson(DRILL_SESSIONS_KEY, { ...sessions, [email]: next });
+  return next[0];
 }
 
 export function getReviewerProgress(email) {
@@ -1398,7 +1582,7 @@ function buildItemDiagnostic({ section, question, response, isCorrect, metrics =
   const changedCorrectToIncorrect = answerEvents.some((event) => {
     if (event.from === null || event.from === undefined || event.to === null || event.to === undefined) return false;
     const wasCorrect = isCorrectAnswer(question, event.from);
-    const becameIncorrect = !isCorrectAnswer(question, event.to);
+    const becameIncorrect = isCorrectAnswer(question, event.to) === false;
     const lastSecondWindow = !responseDurationSeconds || Number(event.elapsedMs || 0) >= responseDurationSeconds * 1000 - 15000;
     return wasCorrect && becameIncorrect && lastSecondWindow;
   });
@@ -1407,7 +1591,7 @@ function buildItemDiagnostic({ section, question, response, isCorrect, metrics =
     ...tags,
     responseDurationSeconds,
     isCorrect,
-    errorFlag: !isCorrect,
+    errorFlag: isCorrect === false,
     changedCorrectToIncorrect,
     changedAnswerCount: Math.max(0, answerEvents.length - 1),
     questionType: question.type || "multiple_choice"
@@ -1520,16 +1704,54 @@ function inferSkillTag(question) {
 
 function isCorrectAnswer(question, response) {
   const type = question.type || "multiple_choice";
+  if (type === "paragraph" || type === "essay") return null;
   if (type === "mcq" || type === "multiple_choice") return response === Number(question.answerIdx ?? 0);
   if (type === "checkboxes") {
     const expected = [...(question.correctAnswers || [])].map(Number).sort().join(",");
     const actual = [...(response || [])].map(Number).sort().join(",");
     return expected === actual;
   }
-  if (type === "short_answer" || type === "paragraph") {
+  if (type === "short_answer") {
     const expected = String(question.correctText || "").trim().toLowerCase();
     const actual = String(response || "").trim().toLowerCase();
     return expected.length > 0 && actual === expected;
   }
   return false;
+}
+
+export function updateLatestEssayReview(email, essayId, updates) {
+  const dashboard = getStudentDashboard(email);
+  const attempts = Array.isArray(dashboard.attempts) ? dashboard.attempts : [];
+  if (!attempts.length) return dashboard;
+  const nextAttempts = attempts.map((attempt) => {
+    if (!getEssayResponses(attempt).some((essay) => essay.id === essayId)) return attempt;
+    const essayResponses = getEssayResponses(attempt).map((essay) => essay.id === essayId ? { ...essay, ...updates } : essay);
+    const reviewed = essayResponses.length > 0 && essayResponses.every((essay) => essay.status === "approved");
+    return { ...attempt, essayResponses, status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed };
+  });
+  const latest = nextAttempts[0];
+  const exams = (dashboard.exams || []).map((exam, index) => index === 0 && latest ? { ...exam, status: latest.status, hasPendingEssays: latest.hasPendingEssays } : exam);
+  saveStudentDashboard(email, { ...dashboard, attempts: nextAttempts, exams });
+  return getStudentDashboard(email);
+}
+
+export function getEssayResponses(attempt) {
+  return Array.isArray(attempt?.essayResponses)
+    ? attempt.essayResponses.map((essay) => {
+        let configuredPoints = Number(essay.points);
+        if (!Number.isFinite(configuredPoints) || configuredPoints <= 0) {
+          const blueprint = attempt.examId
+            ? getExamBlueprintById(attempt.examId)
+            : getExamBlueprints().find((item) => item.title === attempt.examTitle);
+          configuredPoints = Number(blueprint?.sections?.[essay.sectionIndex]?.questions?.[essay.questionIndex]?.points || 1);
+        }
+        return { ...essay, points: Math.max(1, configuredPoints) };
+      })
+    : [];
+}
+
+export function hasPendingEssays(value) {
+  const attempts = Array.isArray(value) ? value : value?.attempts;
+  if (attempts) return attempts.some((attempt) => hasPendingEssays(attempt));
+  return getEssayResponses(value).some((essay) => ["pending_review", "ai_graded"].includes(essay.status));
 }

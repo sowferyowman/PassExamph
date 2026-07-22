@@ -1,23 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
-import { FaArrowLeft, FaGoogle, FaLock, FaMobileAlt, FaUserPlus } from "react-icons/fa";
-import { createStudentAccount, loginUser, signInWithGoogleProfile } from "../services/storage";
-
-const googleDemoProfile = {
-  name: "Google Student",
-  email: "google.student@example.com"
-};
+import { register as apiRegister } from "../api/authApi";
+import { useAuthContext } from "../context/AuthContext";
+import { FaArrowLeft, FaEnvelope, FaGoogle, FaLock, FaUser, FaUserPlus } from "react-icons/fa";
+import { migrateLocalStorageToServer, setAuthenticatedUser } from "../services/storage";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login } = useAuthContext();
   const [mode, setMode] = useState("signin");
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [signInForm, setSignInForm] = useState({ email: "", password: "" });
-  const [createForm, setCreateForm] = useState({ email: "", password: "", smsNumber: "" });
-  const [recoveryForm, setRecoveryForm] = useState({ smsNumber: "" });
+  const [rememberMe, setRememberMe] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", email: "", username: "", password: "" });
 
   function routeAfterAuth(user) {
     if (user.role === "admin") {
@@ -27,36 +22,22 @@ export default function LoginPage() {
     navigate(user.profileCompleted ? "/dashboard" : "/student-profiling", { replace: true });
   }
 
-  function handleSignIn(event) {
+  async function handleSignIn(event) {
     event.preventDefault();
     setMessage("");
-    const user = loginUser(signInForm.email.trim(), signInForm.password);
-    if (!user) {
-      setMessage("Invalid email or password.");
-      return;
-    }
-    routeAfterAuth(user);
+    try { const user = await login(signInForm.email.trim(), signInForm.password); await migrateLocalStorageToServer().catch(() => {}); routeAfterAuth(user); }
+    catch (error) { setMessage(error.response?.data?.error || "Invalid email or password."); }
   }
 
-  function handleCreateAccount(event) {
+  async function handleCreateAccount(event) {
     event.preventDefault();
     setMessage("");
-    const result = createStudentAccount(createForm);
-    if (result.error) {
-      setMessage(result.error);
-      return;
-    }
-    routeAfterAuth(result.user);
+    try { const result = await apiRegister({ email: createForm.email.trim(), username: createForm.username.trim(), password: createForm.password, name: createForm.name.trim() }); const user = setAuthenticatedUser(result.user); await migrateLocalStorageToServer().catch(() => {}); routeAfterAuth(user); }
+    catch (error) { setMessage(error.response?.data?.error || "Could not create account."); }
   }
 
   function handleGoogleSignIn() {
-    const user = signInWithGoogleProfile(googleDemoProfile);
-    routeAfterAuth(user);
-  }
-
-  function handleRecovery(event) {
-    event.preventDefault();
-    setMessage(`Verification code sent to ${recoveryForm.smsNumber}. Use this demo flow to reset your password.`);
+    setMessage("Google sign-in is not available yet.");
   }
 
   return (
@@ -74,7 +55,14 @@ export default function LoginPage() {
           background-attachment: fixed;
         }
 
-        /* Custom Input styling matching the dark blue aesthetic */
+          .studio-background { background: #f1f5f9; }
+          .login-card .blue-input { background: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important; }
+          .login-card .blue-input::placeholder { color: #94a3b8 !important; }
+          .login-card label > span { color: #334155 !important; }
+          .login-card .text-zinc-300 { color: #475569 !important; }
+          .login-card .text-zinc-400 { color: #64748b !important; }
+
+          /* Custom Input styling */
         .blue-input {
           background-color: rgba(0, 12, 29, 0.6) !important;
           border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -95,13 +83,13 @@ export default function LoginPage() {
 
       <main className="studio-background relative min-h-screen w-full overflow-hidden text-white flex items-center justify-center p-4">
         {/* Main Sign-In Card Container */}
-        <div className="relative w-full max-w-lg bg-[#00122c]/65 border border-white/10 rounded-2xl backdrop-blur-xl p-8 md:p-10 shadow-2xl">
+        <div className="login-card relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-xl md:p-10">
           
           {/* ← Back Button repositioned inside the upper-left of the card */}
           <div className="absolute top-8 left-8 md:top-10 md:left-10">
             <Link 
               to="/" 
-              className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors duration-200"
+              className="flex items-center gap-2 text-sm text-slate-500 transition-colors duration-200 hover:text-slate-900"
             >
               <FaArrowLeft className="text-xs" />
               <span>Back</span>
@@ -113,67 +101,22 @@ export default function LoginPage() {
             <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center mb-4">
               {mode === "signin" ? <FaLock className="text-white text-lg" /> : <FaUserPlus className="text-white text-lg" />}
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950">
               {mode === "signin" ? "Welcome back" : "Create student account"}
             </h1>
-            <p className="text-sm text-zinc-400 mt-1">
-              {mode === "signin" ? "Use your student email or legacy username." : "Email, password, and SMS recovery are required."}
+            <p className="mt-1 text-sm text-slate-500">
+              {mode === "signin" ? "Sign in with your username." : "Create your student account."}
             </p>
-          </div>
-
-          {/* Tabs: Sign In / Create Account */}
-          <div className="flex gap-2 bg-black/25 p-1.5 rounded-xl mt-8 border border-white/5">
-            {[
-              ["signin", "Sign In"],
-              ["create", "Create Account"]
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => {
-                  setMode(value);
-                  setRecoveryOpen(false);
-                  setMessage("");
-                }}
-                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-                  mode === value 
-                    ? "bg-white/10 text-white shadow-md border border-white/10" 
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Sign In with Google */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            className="w-full mt-6 flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-white/10 bg-[#00122c]/50 hover:bg-white/5 transition-all text-sm font-semibold text-white"
-          >
-            <FaGoogle className="text-rose-500" /> 
-            <span>Sign in with Google</span>
-          </button>
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/5"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[#00122c] px-3 text-zinc-500 font-medium">Or continue with</span>
-            </div>
           </div>
 
           {/* Render Active Forms */}
           {mode === "signin" ? (
             <form onSubmit={handleSignIn} className="space-y-4">
               <TextInput 
-                label="Email or Username" 
+                label="Username" 
                 value={signInForm.email} 
                 onChange={(email) => setSignInForm((current) => ({ ...current, email }))} 
-                placeholder="student1 or student@example.com" 
+                placeholder="Enter your username" 
               />
               <TextInput 
                 label="Password" 
@@ -182,8 +125,9 @@ export default function LoginPage() {
                 onChange={(password) => setSignInForm((current) => ({ ...current, password }))} 
                 placeholder="Your password" 
               />
-              <div className="flex justify-end">
-                <RecoveryLink onClick={() => setRecoveryOpen((open) => !open)} />
+              <div className="flex items-center justify-between text-sm">
+                <label className="flex items-center gap-2 text-zinc-300"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded accent-blue-600" /> Remember Me</label>
+                <RecoveryLink onClick={() => navigate("/forgot-password-sms")} />
               </div>
               <button className="w-full py-3 bg-white text-[#00204a] font-bold rounded-xl hover:bg-zinc-100 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg mt-2">
                 Sign In
@@ -191,12 +135,27 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleCreateAccount} className="space-y-4">
+              <TextInput
+                label="Full Name"
+                value={createForm.name}
+                onChange={(name) => setCreateForm((current) => ({ ...current, name: name.toUpperCase() }))}
+                placeholder="Enter your full name"
+                icon={<FaUser />}
+              />
               <TextInput 
                 label="Email" 
                 type="email" 
                 value={createForm.email} 
                 onChange={(email) => setCreateForm((current) => ({ ...current, email }))} 
                 placeholder="student@example.com" 
+                icon={<FaEnvelope />}
+              />
+              <TextInput
+                label="Username"
+                value={createForm.username}
+                onChange={(username) => setCreateForm((current) => ({ ...current, username }))}
+                placeholder="Choose a username"
+                icon={<FaUser />}
               />
               <TextInput 
                 label="Password" 
@@ -204,43 +163,21 @@ export default function LoginPage() {
                 value={createForm.password} 
                 onChange={(password) => setCreateForm((current) => ({ ...current, password }))} 
                 placeholder="Create a secure password" 
+                icon={<FaLock />}
               />
-              <TextInput 
-                label="Mobile Number (SMS)" 
-                value={createForm.smsNumber} 
-                onChange={(smsNumber) => setCreateForm((current) => ({ ...current, smsNumber }))} 
-                placeholder="+63**********" 
-                icon={<FaMobileAlt />} 
-              />
-              <div className="flex justify-end">
-                <RecoveryLink onClick={() => setRecoveryOpen((open) => !open)} />
-              </div>
               <button className="w-full py-3 bg-white text-[#00204a] font-bold rounded-xl hover:bg-zinc-100 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg mt-2">
                 Create Account
               </button>
             </form>
           )}
 
-          {/* Password Recovery Flow */}
-          {recoveryOpen && (
-            <form onSubmit={handleRecovery} className="mt-5 rounded-xl border border-blue-900/30 bg-[#00122c]/80 p-4">
-              <p className="text-sm font-bold text-white">Password Recovery</p>
-              <p className="mt-1 text-xs text-zinc-400">
-                Enter the linked mobile number to simulate sending an SMS verification code.
-              </p>
-              <TextInput 
-                label="Linked Mobile Number" 
-                value={recoveryForm.smsNumber} 
-                onChange={(smsNumber) => setRecoveryForm({ smsNumber })} 
-                placeholder="+639123456789" 
-                compact 
-              />
-              <button className="mt-3 rounded-lg bg-white/10 border border-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/20 transition-all">
-                Send SMS Code
-              </button>
-            </form>
-          )}
+          <div className="mt-6 space-y-5">
+            <div className="relative flex items-center"><div className="w-full border-t border-slate-200" /><span className="absolute left-1/2 -translate-x-1/2 bg-white px-4 text-sm text-slate-500">or {mode === "signin" ? "sign in" : "join"} with</span></div>
+            <button type="button" onClick={mode === "signin" ? handleGoogleSignIn : undefined} className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"><FaGoogle className="text-lg" /><span>{mode === "signin" ? "Sign in with Google" : "Join with Google"}</span></button>
+            <p className="text-center text-sm text-slate-600">{mode === "signin" ? "Don't have an account?" : "Already have an account?"} <button type="button" onClick={() => setMode(mode === "signin" ? "create" : "signin")} className="font-bold text-blue-700 hover:underline">{mode === "signin" ? "Create Account" : "Sign In"}</button></p>
+          </div>
 
+          {/* Password Recovery Flow */}
           {/* Messaging Alert Box */}
           {message && (
             <p className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm font-semibold text-amber-400">
@@ -254,8 +191,8 @@ export default function LoginPage() {
               Demo Access
             </p>
             <div className="text-xs text-zinc-400 space-y-1">
-              <p><span className="font-medium text-zinc-300">Admin:</span> admin1 / pass1234</p>
-              <p className="mt-1"><span className="font-medium text-zinc-300">Student:</span> student1 / 123</p>
+              <p><span className="font-medium text-zinc-300">Admin:</span> admin@exams.ph / ACETAdmin@2026!</p>
+              <p className="mt-1"><span className="font-medium text-zinc-300">Student demo:</span> student1 / 123</p>
             </div>
           </div>
 

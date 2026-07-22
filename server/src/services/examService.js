@@ -1,4 +1,5 @@
 const { getDb } = require("../config/database");
+const { scoreEssay } = require("./aiService");
 
 function getExamBlueprint() {
   const row = getDb().prepare("SELECT payload FROM exam_blueprint WHERE id = 1").get();
@@ -50,7 +51,8 @@ function scoreExamAttempt(responses, studentId = 1) {
     const currentDate = new Date().toISOString().split("T")[0];
     const examName = `ACET Mock Practice #${attemptCount + 1}`;
     
-    insertLog.run(studentId, examName, currentDate, finalPct, "Analyzed");
+    const hasEssays = blueprint.some((section) => (section.questions || []).some((question) => question.type === "paragraph" || question.type === "essay"));
+    insertLog.run(studentId, examName, currentDate, finalPct, hasEssays ? "Pending Review" : "Analyzed");
 
     db.prepare("INSERT INTO progression (student_id, label, score) VALUES (?, ?, ?)")
       .run(studentId, `Mock ${attemptCount + 1}`, finalPct);
@@ -64,6 +66,8 @@ function scoreExamAttempt(responses, studentId = 1) {
     subjectScores.forEach((subject) => {
       upsertSubject.run(studentId, subject.title, subject.pct, getSubjectColor(subject.pct));
     });
+
+    saveEssayResponses(responses, studentId, examName);
   } catch (error) {
     console.error("Failed to write exam log record to database:", error);
   }
@@ -91,6 +95,21 @@ function scoreExamAttempt(responses, studentId = 1) {
   };
 }
 
+function saveEssayResponses(responses, studentId, examName) {
+  const blueprint = getExamBlueprint();
+  const db = getDb();
+  const examLog = db.prepare("SELECT id FROM exam_logs WHERE student_id = ? AND name = ? ORDER BY id DESC LIMIT 1").get(studentId, examName);
+  const insert = db.prepare(`INSERT INTO essay_responses (student_id, exam_log_id, exam_name, question_index, response, rubric, points, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review')`);
+  blueprint.forEach((section, sectionIndex) => (section.questions || []).forEach((question, questionIndex) => {
+    if (question.type !== "paragraph" && question.type !== "essay") return;
+    const response = String(responses?.[sectionIndex]?.[questionIndex] || "");
+    const row = insert.run(studentId, examLog?.id || null, examName, questionIndex, response, question.rubric || "", Math.max(1, Number(question.points || 1)));
+    scoreEssay({ response, rubric: question.rubric, points: question.points || 1 }).then((scored) => {
+      if (scored.status === "ai_graded") db.prepare("UPDATE essay_responses SET ai_score = ?, status = 'ai_graded' WHERE id = ?").run(scored.score, row.lastInsertRowid);
+    }).catch(() => {});
+  }));
+}
+
 function getSubjectColor(score) {
   if (score >= 90) return "emerald";
   if (score >= 80) return "blue";
@@ -98,4 +117,4 @@ function getSubjectColor(score) {
   return "rose";
 }
 
-module.exports = { getExamBlueprint, scoreExamAttempt };
+module.exports = { getExamBlueprint, scoreExamAttempt, saveEssayResponses };

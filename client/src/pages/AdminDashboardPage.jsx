@@ -6,6 +6,8 @@ import PremiumRichTextEditor from "../components/PremiumRichTextEditor";
 import {
   getExamBlueprints,
   getReviewerBlueprints,
+  updateReviewerBlueprint,
+  deleteReviewerBlueprint,
   publishExamBlueprint,
   publishReviewerBlueprint,
   deleteExamBlueprint,
@@ -76,6 +78,7 @@ const emptyQuestion = {
   answerIdx: 0,
   correctAnswers: [],
   correctText: "",
+  rubric: "",
   diagnosticSubcategory: "",
   diagnosticSkillTag: "",
   points: 1
@@ -133,6 +136,7 @@ export default function AdminDashboardPage() {
   const [reviewers, setReviewers] = useState(() => getReviewerBlueprints());
   const [message, setMessage] = useState("");
   const [editingExamId, setEditingExamId] = useState(null);
+  const [editingReviewerId, setEditingReviewerId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   // Confirmation Dialog State
@@ -187,8 +191,22 @@ export default function AdminDashboardPage() {
 
   function cancelEditing() {
     setEditingExamId(null);
+    setEditingReviewerId(null);
     setExamForm(initialExamForm);
     setMessage("");
+  }
+
+  function loadReviewerForEdit(reviewerId) {
+    const reviewer = reviewers.find((item) => item.id === reviewerId);
+    if (!reviewer) return;
+    setEditingReviewerId(reviewerId);
+    setReviewerForm({ title: reviewer.title || "", subjectCategory: reviewer.subjectCategory || "", modules: reviewer.modules || [] });
+    setMessage(`Editing: "${reviewer.title}"`);
+  }
+
+  function handleDeleteReviewer(reviewerId) {
+    const reviewer = reviewers.find((item) => item.id === reviewerId);
+    showConfirm({ title: "Delete Reviewer", message: `Delete "${reviewer?.title || "this reviewer"}"?`, onConfirm: () => { deleteReviewerBlueprint(reviewerId); setReviewers(getReviewerBlueprints()); setMessage("Reviewer deleted successfully."); } });
   }
 
   function handleDeleteExam(examId) {
@@ -385,8 +403,8 @@ export default function AdminDashboardPage() {
         if (usesOptions(question.type) && question.choiceOpts.some((option) => !option.trim())) {
           return "Every option must be filled.";
         }
-        if ((question.type === "short_answer" || question.type === "paragraph") && !question.correctText.trim()) {
-          return "Short answer and paragraph items need an answer key.";
+        if (question.type === "short_answer" && !String(question.correctText || "").trim()) {
+          return "Short answer items need an answer key.";
         }
         if (question.type === "checkboxes" && !question.correctAnswers.length) {
           return "Checkbox items need at least one correct option.";
@@ -452,6 +470,14 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    if (editingReviewerId) {
+      const updated = updateReviewerBlueprint(editingReviewerId, reviewerForm);
+      setReviewers(getReviewerBlueprints());
+      setMessage(`"${updated.title}" was updated successfully!`);
+      setEditingReviewerId(null);
+      setReviewerForm(initialReviewerForm);
+      return;
+    }
     const published = publishReviewerBlueprint(reviewerForm);
     setReviewers(getReviewerBlueprints());
     setMessage(`"${published.title}" was published successfully! Students can now access this reviewer.`);
@@ -482,9 +508,9 @@ export default function AdminDashboardPage() {
 
         <div className="mx-auto grid max-w-7xl gap-6 p-6 lg:grid-cols-[1fr_20rem]">
           <section className="space-y-5">
-            {editingExamId && (
+            {(editingExamId || editingReviewerId) && (
               <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <p className="text-sm font-semibold text-blue-700">Editing Exam - Make your changes and click "Update Exam"</p>
+                <p className="text-sm font-semibold text-blue-700">Editing {editingExamId ? "Exam" : "Reviewer"} - Make your changes and click update</p>
                 <button onClick={cancelEditing} className="text-blue-700 hover:text-blue-900">
                   <FaTimes /> Cancel
                 </button>
@@ -504,14 +530,14 @@ export default function AdminDashboardPage() {
                 </button>
               )}
               <button onClick={publishItem} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
-                <FaSave /> {editingExamId ? "Update Exam" : `Publish ${mode === "exam" ? "Exam" : "Reviewer"}`}
+                <FaSave /> {editingExamId || editingReviewerId ? `Update ${mode === "exam" ? "Exam" : "Reviewer"}` : `Publish ${mode === "exam" ? "Exam" : "Reviewer"}`}
               </button>
             </div>
             {message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">{message}</p>}
           </section>
 
           <aside className="space-y-5">
-            <div className="glass-card p-5">
+            {mode === "exam" ? <div className="glass-card p-5">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Current Draft</p>
               <p className="mt-3 text-3xl font-black text-slate-950">{mode === "exam" ? totalQuestions : reviewerForm.modules.length}</p>
               <p className="text-sm font-semibold text-slate-500">
@@ -529,9 +555,21 @@ export default function AdminDashboardPage() {
                   {examForm.accessType === "unlimited" && "Unlimited attempts"}
                 </p>
               )}
-            </div>
+            </div> : <div className="glass-card p-5">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Reviewers</p>
+              <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
+                {reviewers.length ? reviewers.map((reviewer) => (
+                  <div key={reviewer.id} className="rounded-lg border border-slate-200 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="truncate font-black text-slate-900">{reviewer.title}</p><p className="mt-1 text-xs font-semibold text-slate-500">{reviewer.subjectCategory} · {reviewer.modules?.length || 0} modules</p><span className="text-xs font-semibold text-emerald-600">Published</span></div>
+                      <div className="flex shrink-0 gap-1"><button onClick={() => loadReviewerForEdit(reviewer.id)} className="rounded p-1.5 text-blue-600 hover:bg-blue-50" title="Edit reviewer"><FaEdit /></button><button onClick={() => handleDeleteReviewer(reviewer.id)} className="rounded p-1.5 text-rose-600 hover:bg-rose-50" title="Delete reviewer"><FaTrash /></button></div>
+                    </div>
+                  </div>
+                )) : <p className="text-sm text-slate-500">No published reviewers yet.</p>}
+              </div>
+            </div>}
 
-            <div className="glass-card p-5">
+            {mode === "exam" && <div className="glass-card p-5">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Exams</p>
               <div className="mt-4 space-y-3 max-h-96 overflow-y-auto">
                 {blueprints.length > 0 ? blueprints.map((blueprint) => (
@@ -607,7 +645,7 @@ export default function AdminDashboardPage() {
                   <p className="text-sm text-slate-500">No published exams yet. Create and publish your first exam above.</p>
                 )}
               </div>
-            </div>
+            </div>}
           </aside>
         </div>
       </div>
@@ -911,7 +949,7 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {(question.type === "short_answer" || question.type === "paragraph") && (
+        {question.type === "short_answer" && (
           <div className="mt-4">
             <label className="block">
               <span className="text-xs font-black uppercase tracking-wider text-slate-500">Answer Key <span className="text-rose-500">*</span></span>
@@ -920,6 +958,20 @@ export default function AdminDashboardPage() {
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { correctText: event.target.value })}
                 className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Enter the correct answer"
+              />
+            </label>
+          </div>
+        )}
+
+        {question.type === "paragraph" && (
+          <div className="mt-4">
+            <label className="block">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Sample Answer / Rubric <span className="text-slate-400">(optional)</span></span>
+              <textarea
+                value={question.rubric || ""}
+                onChange={(event) => updateQuestion(sectionIndex, questionIndex, { rubric: event.target.value })}
+                className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="Describe the key points the AI should look for..."
               />
             </label>
           </div>

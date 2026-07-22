@@ -1,9 +1,11 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { getCurrentUser } from "../services/storage";
+import { useAuthContext } from "../context/AuthContext";
 
 export default function ProtectedRoute({ allowedRole }) {
-  const user = getCurrentUser();
+  const { user, loading } = useAuthContext();
   const location = useLocation();
+
+  if (loading) return <div className="min-h-screen bg-slate-950" />;
 
   if (!user) {
     return <Navigate to="/login" replace />;

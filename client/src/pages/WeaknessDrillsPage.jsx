@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaArrowLeft, FaBrain, FaCheckCircle, FaPlay, FaRoute, FaSpinner, FaTimesCircle } from "react-icons/fa";
+import { FaArrowLeft, FaBrain, FaCheckCircle, FaPlay, FaRoute, FaSpinner, FaTimesCircle, FaBolt, FaRedo, FaTrophy } from "react-icons/fa";
 import { routeAdaptiveLearning } from "../api/aiApi";
+import { loadDrillSessions, saveDrillSessionToApi } from "../api/drillApi";
 import {
   getCurrentUser,
   getDrillBankQuestions,
@@ -9,7 +10,9 @@ import {
   getQuestionsForSubject,
   getReviewerBlueprints,
   getStudentDashboard,
+  getDrillSessions,
   getWeaknessAnalysis,
+  saveDrillSession,
   scoreDrillAttempt
 } from "../services/storage";
 
@@ -23,6 +26,14 @@ export default function WeaknessDrillsPage() {
   const [questions, setQuestions] = useState([]);
   const [responses, setResponses] = useState({});
   const [results, setResults] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [sessions, setSessions] = useState(() => getDrillSessions(user?.email));
+
+  useEffect(() => {
+    loadDrillSessions().then((remote) => {
+      if (Array.isArray(remote) && remote.length) setSessions((current) => [...remote, ...current].filter((item, index, all) => all.findIndex((candidate) => String(candidate.id) === String(item.id)) === index).slice(0, 25));
+    }).catch(() => {});
+  }, []);
   const rankedWeakSubjects = useMemo(() => rankWeakSubjects(analysis.weakSubjects, adaptiveGate), [analysis.weakSubjects, adaptiveGate]);
 
   useEffect(() => {
@@ -81,6 +92,7 @@ export default function WeaknessDrillsPage() {
     setQuestions(pulledQuestions);
     setResponses({});
     setResults(null);
+    setActiveIndex(0);
   }
 
   function saveResponse(index, value) {
@@ -97,7 +109,17 @@ export default function WeaknessDrillsPage() {
 
   function submitDrill() {
     const orderedResponses = questions.map((_, index) => responses[index]);
-    setResults(scoreDrillAttempt(questions, orderedResponses));
+    const scored = scoreDrillAttempt(questions, orderedResponses);
+    const saved = saveDrillSession(user?.email, {
+      subject: activeSubject,
+      questions: questions.map((question) => question.id),
+      responses: orderedResponses,
+      ...scored,
+      weaknessFocus: analysis.diagnosticInsights?.find((item) => item.category === activeSubject)?.path || []
+    });
+    saveDrillSessionToApi({ subject: activeSubject, pct: scored.pct, correct: scored.correct, total: scored.total, bestStreak: scored.bestStreak, points: scored.points, responses: orderedResponses, weaknessFocus: analysis.diagnosticInsights?.find((item) => item.category === activeSubject)?.path || [] }).catch(() => {});
+    setSessions((current) => [saved, ...current].slice(0, 25));
+    setResults(scored);
   }
 
   if (!analysis.hasAttempts) {
@@ -123,62 +145,40 @@ export default function WeaknessDrillsPage() {
   }
 
   if (activeSubject) {
+    const currentQuestion = questions[activeIndex];
     return (
-      <div className="min-h-screen bg-rose-50/40 p-6">
-        <div className="mx-auto max-w-5xl space-y-6">
-          <button onClick={() => setActiveSubject(null)} className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-slate-900">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50 p-5 md:p-10">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <button onClick={() => setActiveSubject(null)} className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-slate-900">
             <FaArrowLeft /> Back to Recommendations
           </button>
 
-          <header>
-            <p className="text-xs font-black uppercase tracking-wider text-rose-700">Weakness Drill</p>
-            <h1 className="mt-1 text-3xl font-black text-slate-950">{activeSubject} Practice Block</h1>
-            <p className="mt-1 text-slate-500">Practice questions currently available for this subject category.</p>
-          </header>
-
           {!questions.length ? (
-            <div className="rounded-2xl border border-rose-100 bg-white p-8 text-center shadow-sm">
+            <div className="rounded-3xl border border-amber-100 bg-white p-8 text-center shadow-lg">
               <h2 className="text-2xl font-black text-slate-950">No question pool available yet.</h2>
               <p className="mt-2 text-sm text-slate-500">No practice questions are available for this subject yet.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {questions.map((question, index) => (
-                <article key={`${question.stem}-${index}`} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="mb-2 flex items-center gap-3">
-                        <span className="text-xs font-black uppercase tracking-wider text-rose-700">Item {index + 1}</span>
-                        {results && (
-                          results.items[index].isCorrect
-                            ? <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600"><FaCheckCircle /> Correct</span>
-                            : <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600"><FaTimesCircle /> Incorrect</span>
-                        )}
-                      </div>
-                      <div className="text-lg font-bold text-slate-900" dangerouslySetInnerHTML={{ __html: question.stem }} />
-                    </div>
-                  </div>
-
-                  {renderQuestionInput(question, index)}
-
-                  {results && (
-                    <div className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${results.items[index].isCorrect ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
-                      {results.items[index].explanation}
-                    </div>
-                  )}
-                </article>
-              ))}
-
+            <div className="space-y-5">
               {!results ? (
-                <button onClick={submitDrill} className="w-full rounded-xl bg-slate-900 px-6 py-4 text-sm font-black text-white transition hover:bg-slate-800">
-                  Submit Drill
-                </button>
+                <article className="rounded-3xl border border-amber-100 bg-white p-6 shadow-xl transition-all duration-300 md:p-10">
+                  <div className="flex items-center justify-between gap-4">
+                    <div><p className="text-xs font-black uppercase tracking-widest text-amber-600"><FaBolt className="mr-1 inline" /> Quiz Bee Round</p><h1 className="mt-1 text-2xl font-black text-slate-950">{activeSubject} Flashcards</h1></div>
+                    <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">Question {activeIndex + 1} of {questions.length}</span>
+                  </div>
+                  <div className="mt-6 h-3 overflow-hidden rounded-full bg-amber-100"><div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-500" style={{ width: `${((activeIndex + 1) / questions.length) * 100}%` }} /></div>
+                  <div className="mt-10 text-center text-xl font-black leading-relaxed text-slate-900" dangerouslySetInnerHTML={{ __html: currentQuestion?.stem }} />
+                  <div className="mt-8">{currentQuestion && renderQuestionInput(currentQuestion, activeIndex)}</div>
+                  <button disabled={responses[activeIndex] === undefined || responses[activeIndex] === ""} onClick={() => activeIndex === questions.length - 1 ? submitDrill() : setActiveIndex((index) => index + 1)} className="mt-8 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-emerald-500 px-6 py-4 text-sm font-black text-white shadow-lg transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{activeIndex === questions.length - 1 ? "Finish Round" : "Lock In Answer →"}</button>
+                </article>
               ) : (
-                <div className="rounded-xl border border-rose-100 bg-white p-6 shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-wider text-rose-700">Drill Result</p>
-                  <h2 className="mt-2 text-3xl font-black text-slate-950">{results.pct}%</h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{results.correct} of {results.total} correct</p>
-                </div>
+                <article className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-xl">
+                  <FaTrophy className="mx-auto text-5xl text-amber-500" /><p className="mt-3 text-xs font-black uppercase tracking-widest text-emerald-600">Round Complete!</p>
+                  <h2 className="mt-2 text-4xl font-black text-slate-950">{results.pct}%</h2><p className="mt-2 font-semibold text-slate-500">{results.correct} of {results.total} correct</p>
+                  <div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-amber-50 p-4"><p className="text-xs font-bold text-amber-700">Best Streak</p><p className="text-2xl font-black text-amber-900">{results.bestStreak}</p></div><div className="rounded-2xl bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-700">Points Earned</p><p className="text-2xl font-black text-emerald-900">{results.points}</p></div></div>
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">{results.items.map((item, index) => <span key={index} className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black ${item.isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{item.isCorrect ? <FaCheckCircle /> : <FaTimesCircle />} {item.isCorrect ? "Correct" : "Incorrect"}</span>)}</div>
+                  <div className="mt-7 flex flex-col gap-3 sm:flex-row"><button onClick={() => startDrill({ subject: activeSubject })} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 font-black text-white"><FaRedo /> Try Again</button><button onClick={() => setActiveSubject(null)} className="flex-1 rounded-2xl border border-slate-200 px-5 py-3 font-black text-slate-700">Back to Recommendations</button></div>
+                </article>
               )}
             </div>
           )}
@@ -199,6 +199,8 @@ export default function WeaknessDrillsPage() {
         <AdaptiveGatePanel gate={adaptiveGate} status={gateStatus} />
         {/* FIX: Ipinasa na ang adaptiveGate state para sumabay ang dynamic layout rendering */}
         <DiagnosticReport analysis={analysis} adaptiveGate={adaptiveGate} />
+
+        {sessions.length > 0 && <div className="mb-6 rounded-2xl border border-amber-100 bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-amber-700">Saved Practice Sessions</p><div className="mt-3 flex flex-wrap gap-2">{sessions.slice(0, 4).map((session) => <span key={session.id} className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800">{session.subject} · {session.pct}%</span>)}</div></div>}
 
         <div className="space-y-3">
           {rankedWeakSubjects.map((subject) => (

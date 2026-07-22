@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowRight, FaCheck, FaGraduationCap } from "react-icons/fa";
+import { updateProfile } from "../api/authApi";
 import { getCurrentUser, updateCurrentStudentProfile } from "../services/storage";
 
 const examTargets = ["ACET", "UPCAT", "DCAT", "USTET", "General CET Prep"];
@@ -20,7 +21,7 @@ export default function StudentProfilingPage() {
 
   const progress = useMemo(() => `${step + 1} of 3`, [step]);
 
-  function nextStep() {
+  async function nextStep() {
     setError("");
     if (step === 0 && !form.name.trim()) {
       setError("Full name is required.");
@@ -31,7 +32,7 @@ export default function StudentProfilingPage() {
       return;
     }
 
-    updateCurrentStudentProfile({
+    const profile = {
       name: form.name.trim(),
       nickname: form.nickname.trim(),
       profileCompleted: true,
@@ -40,7 +41,9 @@ export default function StudentProfilingPage() {
         strengths: splitTags(form.strengths),
         weakTags: splitTags(form.weakTags)
       }
-    });
+    };
+    updateCurrentStudentProfile({ ...profile, profileCompleted: true });
+    try { await updateProfile(profile); } catch (reason) { setError(reason.response?.data?.error || "Could not save your profile."); return; }
     navigate("/dashboard", { replace: true });
   }
 
@@ -67,7 +70,7 @@ export default function StudentProfilingPage() {
         <div className="mt-8">
           {step === 0 && (
             <div className="space-y-4">
-              <Field label="Full Name" value={form.name} onChange={(name) => setForm((current) => ({ ...current, name }))} placeholder="Stanley Mejia" />
+              <Field label="Full Name" value={form.name} onChange={(name) => setForm((current) => ({ ...current, name }))} placeholder="Stanly Mejia" />
               <Field label="Nickname" value={form.nickname} onChange={(nickname) => setForm((current) => ({ ...current, nickname }))} placeholder="Stan" />
             </div>
           )}

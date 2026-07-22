@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaAngleDoubleLeft, FaAngleDoubleRight, FaBookOpen, FaBullseye, FaClipboardList, FaGraduationCap, FaSignOutAlt } from "react-icons/fa";
+import { FaAngleDoubleLeft, FaAngleDoubleRight, FaBookOpen, FaBullseye, FaClipboardList, FaCog, FaGraduationCap, FaSignOutAlt, FaTachometerAlt } from "react-icons/fa";
 import { getCurrentUser, logoutUser } from "../services/storage";
 
 const SIDEBAR_PREFERENCE_KEY = "acetAdminSidebarCollapsed";
@@ -20,7 +20,7 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
 
   function goToBuilder(mode) {
     onModeChange?.(mode);
-    navigate(`/admin/dashboard?mode=${mode}`);
+    navigate(`/admin/exams?mode=${mode}`);
   }
 
   function logout() {
@@ -99,7 +99,7 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
         }
       `}</style>
 
-      <aside className={`sidebar-gradient hidden shrink-0 flex-col text-white shadow-xl border-r border-white/5 transition-[width] duration-200 md:flex ${sidebarCollapsed ? "w-20" : "w-64"}`}>
+      <aside className={`sidebar-gradient hidden h-screen shrink-0 flex-col text-white shadow-xl border-r border-white/5 transition-[width] duration-200 md:flex ${sidebarCollapsed ? "w-20" : "w-64"}`}>
         
         {/* Logo / Header & Toggle Block */}
         <div className={`flex ${sidebarCollapsed ? "flex-col items-center gap-4 p-4" : "items-center justify-between p-6"}`}>
@@ -141,6 +141,9 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
 
         {/* Navigation Items - Same as Student Sidebar */}
         <nav className={`flex-1 space-y-1.5 overflow-y-auto ${sidebarCollapsed ? "px-3" : "px-4"}`} aria-label="Admin navigation">
+          <button type="button" onClick={() => navigate("/admin/dashboard")} title={sidebarCollapsed ? "Dashboard" : undefined} className={`flex w-full items-center rounded-xl py-3 text-sm font-bold transition-all ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${active === "dashboard" ? "bg-white/10 text-white border border-white/10 shadow-inner" : "text-zinc-400 hover:bg-white/5 hover:text-white"}`}>
+            <FaTachometerAlt className="shrink-0 text-base" />{!sidebarCollapsed && <span>Dashboard</span>}{sidebarCollapsed && <span className="sr-only">Dashboard</span>}
+          </button>
           <button
             type="button"
             onClick={() => goToBuilder("exam")}
@@ -190,6 +193,9 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
             <FaBullseye className="shrink-0 text-base" /> 
             {!sidebarCollapsed && <span>Create Drill</span>}
             {sidebarCollapsed && <span className="sr-only">Create Drill</span>}
+          </button>
+          <button type="button" onClick={() => navigate("/admin/settings")} title={sidebarCollapsed ? "Settings" : undefined} className={`flex w-full items-center rounded-xl py-3 text-sm font-bold transition-all ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${active === "settings" ? "bg-white/10 text-white border border-white/10 shadow-inner" : "text-zinc-400 hover:bg-white/5 hover:text-white"}`}>
+            <FaCog className="shrink-0 text-base" />{!sidebarCollapsed && <span>Settings</span>}{sidebarCollapsed && <span className="sr-only">Settings</span>}
           </button>
         </nav>
 

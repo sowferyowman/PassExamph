@@ -4,21 +4,30 @@ import DashboardLayout from "./layouts/DashboardLayout";
 import CommunityForumPage from "./features/community/CommunityForumPage";
 import RewardsBadgesPage from "./features/community/RewardsBadgesPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminReviewDashboard from "./pages/AdminReviewDashboard";
+import AdminSettingsPage from "./pages/AdminSettingsPage";
 import CreateDrill from "./pages/CreateDrill";
 import DashboardPage from "./pages/DashboardPage";
 import ExamPage from "./pages/ExamPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ForgotPasswordSms from "./pages/ForgotPasswordSms";
 import ReviewersPage from "./pages/ReviewersPage";
 import SettingsPage from "./pages/SettingsPage";
 import StudentProfilingPage from "./pages/StudentProfilingPage";
 import WeaknessDrillsPage from "./pages/WeaknessDrillsPage";
+import { AuthProvider } from "./context/AuthContext";
 
 export default function App() {
   return (
-    <Routes>
+    <AuthProvider><Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/forgot-password-sms" element={<ForgotPasswordSms />} />
 
       <Route element={<ProtectedRoute allowedRole="student" />}>
         <Route path="/student-profiling" element={<StudentProfilingPage />} />
@@ -47,11 +56,14 @@ export default function App() {
       </Route>
 
       <Route element={<ProtectedRoute allowedRole="admin" />}>
-        <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        <Route path="/admin/dashboard" element={<AdminReviewDashboard />} />
+        <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        <Route path="/admin/dashboard-home" element={<AdminReviewDashboard />} />
+        <Route path="/admin/exams" element={<AdminDashboardPage />} />
         <Route path="/admin/drills" element={<CreateDrill />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    </Routes></AuthProvider>
   );
 }

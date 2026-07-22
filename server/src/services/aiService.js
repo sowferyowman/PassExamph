@@ -1,4 +1,5 @@
 const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_ESSAY_FALLBACK_MODEL = "llama-3.1-8b-instant";
 
 function getGroqClient() {
   if (!process.env.GROQ_API_KEY) {
@@ -69,6 +70,37 @@ async function diagnoseExam(payload) {
   } catch (error) {
     console.error("Groq exam diagnosis fallback:", error.message);
     return { ...fallback, source: "local_fallback", warning: error.message };
+  }
+}
+
+async function scoreEssay({ response = "", rubric = "", points = 1 } = {}) {
+  const groq = getGroqClient();
+  const messages = [
+    { role: "system", content: "Score the essay using the rubric. Return only JSON: {\"score\": number}. No feedback or explanation. Score must be between 0 and the supplied maximum points." },
+    { role: "user", content: JSON.stringify({ response, rubric: rubric || "Assess relevance, accuracy, organization, and clarity.", max_points: Number(points) || 1 }) }
+  ];
+  const request = (model) => groq.chat.completions.create({ model, temperature: 0.1, max_tokens: 200, response_format: { type: "json_object" }, messages });
+  const normalizeScore = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, Math.min(Number(points) || 1, numeric)) : null;
+  };
+  try {
+    const completion = await request(GROQ_MODEL);
+    const value = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+    const score = normalizeScore(value.score);
+    return score === null ? { score: null, status: "pending_review" } : { score, status: "ai_graded" };
+  } catch (error) {
+    if (error?.status === 429 || error?.response?.status === 429 || /429|rate limit/i.test(error?.message || "")) {
+      return { score: null, status: "pending_review", reason: "rate_limited" };
+    }
+    try {
+      const completion = await request(GROQ_ESSAY_FALLBACK_MODEL);
+      const value = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+      const score = normalizeScore(value.score);
+      return score === null ? { score: null, status: "pending_review" } : { score, status: "ai_graded" };
+    } catch (fallbackError) {
+      return { score: null, status: "pending_review", reason: fallbackError?.message || error?.message };
+    }
   }
 }
 
@@ -198,4 +230,4 @@ function normalizeGate(value, fallback) {
   };
 }
 
-module.exports = { diagnoseExam, buildAdaptiveGate };
+module.exports = { diagnoseExam, buildAdaptiveGate, scoreEssay };

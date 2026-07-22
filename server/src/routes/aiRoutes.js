@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { buildAdaptiveGate, diagnoseExam } = require("../services/aiService");
+const { buildAdaptiveGate, diagnoseExam, scoreEssay } = require("../services/aiService");
 
 router.post("/diagnose-exam", async (req, res) => {
   try {
@@ -24,6 +24,15 @@ router.post("/adaptive-gate", async (req, res) => {
   } catch (error) {
     console.error("AI adaptive gate endpoint failure:", error);
     res.status(500).json({ error: "Failed to generate adaptive learning gate." });
+  }
+});
+
+router.post("/score-essay", async (req, res) => {
+  try {
+    res.json(await scoreEssay(req.body || {}));
+  } catch (error) {
+    console.error("AI essay scoring failure:", error);
+    res.status(200).json({ score: null, status: "pending_review" });
   }
 });
 

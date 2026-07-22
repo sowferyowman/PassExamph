@@ -1,30 +1,45 @@
 import { useMemo, useState } from "react";
-import { FaBolt, FaSave } from "react-icons/fa";
+import { FaBolt, FaEdit, FaPlus, FaSave, FaTrash } from "react-icons/fa";
 import AdminSidebar from "../components/AdminSidebar";
 import PremiumRichTextEditor from "../components/PremiumRichTextEditor";
-import { getDrillBankQuestions, publishDrillQuestion } from "../services/storage";
-
-const subjectOptions = ["Mathematics", "Logical Reasoning", "Science", "English", "Reading Comprehension", "General Knowledge"];
+import { deleteDrillQuestion, getDrillBankQuestions, publishDrillQuestion, updateDrillQuestion } from "../services/storage";
 
 const emptyForm = {
   questionType: "multiple_choice",
   type: "multiple_choice",
   stem: "",
-  choiceOpts: ["", "", "", ""],
+  choiceOpts: ["", ""],
   answerIdx: 0,
   correctAnswers: [],
   correctText: "",
   gradingPlaceholder: "",
-  subjectTitle: "Mathematics",
+  subjectTitle: "",
   diagnosticSubcategory: "",
   diagnosticSkillTag: "",
   explanation: ""
 };
 
+// Helper functions
+function stripHtml(html) {
+  if (!html) return "";
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || "";
+}
+
+function usesOptions(type) {
+  return type === "multiple_choice" || type === "checkboxes";
+}
+
+function getOptionLabel(index) {
+  return String.fromCharCode(65 + index); // A, B, C, D, ...
+}
+
 export default function CreateDrill() {
   const [form, setForm] = useState(emptyForm);
   const [drillBank, setDrillBank] = useState(() => getDrillBankQuestions());
   const [message, setMessage] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const subjectCounts = useMemo(() => {
     return drillBank.reduce((counts, question) => {
@@ -40,12 +55,36 @@ export default function CreateDrill() {
     }));
   }
 
+  function addOption() {
+    setForm((current) => ({
+      ...current,
+      choiceOpts: [...current.choiceOpts, ""]
+    }));
+  }
+
+  function removeOption(index) {
+    if (form.choiceOpts.length <= 2) {
+      setMessage("You need at least 2 options.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      choiceOpts: current.choiceOpts.filter((_, i) => i !== index),
+      answerIdx: current.answerIdx >= current.choiceOpts.length - 1 ? 0 : 
+                 (current.answerIdx === index ? 0 : 
+                  current.answerIdx > index ? current.answerIdx - 1 : current.answerIdx),
+      correctAnswers: current.correctAnswers
+        .filter(idx => idx !== index)
+        .map(idx => idx > index ? idx - 1 : idx)
+    }));
+  }
+
   function updateQuestionType(questionType) {
     setForm((current) => ({
       ...current,
       questionType,
       type: questionType,
-      choiceOpts: usesOptions(questionType) ? current.choiceOpts : ["", "", "", ""],
+      choiceOpts: usesOptions(questionType) ? (current.choiceOpts.length >= 2 ? current.choiceOpts : ["", ""]) : [],
       answerIdx: 0,
       correctAnswers: [],
       correctText: "",
@@ -55,7 +94,8 @@ export default function CreateDrill() {
 
   function validateForm() {
     if (!stripHtml(form.stem)) return "Question text is required.";
-    if (usesOptions(form.questionType) && form.choiceOpts.some((option) => !option.trim())) return "Options A, B, C, and D are required.";
+    if (usesOptions(form.questionType) && form.choiceOpts.some((option) => !option.trim())) return "All options must be filled.";
+    if (usesOptions(form.questionType) && form.choiceOpts.length < 2) return "You need at least 2 options.";
     if (form.questionType === "checkboxes" && !form.correctAnswers.length) return "Checkbox questions need at least one correct answer.";
     if (form.questionType === "short_answer" && !form.correctText.trim()) return "Short Answer needs a correct keyphrase answer.";
     if (form.questionType === "paragraph" && !form.gradingPlaceholder.trim()) return "Long Paragraph needs a descriptive grading placeholder.";
@@ -72,7 +112,7 @@ export default function CreateDrill() {
       return;
     }
 
-    const published = publishDrillQuestion({
+    const drillPayload = {
       ...form,
       type: form.questionType,
       questionType: form.questionType,
@@ -92,92 +132,152 @@ export default function CreateDrill() {
         weaknessTag: form.diagnosticSkillTag.trim(),
         path: [form.subjectTitle, form.diagnosticSubcategory.trim(), form.diagnosticSkillTag.trim()]
       }
-    });
+    };
+    const published = editingId ? updateDrillQuestion(editingId, drillPayload) : publishDrillQuestion(drillPayload);
 
     setDrillBank(getDrillBankQuestions());
+    setEditingId(null);
     setForm({ ...emptyForm, subjectTitle: form.subjectTitle });
-    setMessage(`Published drill question to drillBankData under ${published.subjectTitle} -> ${published.diagnosticSubcategory} -> ${published.diagnosticSkillTag}.`);
+    setMessage(`${editingId ? "Updated" : "Published"} drill question under ${published.subjectTitle} -> ${published.diagnosticSubcategory} -> ${published.diagnosticSkillTag}.`);
+  }
+
+  function editDrill(question) {
+    setEditingId(question.id);
+    setForm({ ...emptyForm, ...question, questionType: question.questionType || question.type || "multiple_choice", stem: question.stem || question.questionHtml || "", gradingPlaceholder: question.gradingPlaceholder || (question.type === "paragraph" ? question.correctText || "" : "") });
+    setMessage(`Editing drill: ${question.subjectTitle || "Untitled"}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function removeDrill(question) {
+    setDeleteTarget(question);
+  }
+
+  function confirmDeleteDrill() {
+    if (!deleteTarget) return;
+    deleteDrillQuestion(deleteTarget.id);
+    setDrillBank(getDrillBankQuestions());
+    setMessage("Drill deleted successfully.");
+    setDeleteTarget(null);
   }
 
   function renderAnswerWorkspace() {
     if (usesOptions(form.questionType)) {
       return (
         <>
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {form.choiceOpts.map((option, index) => (
-              <label key={index} className="block">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Option {String.fromCharCode(65 + index)}</span>
-                <input
-                  value={option}
-                  onChange={(event) => updateOption(index, event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder={`Choice ${String.fromCharCode(65 + index)}`}
-                />
-              </label>
-            ))}
-          </div>
-
-          {form.questionType === "checkboxes" ? (
-            <div className="mt-5">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Correct Answers</span>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {form.choiceOpts.map((_, optionIndex) => (
-                  <label key={optionIndex} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 shadow-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.correctAnswers.includes(optionIndex)}
-                      onChange={() => setForm((current) => ({ ...current, correctAnswers: toggleCorrectAnswer(current.correctAnswers, optionIndex) }))}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Option {String.fromCharCode(65 + optionIndex)}
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <label className="mt-5 block">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Correct Answer Index</span>
-              <select
-                value={form.answerIdx}
-                onChange={(event) => setForm((current) => ({ ...current, answerIdx: Number(event.target.value) }))}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Options <span className="text-rose-500">*</span>
+                <span className="ml-2 text-xs font-normal text-slate-400">
+                  ({form.choiceOpts.length} options)
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={addOption}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition"
               >
-                {form.choiceOpts.map((_, index) => (
-                  <option key={index} value={index}>
-                    {index} - Option {String.fromCharCode(65 + index)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+                <FaPlus className="text-xs" /> Add Option
+              </button>
+            </div>
+            
+            <div className="space-y-2">
+              {form.choiceOpts.map((option, optionIndex) => (
+                <div key={optionIndex} className="flex items-center gap-2">
+                  <span className="w-8 text-sm font-bold text-slate-500 text-center">
+                    {getOptionLabel(optionIndex)}
+                  </span>
+                  <input
+                    value={option}
+                    onChange={(event) => updateOption(optionIndex, event.target.value)}
+                    className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    placeholder={`Option ${getOptionLabel(optionIndex)}`}
+                  />
+                  {form.questionType === "multiple_choice" && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, answerIdx: optionIndex }))}
+                      className={`px-3 py-1.5 text-xs font-bold rounded transition ${
+                        form.answerIdx === optionIndex
+                          ? "bg-emerald-500 text-white"
+                          : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                      }`}
+                    >
+                      {form.answerIdx === optionIndex ? "✓ Correct" : "Set Correct"}
+                    </button>
+                  )}
+                  {form.questionType === "checkboxes" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentCorrect = form.correctAnswers || [];
+                        const newCorrect = currentCorrect.includes(optionIndex)
+                          ? currentCorrect.filter(idx => idx !== optionIndex)
+                          : [...currentCorrect, optionIndex].sort((a, b) => a - b);
+                        setForm((current) => ({ ...current, correctAnswers: newCorrect }));
+                      }}
+                      className={`px-3 py-1.5 text-xs font-bold rounded transition ${
+                        (form.correctAnswers || []).includes(optionIndex)
+                          ? "bg-emerald-500 text-white"
+                          : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                      }`}
+                    >
+                      {(form.correctAnswers || []).includes(optionIndex) ? "✓ Correct" : "Mark Correct"}
+                    </button>
+                  )}
+                  {form.choiceOpts.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => removeOption(optionIndex)}
+                      className="text-rose-400 hover:text-rose-600 transition p-1"
+                    >
+                      <FaTrash className="text-sm" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {form.questionType === "checkboxes" && (
+              <div className="mt-3 text-xs font-semibold text-slate-500">
+                Selected correct options: {(form.correctAnswers || []).length > 0 
+                  ? (form.correctAnswers || []).map(idx => getOptionLabel(idx)).join(', ') 
+                  : 'None selected'}
+              </div>
+            )}
+          </div>
         </>
       );
     }
 
     if (form.questionType === "short_answer") {
       return (
-        <label className="mt-5 block">
-          <span className="text-xs font-black uppercase tracking-wider text-slate-500">Correct Keyphrase Answer</span>
-          <input
-            value={form.correctText}
-            onChange={(event) => setForm((current) => ({ ...current, correctText: event.target.value }))}
-            className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-            placeholder="Exact keyphrase students must enter"
-          />
-        </label>
+        <div className="mt-4">
+          <label className="block">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Answer Key <span className="text-rose-500">*</span></span>
+            <input
+              value={form.correctText}
+              onChange={(event) => setForm((current) => ({ ...current, correctText: event.target.value }))}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+              placeholder="Enter the correct answer"
+            />
+          </label>
+        </div>
       );
     }
 
     return (
-      <label className="mt-5 block">
-        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Open-Ended Grading Placeholder</span>
-        <textarea
-          value={form.gradingPlaceholder}
-          onChange={(event) => setForm((current) => ({ ...current, gradingPlaceholder: event.target.value }))}
-          className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-          placeholder="Describe the expected reasoning, rubric, or evaluator notes for this long paragraph response."
-        />
-      </label>
+      <div className="mt-4">
+        <label className="block">
+          <span className="text-xs font-black uppercase tracking-wider text-slate-500">Sample Answer / Rubric <span className="text-slate-400">(optional)</span></span>
+          <textarea
+            value={form.gradingPlaceholder}
+            onChange={(event) => setForm((current) => ({ ...current, gradingPlaceholder: event.target.value }))}
+            className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+            placeholder="Describe the key points the AI should look for..."
+          />
+        </label>
+      </div>
     );
   }
 
@@ -198,11 +298,11 @@ export default function CreateDrill() {
           <section className="space-y-5">
             <div className="glass-card p-6">
               <label className="block">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text</span>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text <span className="text-rose-500">*</span></span>
                 <PremiumRichTextEditor
                   value={form.stem}
                   onChange={(value) => setForm((current) => ({ ...current, stem: value }))}
-                  placeholder="Write the drill question here with equations, media, links, highlights, and formatted passages..."
+                  placeholder="Write the drill question here..."
                 />
               </label>
             </div>
@@ -226,38 +326,33 @@ export default function CreateDrill() {
             </div>
 
             <div className="glass-card p-6">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Mandatory AI Classification Metadata</p>
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">AI Classification Metadata</p>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Subject Category</span>
-                  <select
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Subject Category <span className="text-rose-500">*</span></span>
+                  <input
                     value={form.subjectTitle}
                     onChange={(event) => setForm((current) => ({ ...current, subjectTitle: event.target.value }))}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  >
-                    {subjectOptions.map((subject) => (
-                      <option key={subject} value={subject}>
-                        {subject}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Sub-Category</span>
-                  <input
-                    value={form.diagnosticSubcategory}
-                    onChange={(event) => setForm((current) => ({ ...current, diagnosticSubcategory: event.target.value }))}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                    placeholder="Syllogisms, Geometry"
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    placeholder="e.g., Mathematics, English"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Specific Weakness Tag</span>
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Sub-Category <span className="text-rose-500">*</span></span>
+                  <input
+                    value={form.diagnosticSubcategory}
+                    onChange={(event) => setForm((current) => ({ ...current, diagnosticSubcategory: event.target.value }))}
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    placeholder="e.g., Algebra, Reading Inference"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Skill Tag <span className="text-rose-500">*</span></span>
                   <input
                     value={form.diagnosticSkillTag}
                     onChange={(event) => setForm((current) => ({ ...current, diagnosticSkillTag: event.target.value }))}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                    placeholder="Double Negatives"
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    placeholder="e.g., Double Negatives, Rate Problems"
                   />
                 </label>
               </div>
@@ -265,8 +360,9 @@ export default function CreateDrill() {
 
             <div className="flex flex-wrap gap-3">
               <button onClick={publishDrill} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
-                <FaSave /> Publish to Drill Bank
+                <FaSave /> {editingId ? "Update Drill" : "Publish to Drill Bank"}
               </button>
+              {editingId && <button onClick={() => { setEditingId(null); setForm(emptyForm); }} className="rounded-lg border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600">Cancel Edit</button>}
             </div>
             {message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">{message}</p>}
           </section>
@@ -298,8 +394,8 @@ export default function CreateDrill() {
               <div className="mt-4 space-y-3">
                 {drillBank.slice(0, 4).map((question) => (
                   <div key={question.id} className="rounded-lg border border-slate-200 p-3">
-                    <p className="line-clamp-2 text-sm font-black text-slate-900">{stripHtml(question.stem)}</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">{question.subjectTitle} / {question.diagnosticSubcategory} / {formatQuestionType(question.questionType || question.type)}</p>
+                    <div className="flex items-start justify-between gap-2"><p className="line-clamp-2 text-sm font-black text-slate-900">{stripHtml(question.stem)}</p><div className="flex shrink-0 gap-1"><button onClick={() => editDrill(question)} className="rounded p-1 text-blue-600 hover:bg-blue-50" title="Edit drill"><FaEdit /></button><button onClick={() => removeDrill(question)} className="rounded p-1 text-rose-600 hover:bg-rose-50" title="Delete drill"><FaTrash /></button></div></div>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{question.subjectTitle} / {question.diagnosticSubcategory} / {question.diagnosticSkillTag}</p>
                   </div>
                 ))}
                 {!drillBank.length && <p className="text-sm text-slate-500">Published drill questions will appear here.</p>}
@@ -308,33 +404,20 @@ export default function CreateDrill() {
           </aside>
         </div>
       </div>
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-600"><FaTrash /></div>
+                <h3 className="text-lg font-bold text-slate-900">Delete Drill</h3>
+              </div>
+            </div>
+            <div className="px-6 py-5"><p className="text-sm leading-relaxed text-slate-600">Delete this drill from <span className="font-bold text-slate-900">{deleteTarget.subjectTitle || "the drill bank"}</span>?</p><p className="mt-2 text-xs text-rose-600">This action cannot be undone.</p></div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4"><button onClick={() => setDeleteTarget(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={confirmDeleteDrill} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 hover:bg-rose-700">Yes, Delete</button></div>
+          </div>
+        </div>
+      )}
     </main>
   );
-}
-
-function usesOptions(type) {
-  return type === "multiple_choice" || type === "mcq" || type === "checkboxes";
-}
-
-function toggleCorrectAnswer(currentAnswers, optionIndex) {
-  if (currentAnswers.includes(optionIndex)) {
-    return currentAnswers.filter((item) => item !== optionIndex);
-  }
-
-  return [...currentAnswers, optionIndex];
-}
-
-function formatQuestionType(type) {
-  if (type === "checkboxes") return "Checkbox";
-  if (type === "short_answer") return "Short Answer";
-  if (type === "paragraph") return "Long Paragraph";
-  return "Multiple Choice";
-}
-
-function stripHtml(value) {
-  return String(value || "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }

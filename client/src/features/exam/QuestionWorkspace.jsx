@@ -58,9 +58,10 @@ export default function QuestionWorkspace({ section, question, questionIndex, re
             className="h-72 w-full resize-none rounded-xl border-2 border-slate-200 p-5 font-medium leading-relaxed text-slate-700 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
             placeholder="Begin typing your essay response here..."
           />
-          <p className="mt-2 text-right text-xs font-bold text-slate-400">
-            {essay.trim().split(/\s+/).filter(Boolean).length} Words
-          </p>
+          <div className="mt-2 flex justify-end gap-4 text-xs font-bold text-slate-400">
+            <span>{essay.trim().split(/\s+/).filter(Boolean).length} Words</span>
+            <span>{essay.length} Characters</span>
+          </div>
         </div>
       )}
     </section>

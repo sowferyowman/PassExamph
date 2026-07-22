@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaArrowLeft, FaBrain, FaChartPie, FaSpinner } from "react-icons/fa";
+import { FaArrowLeft, FaBrain, FaChartPie, FaSpinner, FaHourglassHalf } from "react-icons/fa";
 import { diagnoseExam } from "../../api/aiApi";
 import { getCurrentUser, saveAiDiagnosticForLatestAttempt } from "../../services/storage";
 
@@ -51,11 +51,13 @@ export default function ResultsView({ results, onBack }) {
 
         <div className="glass-card p-8 text-center">
           <p className="text-xs font-black uppercase tracking-wider text-blue-600">Mock Complete</p>
-          <h1 className="mt-2 text-5xl font-black text-slate-950">{results?.finalPct ?? 0}%</h1>
+          {results?.hasEssays ? (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-black text-amber-800"><FaHourglassHalf /> Pending Review</div>
+          ) : <h1 className="mt-2 text-5xl font-black text-slate-950">{results?.finalPct ?? 0}%</h1>}
           <p className="mt-2 text-sm font-semibold text-slate-500">
-            {results?.correct ?? 0} / {results?.total ?? 0} items correct
+            {results?.hasEssays ? `${results.essayCount || 1} essay question${results.essayCount === 1 ? "" : "s"} — Pending Review` : `${results?.correct ?? 0} / ${results?.total ?? 0} items correct`}
           </p>
-          <p className="mt-4 text-sm text-slate-600">AI target score after interventions: {results?.targetScore ?? 0}%</p>
+          {!results?.hasEssays && <p className="mt-4 text-sm text-slate-600">AI target score after interventions: {results?.targetScore ?? 0}%</p>}
         </div>
 
         <section className="glass-card overflow-hidden">
@@ -92,7 +94,7 @@ export default function ResultsView({ results, onBack }) {
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-xs font-black uppercase tracking-wider text-slate-500">Performance Score</p>
-                    <p className="mt-2 text-3xl font-black text-violet-700">{aiDiagnostic.percentage_score}%</p>
+                    <p className="mt-2 text-3xl font-black text-violet-700">{results?.hasEssays ? "Pending" : `${aiDiagnostic.percentage_score}%`}</p>
                   </div>
                   {(aiDiagnostic.subject_mastery || []).slice(0, 2).map((subject) => (
                     <div key={subject.subject} className="rounded-xl border border-slate-200 bg-white p-4">
