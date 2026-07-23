@@ -15,53 +15,10 @@ const NOTIFICATIONS_KEY = "notificationsData";
 const REVIEWER_PROGRESS_KEY = "reviewer_progress";
 const STAN_DASHBOARD_RESET_KEY = "acet_stan_dashboard_reset_20260715_v1";
 
-const defaultUsers = [
-  {
-    id: "admin-default",
-    username: "admin1",
-    email: "admin@exams.ph",
-    password: "pass1234",
-    role: "admin",
-    name: "Admin Workspace"
-  },
-  {
-    id: "student-default",
-    username: "student1",
-    email: "student1@exams.ph",
-    password: "123",
-    role: "student",
-    name: "Stanly Mejia"
-  }
-];
-
-const defaultUserAccounts = [
-  {
-    id: "admin-default",
-    username: "admin1",
-    name: "Admin Workspace",
-    nickname: "Admin",
-    email: "admin@exams.ph",
-    password: "pass1234",
-    smsNumber: "",
-    role: "admin",
-    isGoogleLinked: false,
-    profileCompleted: true,
-    academicMetrics: { target: "Admin", strengths: [], weakTags: [] }
-  },
-  {
-    id: "student-default",
-    username: "student1",
-    name: "Stanly Mejia",
-    nickname: "Stan",
-    email: "student1@exams.ph",
-    password: "123",
-    smsNumber: "+639123456789",
-    role: "student",
-    isGoogleLinked: false,
-    profileCompleted: true,
-    academicMetrics: { target: "ACET", strengths: ["Mathematics"], weakTags: ["Reading Inference"] }
-  }
-];
+// Authentication is handled by the server.  Never seed usernames, emails, or
+// passwords in the client bundle (the bundle is public and can be inspected).
+const defaultUsers = [];
+const defaultUserAccounts = [];
 
 const defaultForumThreads = [];
 

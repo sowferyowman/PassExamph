@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FaPlus, FaSave, FaTrash, FaUnlock, FaLock, FaUsers, FaEdit, FaEye, FaEyeSlash, FaTimes } from "react-icons/fa";
 import AdminSidebar from "../components/AdminSidebar";
-import PremiumRichTextEditor from "../components/PremiumRichTextEditor";
+import TinyMCEEditor from "../components/TinyMCEEditor";
 import {
   getExamBlueprints,
   getReviewerBlueprints,
@@ -809,7 +809,7 @@ export default function AdminDashboardPage() {
         <div className="flex items-start justify-between gap-3">
           <label className="block flex-1">
             <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text <span className="text-rose-500">*</span></span>
-            <PremiumRichTextEditor
+            <TinyMCEEditor
               value={question.stem}
               onChange={(value) => updateQuestion(sectionIndex, questionIndex, { stem: value })}
               placeholder="Type your question here..."
@@ -1040,7 +1040,7 @@ export default function AdminDashboardPage() {
                 </label>
                 <label className="block mt-3">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-500">Reading Material <span className="text-rose-500">*</span></span>
-                  <PremiumRichTextEditor
+                  <TinyMCEEditor
                     value={module.content}
                     onChange={(value) => updateReviewerModule(module.id, { content: value })}
                     placeholder="Write the reading material here..."

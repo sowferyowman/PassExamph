@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, FaPlay, FaHourglassHalf, FaCheckCircle } from "react-icons/fa";
 import { scoreEssay } from "../api/aiApi";
+import { advanceExamSection, completeExamSession, createExamSession, getActiveExamSession, saveExamProgress, startExamSection, syncExamSession } from "../api/examSessionApi";
 import ExamShell from "../features/exam/ExamShell";
 import ResultsView from "../features/exam/ResultsView";
 import {
@@ -40,13 +41,18 @@ export default function ExamPage({ historyOnly = false }) {
   const [startedAt, setStartedAt] = useState(null);
   const [questionMetrics, setQuestionMetrics] = useState([]);
   const [historyData, setHistoryData] = useState({ exams: [] });
+  const [serverTimeLeft, setServerTimeLeft] = useState(null);
   const activeQuestionStartedAt = useRef(Date.now());
   const questionMetricsRef = useRef([]);
+  const responsesRef = useRef([]);
+  const positionRef = useRef({ section: 0, question: 0 });
+  const sessionRef = useRef(null);
+  const saveTimerRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
 
-    function loadExam() {
+    async function loadExam() {
       try {
         const user = getCurrentUser();
         const dashboard = getStudentDashboard(user?.email);
@@ -70,6 +76,21 @@ export default function ExamPage({ historyOnly = false }) {
           return;
         }
 
+        const activeSession = await getActiveExamSession().catch(() => null);
+        const resumableBlueprint = activeSession && examBlueprints.find((exam) => String(exam.id) === String(activeSession.examId));
+        if (resumableBlueprint) {
+          const nextSections = resumableBlueprint.sections || [];
+          const restoredResponses = hydrateResponses(nextSections, activeSession.responses);
+          setBlueprint(resumableBlueprint); setSections(nextSections); setResponses(restoredResponses);
+          responsesRef.current = restoredResponses;
+          setActiveSection(activeSession.activeSection); setActiveQuestion(activeSession.activeQuestion);
+          positionRef.current = { section: activeSession.activeSection, question: activeSession.activeQuestion };
+          sessionRef.current = activeSession; setServerTimeLeft(activeSession.remainingSeconds);
+          questionMetricsRef.current = createEmptyQuestionMetrics(nextSections); setQuestionMetrics(questionMetricsRef.current);
+          activeQuestionStartedAt.current = Date.now(); setStartedAt(activeSession.serverNow);
+          setPhase(activeSession.status === "active" ? "testing" : "intermission");
+          return;
+        }
         setPhase("select");
       } catch (err) {
         console.error("Exam blueprint storage error:", err);
@@ -86,6 +107,38 @@ export default function ExamPage({ historyOnly = false }) {
       mounted = false;
     };
   }, [historyOnly]);
+
+  const applySession = useCallback((session) => {
+    sessionRef.current = session;
+    setServerTimeLeft(session.remainingSeconds);
+    return session;
+  }, []);
+
+  const persistProgress = useCallback(async () => {
+    const session = sessionRef.current;
+    if (!session || !["overview", "intermission", "active"].includes(session.status)) return null;
+    try {
+      return applySession(await saveExamProgress(session.id, { responses: responsesRef.current, activeSection: positionRef.current.section, activeQuestion: positionRef.current.question }));
+    } catch (error) {
+      console.warn("Exam autosave will retry when the connection returns.", error);
+      return null;
+    }
+  }, [applySession]);
+
+  const queueProgressSave = useCallback(() => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(persistProgress, 750);
+  }, [persistProgress]);
+
+  const flushProgress = useCallback(async () => {
+    clearTimeout(saveTimerRef.current);
+    return persistProgress();
+  }, [persistProgress]);
+
+  useEffect(() => {
+    const interval = setInterval(flushProgress, 20000);
+    return () => { clearInterval(interval); clearTimeout(saveTimerRef.current); };
+  }, [flushProgress]);
 
   const currentSection = sections[activeSection];
   const currentQuestion = currentSection?.questions[activeQuestion];
@@ -144,19 +197,22 @@ export default function ExamPage({ historyOnly = false }) {
     questionMetricsRef.current = nextMetrics;
     setQuestionMetrics(nextMetrics);
 
-    setResponses((current) =>
-      current.map((sectionResponses, sectionIndex) =>
-        sectionIndex === activeSection
-          ? sectionResponses.map((item, questionIndex) => (questionIndex === activeQuestion ? value : item))
-          : sectionResponses
-      )
+    const nextResponses = responsesRef.current.map((sectionResponses, sectionIndex) =>
+      sectionIndex === activeSection
+        ? sectionResponses.map((item, questionIndex) => (questionIndex === activeQuestion ? value : item))
+        : sectionResponses
     );
-  }, [activeQuestion, activeSection, responses]);
+    responsesRef.current = nextResponses;
+    setResponses(nextResponses);
+    queueProgressSave();
+  }, [activeQuestion, activeSection, queueProgressSave, responses]);
 
   const submitAttempt = useCallback(async () => {
     try {
       const finalQuestionMetrics = recordActiveQuestionTime();
       setPhase("submitting");
+      await flushProgress();
+      if (sessionRef.current) await completeExamSession(sessionRef.current.id).then(applySession);
       const user = getCurrentUser();
       const scoredResults = scoreBlueprintAttempt(blueprint, responses, { questionMetrics: finalQuestionMetrics });
       const durationSeconds = startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / 1000)) : 0;
@@ -183,7 +239,18 @@ export default function ExamPage({ historyOnly = false }) {
       setError("Your exam attempt could not be saved. Please return to the dashboard and try again.");
       setPhase("error");
     }
-  }, [blueprint, recordActiveQuestionTime, responses, startedAt]);
+  }, [applySession, blueprint, flushProgress, recordActiveQuestionTime, responses, startedAt]);
+
+  const finishCurrentSection = useCallback(async () => {
+    recordActiveQuestionTime();
+    await flushProgress();
+    const session = sessionRef.current;
+    if (!session) return submitAttempt();
+    const updated = applySession(await advanceExamSection(session.id));
+    if (updated.status === "completed") return submitAttempt();
+    positionRef.current = { section: updated.activeSection, question: 0 };
+    setActiveSection(updated.activeSection); setActiveQuestion(0); setPhase("intermission"); setServerTimeLeft(null);
+  }, [applySession, flushProgress, recordActiveQuestionTime, submitAttempt]);
 
   const next = useCallback(() => {
     recordActiveQuestionTime();
@@ -191,39 +258,59 @@ export default function ExamPage({ historyOnly = false }) {
     if (!section) return;
 
     if (activeQuestion < section.questions.length - 1) {
-      setActiveQuestion((current) => current + 1);
+      const nextQuestion = activeQuestion + 1;
+      positionRef.current = { section: activeSection, question: nextQuestion };
+      setActiveQuestion(nextQuestion);
+      queueProgressSave();
       return;
     }
-
-    if (activeSection < sections.length - 1) {
-      setActiveSection((current) => current + 1);
-      setActiveQuestion(0);
-      setPhase("intermission");
-      return;
-    }
-
-    submitAttempt();
-  }, [activeQuestion, activeSection, recordActiveQuestionTime, sections, submitAttempt]);
+    finishCurrentSection();
+  }, [activeQuestion, activeSection, finishCurrentSection, queueProgressSave, recordActiveQuestionTime, sections]);
 
   const previous = useCallback(() => {
     recordActiveQuestionTime();
-    setActiveQuestion((current) => Math.max(0, current - 1));
-  }, [recordActiveQuestionTime]);
+    const nextQuestion = Math.max(0, activeQuestion - 1);
+    positionRef.current = { section: activeSection, question: nextQuestion };
+    setActiveQuestion(nextQuestion);
+    queueProgressSave();
+  }, [activeQuestion, activeSection, queueProgressSave, recordActiveQuestionTime]);
 
   const jump = useCallback((questionIndex) => {
     recordActiveQuestionTime();
+    positionRef.current = { section: activeSection, question: questionIndex };
     setActiveQuestion(questionIndex);
-  }, [recordActiveQuestionTime]);
+    queueProgressSave();
+  }, [activeSection, queueProgressSave, recordActiveQuestionTime]);
 
-  function updatePhase(nextPhase) {
-    if (nextPhase === "testing" && !startedAt) {
-      setStartedAt(Date.now());
+  async function updatePhase(nextPhase) {
+    if (nextPhase === "testing") {
+      try {
+        const session = applySession(await startExamSection(sessionRef.current.id, activeSection));
+        if (!startedAt) setStartedAt(session.serverNow);
+      } catch (_error) {
+        setError("Unable to synchronize the exam timer. Please reconnect and try again."); setPhase("error"); return;
+      }
     }
     if (nextPhase === "testing") {
       activeQuestionStartedAt.current = Date.now();
     }
     setPhase(nextPhase);
   }
+
+  async function beginAttempt() {
+    try {
+      const session = applySession(await createExamSession({ examId: blueprint.id, sectionDurations: sections.map((section) => Number(section.allottedTimeSec || 60)) }));
+      responsesRef.current = responses; positionRef.current = { section: 0, question: 0 };
+      setStartedAt(session.serverNow); setPhase("intermission");
+    } catch (_error) {
+      setError("Unable to create a server-synchronized exam session."); setPhase("error");
+    }
+  }
+
+  const syncTimer = useCallback(async () => {
+    if (!sessionRef.current) return null;
+    try { return applySession(await syncExamSession(sessionRef.current.id)); } catch (_error) { return null; }
+  }, [applySession]);
 
   function selectExam(nextBlueprint) {
     const nextSections = nextBlueprint.sections || [];
@@ -233,6 +320,7 @@ export default function ExamPage({ historyOnly = false }) {
     setBlueprint(nextBlueprint);
     setSections(nextSections);
     setResponses(initialResponses);
+    responsesRef.current = initialResponses;
     setActiveSection(0);
     setActiveQuestion(0);
     setResults(null);
@@ -240,6 +328,9 @@ export default function ExamPage({ historyOnly = false }) {
     questionMetricsRef.current = initialMetrics;
     setQuestionMetrics(initialMetrics);
     activeQuestionStartedAt.current = Date.now();
+    positionRef.current = { section: 0, question: 0 };
+    sessionRef.current = null;
+    setServerTimeLeft(null);
     setPhase("overview");
   }
 
@@ -422,7 +513,7 @@ export default function ExamPage({ historyOnly = false }) {
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => updatePhase("intermission")} 
+                  onClick={beginAttempt} 
                   className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-wider text-white transition hover:bg-blue-500 active:scale-[0.98]"
                 >
                   <FaPlay className="text-[10px]" /> Start ACET Mock Exam
@@ -492,10 +583,13 @@ export default function ExamPage({ historyOnly = false }) {
       response={response}
       responses={responses}
       progress={progress}
+      serverTimeLeft={serverTimeLeft}
       onSaveResponse={saveResponse}
       onNext={next}
       onPrevious={previous}
       onJump={jump}
+      onSyncTime={syncTimer}
+      onTimeExpired={finishCurrentSection}
       onExit={() => navigate("/dashboard")}
     />
   );
@@ -599,4 +693,8 @@ function getDurationMinutes(exam) {
   if (Number(exam.duration) > 0) return Number(exam.duration);
   const durationSeconds = (exam.sections || []).reduce((total, section) => total + Number(section.allottedTimeSec || 0), 0);
   return durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : null;
+}
+
+function hydrateResponses(sections, saved = []) {
+  return sections.map((section, sectionIndex) => section.questions.map((_, questionIndex) => saved?.[sectionIndex]?.[questionIndex] ?? null));
 }

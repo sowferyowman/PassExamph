@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FaArrowLeft, FaArrowRight, FaClock, FaTimes } from "react-icons/fa";
 import QuestionWorkspace from "./QuestionWorkspace";
 
@@ -24,24 +24,52 @@ export default function ExamShell(props) {
     onNext,
     onPrevious,
     onJump,
-    onExit
+    onExit,
+    serverTimeLeft,
+    onSyncTime,
+    onTimeExpired
   } = props;
 
-  const [timeLeft, setTimeLeft] = useState(currentSection.allottedTimeSec);
+  const [timeLeft, setTimeLeft] = useState(serverTimeLeft ?? currentSection.allottedTimeSec);
+  const anchorRef = useRef({ remaining: serverTimeLeft ?? currentSection.allottedTimeSec, receivedAt: Date.now() });
+  const expiredRef = useRef(false);
 
   useEffect(() => {
-    setTimeLeft(currentSection.allottedTimeSec);
-  }, [currentSection]);
+    const remaining = serverTimeLeft ?? currentSection.allottedTimeSec;
+    anchorRef.current = { remaining, receivedAt: Date.now() };
+    expiredRef.current = false;
+    setTimeLeft(remaining);
+  }, [currentSection, serverTimeLeft]);
 
   useEffect(() => {
     if (phase !== "testing") return undefined;
-    const timer = setInterval(() => setTimeLeft((value) => Math.max(0, value - 1)), 1000);
+    const timer = setInterval(() => {
+      const { remaining, receivedAt } = anchorRef.current;
+      setTimeLeft(Math.max(0, remaining - Math.floor((Date.now() - receivedAt) / 1000)));
+    }, 250);
     return () => clearInterval(timer);
   }, [phase]);
 
   useEffect(() => {
-    if (phase === "testing" && timeLeft === 0) onNext();
-  }, [phase, timeLeft, onNext]);
+    if (phase === "testing" && timeLeft === 0 && !expiredRef.current) {
+      expiredRef.current = true;
+      onTimeExpired();
+    }
+  }, [phase, timeLeft, onTimeExpired]);
+
+  useEffect(() => {
+    if (phase !== "testing") return undefined;
+    const sync = async () => {
+      const session = await onSyncTime();
+      if (session && Number.isFinite(session.remainingSeconds)) {
+        anchorRef.current = { remaining: session.remainingSeconds, receivedAt: Date.now() };
+        setTimeLeft(session.remainingSeconds);
+      }
+    };
+    sync();
+    const interval = setInterval(sync, 10000);
+    return () => clearInterval(interval);
+  }, [onSyncTime, phase]);
 
   if (phase === "intermission") {
     return (

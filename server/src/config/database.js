@@ -141,6 +141,22 @@ function ensureDatabase() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS exam_sessions (
+      id TEXT PRIMARY KEY,
+      student_id INTEGER NOT NULL,
+      exam_id TEXT NOT NULL,
+      section_durations TEXT NOT NULL,
+      responses TEXT NOT NULL DEFAULT '[]',
+      active_section INTEGER NOT NULL DEFAULT 0,
+      active_question INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'overview',
+      started_at_ms INTEGER NOT NULL,
+      section_started_at_ms INTEGER,
+      updated_at_ms INTEGER NOT NULL,
+      completed_at_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_exam_sessions_student_status ON exam_sessions(student_id, status);
+
   `);
   migrateLegacySchema(database);
   [

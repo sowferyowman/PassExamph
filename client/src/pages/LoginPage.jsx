@@ -185,16 +185,9 @@ export default function LoginPage() {
             </p>
           )}
 
-          {/* Helper Credentials Box */}
-          <div className="mt-8 bg-black/25 rounded-xl p-4 border border-white/5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
-              Demo Access
-            </p>
-            <div className="text-xs text-zinc-400 space-y-1">
-              <p><span className="font-medium text-zinc-300">Admin:</span> admin@exams.ph / ACETAdmin@2026!</p>
-              <p className="mt-1"><span className="font-medium text-zinc-300">Student demo:</span> student1 / 123</p>
-            </div>
-          </div>
+          <p className="mt-8 text-center text-xs text-zinc-500">
+            Sign in with the account credentials provided by your administrator.
+          </p>
 
         </div>
       </main>

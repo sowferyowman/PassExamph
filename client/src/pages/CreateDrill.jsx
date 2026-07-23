@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FaBolt, FaEdit, FaPlus, FaSave, FaTrash } from "react-icons/fa";
 import AdminSidebar from "../components/AdminSidebar";
-import PremiumRichTextEditor from "../components/PremiumRichTextEditor";
+import TinyMCEEditor from "../components/TinyMCEEditor";
 import { deleteDrillQuestion, getDrillBankQuestions, publishDrillQuestion, updateDrillQuestion } from "../services/storage";
 
 const emptyForm = {
@@ -299,7 +299,7 @@ export default function CreateDrill() {
             <div className="glass-card p-6">
               <label className="block">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text <span className="text-rose-500">*</span></span>
-                <PremiumRichTextEditor
+                <TinyMCEEditor
                   value={form.stem}
                   onChange={(value) => setForm((current) => ({ ...current, stem: value }))}
                   placeholder="Write the drill question here..."

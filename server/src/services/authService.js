@@ -6,10 +6,12 @@ const { sendEmail } = require("./emailService");
 const ACCESS_TTL = 15 * 60 * 1000;
 const REFRESH_TTL = 7 * 24 * 60 * 60 * 1000;
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
-const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || "ACETAdmin@2026!";
+const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
+const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL;
+const DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME;
+const DEFAULT_ADMIN_NAME = process.env.DEFAULT_ADMIN_NAME;
 const smsResetAttempts = new Map();
 const emailResetAttempts = new Map();
-a
 function bcryptClient() {
   try { return require("bcrypt"); } catch (_error) { return null; }
 }
@@ -53,22 +55,16 @@ function publicUser(user) { return { id: user.id, email: user.email, username: u
 
 async function ensureDefaultAdmin() {
   const db = getDb();
-  const existing = db.prepare("SELECT * FROM users WHERE email = ?").get("admin@exams.ph");
+  if (!DEFAULT_ADMIN_PASSWORD || !DEFAULT_ADMIN_EMAIL || !DEFAULT_ADMIN_USERNAME || !DEFAULT_ADMIN_NAME) {
+    throw new Error("DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_NAME, and DEFAULT_ADMIN_PASSWORD are required in server/.env");
+  }
+  const existing = db.prepare("SELECT * FROM users WHERE email = ?").get(DEFAULT_ADMIN_EMAIL);
   if (!existing) {
     const credentials = await hashPassword(DEFAULT_ADMIN_PASSWORD);
-    db.prepare("INSERT INTO users (email,username,password_hash,password_salt,role,name,is_verified,is_active,updated_at) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)").run("admin@exams.ph", "admin1", credentials.hash, credentials.salt, "admin", "Admin Workspace", 1, 1);
+    db.prepare("INSERT INTO users (email,username,password_hash,password_salt,role,name,is_verified,is_active,updated_at) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)").run(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_USERNAME, credentials.hash, credentials.salt, "admin", DEFAULT_ADMIN_NAME, 1, 1);
   } else if (!existing.password_hash) {
     const credentials = await hashPassword(DEFAULT_ADMIN_PASSWORD);
-    db.prepare("UPDATE users SET username='admin1',password_hash=?,password_salt=?,role='admin',is_verified=1,is_active=1 WHERE id=?").run(credentials.hash, credentials.salt, existing.id);
-  }
-  const demoStudent = db.prepare("SELECT id FROM users WHERE username = ? OR email = ?").get("student1", "student1@exams.ph");
-  if (!demoStudent) {
-    const studentCredentials = await hashPassword("123");
-    const result = db.prepare("INSERT INTO users (email,username,password_hash,password_salt,role,name,is_verified,is_active,updated_at) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)").run("student1@exams.ph", "student1", studentCredentials.hash, studentCredentials.salt, "student", "Stanly Mejia", 1, 1);
-    db.prepare("INSERT OR IGNORE INTO student_profiles (user_id,display_name,target_school) VALUES (?,?,?)").run(result.lastInsertRowid, "Stanly Mejia", "Ateneo de Manila University");
-  } else {
-    db.prepare("UPDATE users SET name=? WHERE id=? AND (name IS NULL OR name IN ('Demo Student','Stanley Mejia'))").run("Stanly Mejia", demoStudent.id);
-    db.prepare("UPDATE student_profiles SET display_name=? WHERE user_id=? AND display_name IN ('Demo Student','Stanley Mejia')").run("Stanly Mejia", demoStudent.id);
+    db.prepare("UPDATE users SET username=?,password_hash=?,password_salt=?,role='admin',is_verified=1,is_active=1 WHERE id=?").run(DEFAULT_ADMIN_USERNAME, credentials.hash, credentials.salt, existing.id);
   }
 }
 
