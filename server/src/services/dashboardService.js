@@ -4,7 +4,7 @@ function getDashboardSummary(studentId = 1) {
   const db = getDb();
 
   const latestLog = db.prepare(
-    "SELECT score FROM exam_logs WHERE student_id = ? ORDER BY taken_at DESC, id DESC LIMIT 1"
+    "SELECT score FROM exam_logs WHERE student_id = ? AND status != 'Pending Review' ORDER BY taken_at DESC, id DESC LIMIT 1"
   ).get(studentId);
   const latestScoreStr = latestLog ? `${latestLog.score}%` : "0%";
 
@@ -53,7 +53,12 @@ function getDashboardSummary(studentId = 1) {
       { label: "Total Tests Taken", value: String(totalTests), detail: `${totalTests * 3} hours of operational runtime`, accent: "purple" },
       ...storedMetrics
     ],
-    progression,
+    // Older records may already have a point inserted for a pending ACET mock.
+    // Hide those legacy points as well as preventing new ones at submission time.
+    progression: progression.filter((point) => {
+      const mockNumber = /^Mock (\d+)$/.exec(point.label)?.[1];
+      return !mockNumber || !exams.some((exam) => exam.status === "Pending Review" && exam.name === `ACET Mock Practice #${mockNumber}`);
+    }),
     subjects,
     exams,
     studyPlan,

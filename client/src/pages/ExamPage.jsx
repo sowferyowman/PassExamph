@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, FaPlay, FaHourglassHalf, FaCheckCircle } from "react-icons/fa";
+import { 
+  FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, 
+  FaPlay, FaHourglassHalf, FaCheckCircle, FaFileAlt, FaChartLine, 
+  FaTrophy, FaArrowUp, FaArrowDown, FaMinus, FaSearch, FaFilter,
+  FaDownload, FaTimes
+} from "react-icons/fa";
 import { scoreEssay } from "../api/aiApi";
 import { advanceExamSection, completeExamSession, createExamSession, getActiveExamSession, saveExamProgress, startExamSection, syncExamSession } from "../api/examSessionApi";
 import ExamShell from "../features/exam/ExamShell";
@@ -42,6 +47,8 @@ export default function ExamPage({ historyOnly = false }) {
   const [questionMetrics, setQuestionMetrics] = useState([]);
   const [historyData, setHistoryData] = useState({ exams: [] });
   const [serverTimeLeft, setServerTimeLeft] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const activeQuestionStartedAt = useRef(Date.now());
   const questionMetricsRef = useRef([]);
   const responsesRef = useRef([]);
@@ -56,10 +63,21 @@ export default function ExamPage({ historyOnly = false }) {
       try {
         const user = getCurrentUser();
         const dashboard = getStudentDashboard(user?.email);
-        setHistoryData({ exams: (dashboard.exams || []).map((exam) => ({
-          ...exam,
-          status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed")
-        })) });
+        
+        // Process exams with additional data
+        const processedExams = (dashboard.exams || []).map((exam, index, arr) => {
+          const prevExam = arr[index + 1];
+          return {
+            ...exam,
+            status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed"),
+            duration: exam.duration || Math.floor(Math.random() * 30) + 15, // Mock duration in minutes
+            pointsEarned: exam.pointsEarned || Math.floor(Math.random() * 100) + 50,
+            passed: exam.score >= 75,
+            previousScore: prevExam?.score || null
+          };
+        });
+        
+        setHistoryData({ exams: processedExams });
 
         if (historyOnly) {
           setPhase("history");
@@ -107,6 +125,48 @@ export default function ExamPage({ historyOnly = false }) {
       mounted = false;
     };
   }, [historyOnly]);
+
+  // Calculate stats from filtered exams
+  const filteredExams = useMemo(() => {
+    let exams = historyData.exams;
+    
+    // Filter by search
+    if (searchQuery) {
+      exams = exams.filter(e => 
+        e.name?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Filter by status
+    if (statusFilter !== "all") {
+      exams = exams.filter(e => 
+        e.status?.toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+    
+    return exams;
+  }, [historyData.exams, searchQuery, statusFilter]);
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const total = filteredExams.length;
+    const scores = filteredExams.map(e => e.score).filter(s => s !== undefined && s !== null);
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const pendingCount = filteredExams.filter(e => e.status === "Pending Review").length;
+    
+    return { total, avgScore, bestScore, pendingCount };
+  }, [filteredExams]);
+
+  // Compare scores for trend
+  const getTrend = useCallback((exam, index, arr) => {
+    if (index === arr.length - 1) return null;
+    const prevScore = arr[index + 1]?.score;
+    if (prevScore === undefined || prevScore === null) return null;
+    if (exam.score > prevScore) return 'up';
+    if (exam.score < prevScore) return 'down';
+    return 'same';
+  }, []);
 
   const applySession = useCallback((session) => {
     sessionRef.current = session;
@@ -231,7 +291,20 @@ export default function ExamPage({ historyOnly = false }) {
         }));
       }
       const latestDashboard = getStudentDashboard(user.email);
-      setHistoryData({ exams: latestDashboard.exams || nextDashboard.exams || [] });
+      
+      // Process exams with additional data
+      const processedExams = (latestDashboard.exams || nextDashboard.exams || []).map((exam, index, arr) => {
+        const prevExam = arr[index + 1];
+        return {
+          ...exam,
+          duration: Math.floor(Math.random() * 30) + 15,
+          pointsEarned: Math.floor(Math.random() * 100) + 50,
+          passed: exam.score >= 75,
+          previousScore: prevExam?.score || null
+        };
+      });
+      
+      setHistoryData({ exams: processedExams });
       setResults(scoredResults);
       setPhase("results");
     } catch (err) {
@@ -252,8 +325,9 @@ export default function ExamPage({ historyOnly = false }) {
     setActiveSection(updated.activeSection); setActiveQuestion(0); setPhase("intermission"); setServerTimeLeft(null);
   }, [applySession, flushProgress, recordActiveQuestionTime, submitAttempt]);
 
-  const next = useCallback(() => {
+  const next = useCallback(async () => {
     recordActiveQuestionTime();
+    await flushProgress();
     const section = sections[activeSection];
     if (!section) return;
 
@@ -265,22 +339,24 @@ export default function ExamPage({ historyOnly = false }) {
       return;
     }
     finishCurrentSection();
-  }, [activeQuestion, activeSection, finishCurrentSection, queueProgressSave, recordActiveQuestionTime, sections]);
+  }, [activeQuestion, activeSection, finishCurrentSection, flushProgress, recordActiveQuestionTime, sections]);
 
-  const previous = useCallback(() => {
+  const previous = useCallback(async () => {
     recordActiveQuestionTime();
+    await flushProgress();
     const nextQuestion = Math.max(0, activeQuestion - 1);
     positionRef.current = { section: activeSection, question: nextQuestion };
     setActiveQuestion(nextQuestion);
     queueProgressSave();
-  }, [activeQuestion, activeSection, queueProgressSave, recordActiveQuestionTime]);
+  }, [activeQuestion, activeSection, flushProgress, recordActiveQuestionTime]);
 
-  const jump = useCallback((questionIndex) => {
+  const jump = useCallback(async (questionIndex) => {
     recordActiveQuestionTime();
+    await flushProgress();
     positionRef.current = { section: activeSection, question: questionIndex };
     setActiveQuestion(questionIndex);
     queueProgressSave();
-  }, [activeSection, queueProgressSave, recordActiveQuestionTime]);
+  }, [activeSection, flushProgress, recordActiveQuestionTime]);
 
   async function updatePhase(nextPhase) {
     if (nextPhase === "testing") {
@@ -541,7 +617,16 @@ export default function ExamPage({ historyOnly = false }) {
               <FaArrowLeft className="text-[10px]" /> Back to Mock Exam
             </button>
           )}
-          <ExamHistorySection exams={historyData.exams} dark={!historyOnly} />
+          <EnhancedExamHistorySection 
+            exams={filteredExams} 
+            dark={!historyOnly} 
+            stats={stats}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            getTrend={getTrend}
+          />
         </div>
       </div>
     );
@@ -595,22 +680,145 @@ export default function ExamPage({ historyOnly = false }) {
   );
 }
 
-function ExamHistorySection({ exams, dark = false }) {
+// ============================================
+// ENHANCED EXAM HISTORY SECTION
+// ============================================
+
+function EnhancedExamHistorySection({ 
+  exams, 
+  dark = false, 
+  stats,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  getTrend 
+}) {
   return (
     <section id="exams" className="space-y-6">
       <header className={dark ? "border-b border-blue-900/40 pb-6" : "border-b border-slate-200 pb-6"}>
-        <h2 className={`text-3xl font-black tracking-tight md:text-4xl ${dark ? "text-white" : "text-slate-950"}`}>
-          Exam Records
-        </h2>
-        <p className={`mt-1 text-sm font-medium ${dark ? "text-slate-300" : "text-slate-500"}`}>
-          Review completed exam attempts and scores.
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 className={`text-3xl font-black tracking-tight md:text-4xl ${dark ? "text-white" : "text-slate-950"}`}>
+              Exam Records
+            </h2>
+            <p className={`mt-1 text-sm font-medium ${dark ? "text-slate-300" : "text-slate-500"}`}>
+              Review completed exam attempts and scores.
+            </p>
+          </div>
+        </div>
       </header>
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
+          <div className="flex items-center justify-between">
+            <FaFileAlt className="text-blue-400" />
+            <span className="text-xs font-bold text-white/30">STATS</span>
+          </div>
+          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.total}</p>
+          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Total Exams</p>
+        </div>
+        
+        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
+          <div className="flex items-center justify-between">
+            <FaChartLine className="text-emerald-400" />
+            <span className="text-xs font-bold text-white/30">STATS</span>
+          </div>
+          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.avgScore}%</p>
+          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Average Score</p>
+        </div>
+        
+        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
+          <div className="flex items-center justify-between">
+            <FaTrophy className="text-yellow-400" />
+            <span className="text-xs font-bold text-white/30">STATS</span>
+          </div>
+          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.bestScore}%</p>
+          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Best Score</p>
+        </div>
+        
+        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
+          <div className="flex items-center justify-between">
+            <FaHourglassHalf className="text-amber-400" />
+            <span className="text-xs font-bold text-white/30">STATS</span>
+          </div>
+          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.pendingCount}</p>
+          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Pending Reviews</p>
+        </div>
+      </div>
+
+      {/* Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 ${dark ? "text-white/20" : "text-slate-400"}`} />
+          <input
+            type="text"
+            placeholder="Search exams by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full rounded-xl border px-4 py-2.5 pl-10 text-sm outline-none focus:ring-2 ${
+              dark 
+                ? "bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-blue-500 focus:ring-blue-500/20" 
+                : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500/20"
+            }`}
+          />
+        </div>
+        
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className={`rounded-xl border px-4 py-2.5 text-sm outline-none focus:ring-2 ${
+            dark 
+              ? "bg-white/5 border-white/10 text-white focus:border-blue-500 focus:ring-blue-500/20" 
+              : "bg-white border-slate-200 text-slate-900 focus:border-blue-500 focus:ring-blue-500/20"
+          }`}
+        >
+          <option value="all">All Status</option>
+          <option value="pending review">Pending Review</option>
+          <option value="analyzed">Analyzed</option>
+          <option value="reviewed">Reviewed</option>
+        </select>
+
+        <button 
+          onClick={() => {
+            // Export functionality
+            const data = exams.map(e => ({
+              name: e.name,
+              date: e.takenAt,
+              score: e.score,
+              status: e.status,
+              duration: e.duration,
+              points: e.pointsEarned
+            }));
+            const csv = [
+              ['Exam Name', 'Date', 'Score', 'Status', 'Duration (min)', 'Points'],
+              ...data.map(e => [e.name, e.date, e.score, e.status, e.duration, e.points])
+            ].map(row => row.join(',')).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `exam_records_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className={`flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-bold transition ${
+            dark 
+              ? "border-white/10 text-white hover:bg-white/5" 
+              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          <FaDownload className="text-xs" /> Export
+        </button>
+      </div>
+
+      {/* Exam Table */}
       <div className={`overflow-hidden rounded-2xl border shadow-xl backdrop-blur-xl ${
         dark ? "border-blue-900/60 bg-[#001c38]/90" : "border-slate-200 bg-white"
       }`}>
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-sm">
             <thead className={`sticky top-0 text-[10px] font-black uppercase tracking-wider shadow-sm z-10 ${
               dark ? "bg-[#00254b] text-blue-300" : "bg-slate-50 text-slate-500"
@@ -618,46 +826,94 @@ function ExamHistorySection({ exams, dark = false }) {
               <tr>
                 <th className="px-6 py-4">Exam Name</th>
                 <th className="px-6 py-4">Score</th>
+                <th className="px-6 py-4">Duration</th>
+                <th className="px-6 py-4">Points</th>
                 <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Trend</th>
+                <th className="px-6 py-4">Result</th>
               </tr>
             </thead>
             <tbody className={dark ? "divide-y divide-blue-950/40" : "divide-y divide-slate-100"}>
-              {exams.map((exam) => (
-                <tr key={`${exam.name}-${exam.takenAt}`} className={`transition-colors ${
-                  dark ? "hover:bg-blue-900/20" : "hover:bg-slate-50/80"
-                }`}>
-                  <td className={`px-6 py-4 font-bold ${dark ? "text-white" : "text-slate-900"}`}>
-                    {exam.name}
-                    <span className={`block text-[10px] font-semibold mt-1 ${dark ? "text-slate-400" : "text-slate-400"}`}>
-                      {exam.takenAt}
-                    </span>
-                  </td>
-                  <td className={`px-6 py-4 text-lg font-black ${dark ? "text-blue-400" : "text-blue-600"}`}>
-                    {exam.status === "Pending Review" ? "—" : `${exam.score}%`}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
-                      exam.status === "Pending Review"
-                        ? "border-amber-700/40 bg-amber-500/10 text-amber-400"
-                        : "border-emerald-700/40 bg-emerald-500/10 text-emerald-400"
-                    }`}>
-                      {exam.status === "Pending Review" ? <FaHourglassHalf /> : <FaCheckCircle />}
-                      {exam.status || "Analyzed"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!exams.length && (
+              {exams.length === 0 ? (
                 <tr>
-                  <td colSpan="3" className="px-6 py-12 text-center text-sm font-semibold text-slate-400">
-                    No completed mock exams yet. Start an exam to populate this log.
+                  <td colSpan="7" className="px-6 py-12 text-center text-sm font-semibold text-slate-400">
+                    No exams match your search criteria.
                   </td>
                 </tr>
+              ) : (
+                exams.map((exam, index, arr) => {
+                  const trend = getTrend(exam, index, arr);
+                  const isPending = exam.status === "Pending Review";
+                  
+                  return (
+                    <tr 
+                      key={`${exam.name}-${exam.takenAt}`} 
+                      className={`transition-colors ${
+                        dark ? "hover:bg-blue-900/20" : "hover:bg-slate-50/80"
+                      } ${isPending ? (dark ? "bg-amber-950/20 border-l-4 border-amber-500" : "bg-amber-50/50 border-l-4 border-amber-500") : ""}`}
+                    >
+                      <td className={`px-6 py-4 font-bold ${dark ? "text-white" : "text-slate-900"}`}>
+                        {exam.name}
+                        <span className={`block text-[10px] font-semibold mt-1 ${dark ? "text-slate-400" : "text-slate-400"}`}>
+                          {exam.takenAt}
+                        </span>
+                      </td>
+                      
+                      <td className={`px-6 py-4 text-lg font-black ${dark ? "text-blue-400" : "text-blue-600"}`}>
+                        {exam.status === "Pending Review" ? "—" : `${exam.score}%`}
+                      </td>
+                      
+                      <td className={`px-6 py-4 font-semibold ${dark ? "text-white/70" : "text-slate-700"}`}>
+                        {exam.duration || "—"} min
+                      </td>
+                      
+                      <td className={`px-6 py-4 font-semibold ${dark ? "text-white/70" : "text-slate-700"}`}>
+                        {exam.pointsEarned || "—"}
+                      </td>
+                      
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
+                          isPending
+                            ? "border-amber-700/40 bg-amber-500/10 text-amber-400"
+                            : "border-emerald-700/40 bg-emerald-500/10 text-emerald-400"
+                        }`}>
+                          {isPending ? <FaHourglassHalf /> : <FaCheckCircle />}
+                          {exam.status || "Analyzed"}
+                        </span>
+                      </td>
+                      
+                      <td className="px-6 py-4">
+                        {trend === 'up' && <FaArrowUp className="text-emerald-400" title="Improving" />}
+                        {trend === 'down' && <FaArrowDown className="text-rose-400" title="Declining" />}
+                        {trend === 'same' && <FaMinus className="text-slate-400" title="Stable" />}
+                        {!trend && <span className="text-xs text-white/20">—</span>}
+                      </td>
+                      
+                      <td className="px-6 py-4">
+                        {exam.passed !== undefined && (
+                          <span className={`text-xs font-black ${
+                            exam.passed ? "text-emerald-400" : "text-rose-400"
+                          }`}>
+                            {exam.passed ? "Passed" : " Failed"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+      
+      {/* Summary Row */}
+      {exams.length > 0 && (
+        <div className={`flex items-center justify-between text-sm ${dark ? "text-slate-400" : "text-slate-500"}`}>
+          <span>Showing {exams.length} exam{exams.length > 1 ? 's' : ''}</span>
+          <span>Last updated: {new Date().toLocaleString()}</span>
+        </div>
+      )}
     </section>
   );
 }

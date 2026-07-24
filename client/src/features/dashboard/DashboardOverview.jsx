@@ -1,6 +1,8 @@
 import ProgressChart from "./ProgressChart";
 import StatCard from "./StatCard";
-import SubjectMastery from "./SubjectMastery";
+import OverallScoreGauge from "./OverallScoreGauge";
+import { Link } from "react-router-dom";
+import { FaArrowRight, FaBookOpen, FaChartLine, FaDownload } from "react-icons/fa";
 
 export default function DashboardOverview({ 
   data, 
@@ -12,6 +14,22 @@ export default function DashboardOverview({
   formatNotificationTime 
 }) {
   const examCount = data.exams.length;
+  const completedScores = data.progression
+    .map((point) => Number(point.score))
+    .filter((score) => Number.isFinite(score));
+  const overallAverage = completedScores.length
+    ? Math.round(completedScores.reduce((sum, score) => sum + score, 0) / completedScores.length)
+    : 0;
+
+  function exportDashboardData() {
+    const exportData = { exportedAt: new Date().toISOString(), stats: data.stats, progression: data.progression };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "acet-dashboard-data.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <section id="dashboard" className="space-y-6">
@@ -21,6 +39,10 @@ export default function DashboardOverview({
           <p className="mt-1 text-sm text-slate-500">Metrics based on {examCount} completed mock examination{examCount === 1 ? "" : "s"}.</p>
         </div>
         
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={exportDashboardData} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+            <FaDownload /> Export data
+          </button>
         {/* Notification Button - Aligned with the header */}
         <div className="relative flex-shrink-0">
           <button 
@@ -104,20 +126,21 @@ export default function DashboardOverview({
             </div>
           )}
         </div>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
-        {data.stats.map((stat) => (
-          <StatCard key={stat.label} stat={stat} />
+        {data.stats.map((stat, index) => (
+          <StatCard key={stat.label} stat={stat} index={index} />
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="text-lg font-bold text-slate-800">Exam Progression Trajectory</h3>
             {data.progression.length ? (
-              <div className="mt-4 h-72">
+              <div className="mt-4 h-72 min-w-0 overflow-visible">
                 <ProgressChart points={data.progression} />
               </div>
             ) : (
@@ -130,7 +153,25 @@ export default function DashboardOverview({
             )}
           </div>
         </div>
-        <SubjectMastery subjects={data.subjects} />
+        <OverallScoreGauge score={overallAverage} examCount={completedScores.length} />
+      </div>
+
+      <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-blue-700">Your next move</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">Ready for your next challenge?</h3>
+            <p className="mt-1 text-sm font-semibold text-slate-600">Build momentum with another mock, or turn your weakest area into a strength first.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/weakness-drills" className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-800 transition hover:border-blue-300 hover:bg-blue-50">
+              <FaBookOpen /> Review weak areas
+            </Link>
+            <Link to="/exam" className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-800">
+              <FaChartLine /> Take a mock <FaArrowRight />
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -69,7 +69,6 @@ function startSection(id, studentId, sectionIndex) {
 function saveProgress(id, studentId, { responses, activeSection, activeQuestion }) {
   const session = getSession(id, studentId);
   if (!["overview", "intermission", "active"].includes(session.status)) return serialise(session);
-  if (timing(session).expired) return serialise(session);
   const section = Number(activeSection);
   const question = Number(activeQuestion);
   if (!Number.isInteger(section) || section !== session.active_section || !Number.isInteger(question) || question < 0) throw Object.assign(new Error("Invalid exam position."), { status: 400 });

@@ -939,16 +939,18 @@ function normalizeDashboardAnalytics(dashboard, email) {
         subjectScores: []
       }));
 
-  const chronologicalAttempts = [...attemptsForChart].reverse();
-  const latestAttempt = attemptsForChart[0];
+  const isPendingEssayReview = (attempt) => attempt?.hasPendingEssays || attempt?.status === "Pending Review";
+  const completedAttempts = attemptsForChart.filter((attempt) => !isPendingEssayReview(attempt));
+  const chronologicalAttempts = [...completedAttempts].reverse();
+  const latestCompletedAttempt = completedAttempts[0];
   const progression = chronologicalAttempts.map((attempt, index) => ({
     label: attempt.examTitle || attempt.name || `Mock ${index + 1}`,
-    score: attempt.hasPendingEssays ? null : Number(attempt.finalPct ?? attempt.score ?? 0),
+    score: Number(attempt.finalPct ?? attempt.score ?? 0),
     takenAt: attempt.takenAt || "",
     examTitle: attempt.examTitle || attempt.name || `Mock ${index + 1}`
   }));
 
-  const latestSubjectScores = Array.isArray(latestAttempt?.subjectScores) ? latestAttempt.subjectScores : [];
+  const latestSubjectScores = Array.isArray(latestCompletedAttempt?.subjectScores) ? latestCompletedAttempt.subjectScores : [];
   const subjects = latestSubjectScores.length
     ? latestSubjectScores.map((subject) => ({
         name: subject.title || subject.name,
@@ -957,8 +959,11 @@ function normalizeDashboardAnalytics(dashboard, email) {
       }))
     : dashboard.subjects || [];
   const totalTests = attemptsForChart.length || exams.length;
+  const totalAvailableMocks = getExamBlueprints().length;
   const rewardSummary = buildCommunityRewardSummary(email, { ...dashboard, attempts });
   const studyPoints = rewardSummary.totalPoints;
+  const studyPointsGoal = 5000;
+  const studyPointsProgress = Math.min(100, Math.round((studyPoints / studyPointsGoal) * 100));
   const placement = getRawLeaderboardPlacement(email, { ...dashboard, attempts });
 
   return {
@@ -968,27 +973,29 @@ function normalizeDashboardAnalytics(dashboard, email) {
     stats: [
       {
         label: "Latest Mock Score",
-        value: latestAttempt?.hasPendingEssays ? "Pending Review" : latestAttempt ? `${Number(latestAttempt.finalPct ?? latestAttempt.score ?? 0)}%` : "0%",
-        detail: latestAttempt?.hasPendingEssays ? "Essay responses awaiting approval" : latestAttempt ? `Scored from ${latestAttempt.examTitle || latestAttempt.name || "completed mock exam"}` : "No completed exam attempts yet",
+        value: latestCompletedAttempt ? `${Number(latestCompletedAttempt.finalPct ?? latestCompletedAttempt.score ?? 0)}%` : "0%",
+        detail: latestCompletedAttempt ? `Scored from ${latestCompletedAttempt.examTitle || latestCompletedAttempt.name || "completed mock exam"}` : "No completed exam attempts yet",
         accent: "blue"
       },
       {
         label: "Total Tests Taken",
         value: String(totalTests),
-        detail: `${totalTests} completed mock exam${totalTests === 1 ? "" : "s"}`,
+        detail: `${totalTests} completed mock exam${totalTests === 1 ? "" : "s"} out of ${totalAvailableMocks} available`,
         accent: "purple"
       },
       {
         label: "Leaderboard Placement",
         value: placement.rank ? `#${placement.rank}` : "-",
-        detail: placement.total ? `Out of ${placement.total} students` : "No ranked students yet",
+        detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet",
         accent: "indigo"
       },
       {
         label: "Study Points",
         value: studyPoints.toLocaleString(),
         detail: "From exams, reviewers, and badges",
-        accent: "teal"
+        accent: "teal",
+        progress: studyPointsProgress,
+        progressLabel: `${studyPoints.toLocaleString()} / ${studyPointsGoal.toLocaleString()} pts to Magis Elite`
       }
     ],
     progression,
@@ -1063,9 +1070,12 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     ...(currentDashboard.attempts || [])
   ];
 
-  const progression = [...attempts].reverse().map((attempt, index) => ({
+  const isPendingEssayReview = (attempt) => attempt?.hasPendingEssays || attempt?.status === "Pending Review";
+  const completedAttempts = attempts.filter((attempt) => !isPendingEssayReview(attempt));
+  const latestCompletedAttempt = completedAttempts[0];
+  const progression = [...completedAttempts].reverse().map((attempt, index) => ({
     label: attempt.examTitle || `Mock ${index + 1}`,
-    score: attempt.hasPendingEssays ? null : Number(attempt.finalPct || 0),
+    score: Number(attempt.finalPct || 0),
     takenAt: attempt.takenAt,
     examTitle: attempt.examTitle || `Mock ${index + 1}`
   }));
@@ -1092,10 +1102,10 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     ...currentDashboard,
     hasDashboardData: true,
     stats: [
-      { label: "Latest Mock Score", value: results.hasEssays ? "Pending Review" : `${results.finalPct}%`, detail: results.hasEssays ? "Essay responses awaiting approval" : `Scored from ${blueprint.title}`, accent: "blue" },
-      { label: "Total Tests Taken", value: String(exams.length), detail: `${exams.length} completed mock exam${exams.length === 1 ? "" : "s"}`, accent: "purple" },
-      { label: "Leaderboard Placement", value: placement.rank ? `#${placement.rank}` : "-", detail: placement.total ? `Out of ${placement.total} students` : "No ranked students yet", accent: "indigo" },
-      { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exams, reviewers, and badges", accent: "teal" }
+      { label: "Latest Mock Score", value: latestCompletedAttempt ? `${Number(latestCompletedAttempt.finalPct ?? latestCompletedAttempt.score ?? 0)}%` : "0%", detail: latestCompletedAttempt ? `Scored from ${latestCompletedAttempt.examTitle || latestCompletedAttempt.name || "completed mock exam"}` : "No completed exam attempts yet", accent: "blue" },
+      { label: "Total Tests Taken", value: String(exams.length), detail: `${exams.length} completed mock exam${exams.length === 1 ? "" : "s"} out of ${getExamBlueprints().length} available`, accent: "purple" },
+      { label: "Leaderboard Placement", value: placement.rank ? `#${placement.rank}` : "-", detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet", accent: "indigo" },
+      { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exams, reviewers, and badges", accent: "teal", progress: Math.min(100, Math.round((rewardSummary.totalPoints / 5000) * 100)), progressLabel: `${rewardSummary.totalPoints.toLocaleString()} / 5,000 pts to Magis Elite` }
     ],
     progression,
     subjects,

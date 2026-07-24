@@ -54,8 +54,12 @@ function scoreExamAttempt(responses, studentId = 1) {
     const hasEssays = blueprint.some((section) => (section.questions || []).some((question) => question.type === "paragraph" || question.type === "essay"));
     insertLog.run(studentId, examName, currentDate, finalPct, hasEssays ? "Pending Review" : "Analyzed");
 
-    db.prepare("INSERT INTO progression (student_id, label, score) VALUES (?, ?, ?)")
-      .run(studentId, `Mock ${attemptCount + 1}`, finalPct);
+    // Essay-backed attempts are incomplete until their responses are reviewed.
+    // Do not plot their MCQ-only subtotal as a completed progression score.
+    if (!hasEssays) {
+      db.prepare("INSERT INTO progression (student_id, label, score) VALUES (?, ?, ?)")
+        .run(studentId, `Mock ${attemptCount + 1}`, finalPct);
+    }
 
     const upsertSubject = db.prepare(`
       INSERT INTO subjects (student_id, name, mastery, color)
