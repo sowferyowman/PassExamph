@@ -72,7 +72,8 @@ export default function ExamPage({ historyOnly = false }) {
             status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed"),
             duration: exam.duration || Math.floor(Math.random() * 30) + 15, // Mock duration in minutes
             pointsEarned: exam.pointsEarned || Math.floor(Math.random() * 100) + 50,
-            passed: exam.score >= 75,
+            passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
+            passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
             previousScore: prevExam?.score || null
           };
         });
@@ -274,7 +275,9 @@ export default function ExamPage({ historyOnly = false }) {
       await flushProgress();
       if (sessionRef.current) await completeExamSession(sessionRef.current.id).then(applySession);
       const user = getCurrentUser();
-      const scoredResults = scoreBlueprintAttempt(blueprint, responses, { questionMetrics: finalQuestionMetrics });
+      const rawResults = scoreBlueprintAttempt(blueprint, responses, { questionMetrics: finalQuestionMetrics });
+      const passingScore = Number.isFinite(Number(blueprint.passingScore)) ? Number(blueprint.passingScore) : 75;
+      const scoredResults = { ...rawResults, passingScore, passed: rawResults.finalPct >= passingScore };
       const durationSeconds = startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / 1000)) : 0;
       const nextDashboard = saveExamAttemptForStudent(user, blueprint, responses, scoredResults, { durationSeconds, questionMetrics: finalQuestionMetrics });
       const essays = nextDashboard.attempts?.[0]?.essayResponses || [];
@@ -299,7 +302,8 @@ export default function ExamPage({ historyOnly = false }) {
           ...exam,
           duration: Math.floor(Math.random() * 30) + 15,
           pointsEarned: Math.floor(Math.random() * 100) + 50,
-          passed: exam.score >= 75,
+            passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
+            passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
           previousScore: prevExam?.score || null
         };
       });
@@ -890,11 +894,11 @@ function EnhancedExamHistorySection({
                       </td>
                       
                       <td className="px-6 py-4">
-                        {exam.passed !== undefined && (
-                          <span className={`text-xs font-black ${
-                            exam.passed ? "text-emerald-400" : "text-rose-400"
+                        {!isPending && exam.passed !== undefined && (
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
+                            exam.passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
                           }`}>
-                            {exam.passed ? "Passed" : " Failed"}
+                            {exam.passed ? "PASS" : "FAIL"}
                           </span>
                         )}
                       </td>

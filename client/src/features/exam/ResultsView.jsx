@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaArrowLeft, FaBrain, FaChartPie, FaSpinner, FaHourglassHalf } from "react-icons/fa";
+import { FaArrowLeft, FaBrain, FaChartPie, FaSpinner, FaHourglassHalf, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import { diagnoseExam } from "../../api/aiApi";
 import { getCurrentUser, saveAiDiagnosticForLatestAttempt } from "../../services/storage";
 
@@ -54,6 +54,12 @@ export default function ResultsView({ results, onBack }) {
           {results?.hasEssays ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-black text-amber-800"><FaHourglassHalf /> Pending Review</div>
           ) : <h1 className="mt-2 text-5xl font-black text-slate-950">{results?.finalPct ?? 0}%</h1>}
+          {!results?.hasEssays && (
+            <div className={`mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black ${results?.passed ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+              {results?.passed ? <FaCheckCircle /> : <FaTimesCircle />}
+              {results?.passed ? "PASS" : "FAIL"} — Passing score: {results?.passingScore ?? 75}%
+            </div>
+          )}
           <p className="mt-2 text-sm font-semibold text-slate-500">
             {results?.hasEssays ? `${results.essayCount || 1} essay question${results.essayCount === 1 ? "" : "s"} — Pending Review` : `${results?.correct ?? 0} / ${results?.total ?? 0} items correct`}
           </p>

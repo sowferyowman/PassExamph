@@ -87,6 +87,7 @@ const emptyQuestion = {
 const initialExamForm = {
   title: "",
   description: "",
+  passingScore: 75,
   accessType: "unlimited",
   maxAttempts: 1,
   sections: [
@@ -105,6 +106,8 @@ const initialReviewerForm = {
     {
       id: crypto.randomUUID(),
       title: "",
+      description: "",
+      estimatedMinutes: 15,
       content: "",
       videoUrl: ""
     }
@@ -181,6 +184,7 @@ export default function AdminDashboardPage() {
       setExamForm({
         title: exam.title || "",
         description: exam.description || "",
+        passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
         accessType: exam.accessType || "unlimited",
         maxAttempts: exam.maxAttempts || 1,
         sections: exam.sections || [{ ...initialExamForm.sections[0], questions: [{ ...emptyQuestion }] }]
@@ -200,7 +204,7 @@ export default function AdminDashboardPage() {
     const reviewer = reviewers.find((item) => item.id === reviewerId);
     if (!reviewer) return;
     setEditingReviewerId(reviewerId);
-    setReviewerForm({ title: reviewer.title || "", subjectCategory: reviewer.subjectCategory || "", modules: reviewer.modules || [] });
+    setReviewerForm({ title: reviewer.title || "", subjectCategory: reviewer.subjectCategory || "", modules: (reviewer.modules || []).map((module) => ({ ...module, description: module.description || "", estimatedMinutes: Number(module.estimatedMinutes) || 15 })) });
     setMessage(`Editing: "${reviewer.title}"`);
   }
 
@@ -392,6 +396,7 @@ export default function AdminDashboardPage() {
 
   function validateExamBlueprint() {
     if (!examForm.title.trim()) return "Exam title is required.";
+    if (!Number.isFinite(Number(examForm.passingScore)) || Number(examForm.passingScore) < 0 || Number(examForm.passingScore) > 100) return "Passing score must be between 0 and 100.";
     if (!examForm.sections.length) return "At least one subject category is required.";
 
     for (const section of examForm.sections) {
@@ -687,6 +692,18 @@ export default function AdminDashboardPage() {
               onChange={(event) => setExamForm((current) => ({ ...current, description: event.target.value }))}
               className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
               placeholder="Description (optional)"
+            />
+          </label>
+          <label className="block mt-4">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Passing Score (%) <span className="text-rose-500">*</span></span>
+            <p className="mt-1 text-xs font-semibold text-slate-400">Students at or above this score will receive a Pass result.</p>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={examForm.passingScore ?? 75}
+              onChange={(event) => setExamForm((current) => ({ ...current, passingScore: Number(event.target.value) }))}
+              className="mt-2 w-40 rounded-lg border border-slate-200 px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
             />
           </label>
         </div>
@@ -1031,11 +1048,27 @@ export default function AdminDashboardPage() {
               <div className="flex-1">
                 <label className="block">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-500">Module Title <span className="text-rose-500">*</span></span>
-                  <input
-                    value={module.title}
+                <input
+                  value={module.title}
                     onChange={(event) => updateReviewerModule(module.id, { title: event.target.value })}
                     className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
                     placeholder="Module title"
+                />
+                </label>
+                <input
+                  value={module.description || ""}
+                  onChange={(event) => updateReviewerModule(module.id, { description: event.target.value })}
+                  className="mt-3 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Short module description"
+                />
+                <label className="mt-3 block">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Estimated completion time (minutes)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={module.estimatedMinutes || 15}
+                    onChange={(event) => updateReviewerModule(module.id, { estimatedMinutes: Math.max(1, Number(event.target.value)) })}
+                    className="mt-2 w-40 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
                 </label>
                 <label className="block mt-3">

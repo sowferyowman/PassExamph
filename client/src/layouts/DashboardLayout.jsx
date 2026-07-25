@@ -20,6 +20,7 @@ export default function DashboardLayout() {
   const [user, setUser] = useState(() => getCurrentUser());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const displayName = user?.nickname || user?.name || user?.email || "Student";
   const initials = getInitials(displayName);
 
@@ -55,7 +56,7 @@ export default function DashboardLayout() {
     };
   }, []);
 
-  function logout() {
+  function confirmLogout() {
     logoutUser();
     navigate("/login", { replace: true });
   }
@@ -471,7 +472,7 @@ export default function DashboardLayout() {
                 </div>
               )}
               <button 
-                onClick={logout} 
+                onClick={() => setShowLogoutConfirm(true)} 
                 className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20" 
                 aria-label="Log out" 
                 title={sidebarCollapsed ? "Log out" : undefined}
@@ -550,7 +551,7 @@ export default function DashboardLayout() {
                     <p className="truncate text-sm font-bold text-white">{displayName}</p>
                     <p className="truncate text-[11px] font-semibold text-blue-400 mt-0.5">{user?.email}</p>
                   </div>
-                  <button onClick={logout} className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white" aria-label="Log out">
+                  <button onClick={() => setShowLogoutConfirm(true)} className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white" aria-label="Log out">
                     <FaSignOutAlt />
                   </button>
                 </div>
@@ -583,6 +584,19 @@ export default function DashboardLayout() {
           </div>
         </main>
       </div>
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="logout-confirm-title" className="text-xl font-black text-slate-950">Sign out of your account?</h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Are you sure you want to sign out? You will need to log in again to continue.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowLogoutConfirm(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 transition hover:bg-slate-50">No, stay signed in</button>
+              <button type="button" onClick={confirmLogout} className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-rose-700">Yes, sign out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

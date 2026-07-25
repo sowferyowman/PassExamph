@@ -20,7 +20,13 @@ const STAN_DASHBOARD_RESET_KEY = "acet_stan_dashboard_reset_20260715_v1";
 const defaultUsers = [];
 const defaultUserAccounts = [];
 
-const defaultForumThreads = [];
+const defaultForumThreads = [
+  { id: "forum_welcome", title: "Welcome to the ACET Study Community", body: "Start by introducing yourself, ask respectful questions, and share study methods that helped you. Keep replies constructive and protect exam integrity.", tag: "Get Started", author: "ACET Study Team", createdAt: "2026-07-24T08:00:00.000Z", replies: [] },
+  { id: "forum_news", title: "Weekly study reminder: build consistency first", body: "Set one realistic goal for this week: complete a reviewer lesson, take a timed drill, or review missed questions. Small, consistent sessions compound quickly.", tag: "Newsroom", author: "ACET Study Team", createdAt: "2026-07-24T09:00:00.000Z", replies: [] },
+  { id: "forum_knowledge", title: "What is your best method for reviewing mistakes?", body: "Share a technique that helps you turn missed questions into better decisions on the next attempt. Include the subject and the skill you practiced.", tag: "Share Knowledge", author: "ACET Study Team", createdAt: "2026-07-24T10:00:00.000Z", replies: [] },
+  { id: "forum_ideas", title: "What feature would improve your study flow?", body: "Suggest an idea for drills, reviewers, analytics, or community learning. React to ideas you would find most useful.", tag: "Suggest an Idea", author: "ACET Study Team", createdAt: "2026-07-24T11:00:00.000Z", replies: [] },
+  { id: "forum_issue", title: "Found an issue? Let us know here", body: "Report a problem with the page, question content, or study flow. Include what happened and the steps that led to it so it can be investigated.", tag: "Report an Issue", author: "ACET Study Team", createdAt: "2026-07-24T12:00:00.000Z", replies: [] }
+];
 
 const studyPlanData = [
   {
@@ -394,7 +400,7 @@ export function initializeLocalStorage() {
   if (!Array.isArray(storedDrills) || storedDrills.length === 0) writeJson(DRILL_BANK_KEY, drillBankSeed);
   if (!localStorage.getItem(DASHBOARD_KEY)) writeJson(DASHBOARD_KEY, {});
   if (!localStorage.getItem(REVIEWER_PROGRESS_KEY)) writeJson(REVIEWER_PROGRESS_KEY, {});
-  if (!localStorage.getItem(FORUM_KEY)) writeJson(FORUM_KEY, []);
+  if (!localStorage.getItem(FORUM_KEY) || !readJson(FORUM_KEY, []).length) writeJson(FORUM_KEY, defaultForumThreads);
   removeSeededForumUsers();
   if (!localStorage.getItem(NOTIFICATIONS_KEY)) writeJson(NOTIFICATIONS_KEY, []);
 
@@ -1032,6 +1038,8 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   const takenAt = new Date().toISOString().split("T")[0];
   const durationSeconds = Number(meta.durationSeconds || 0);
   const earnedMockPoints = calculateAttemptPoints(results.finalPct, durationSeconds);
+  const passingScore = Number.isFinite(Number(blueprint.passingScore)) ? Number(blueprint.passingScore) : 75;
+  const passed = Number(results.finalPct) >= passingScore;
 
   const essayResponses = (blueprint.sections || []).flatMap((section, sectionIndex) =>
     (section.questions || []).flatMap((question, questionIndex) => {
@@ -1048,7 +1056,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   );
   const reviewStatus = essayResponses.length ? "Pending Review" : "Analyzed";
   const exams = [
-    { name: blueprint.title, takenAt, score: results.finalPct, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
+    { name: blueprint.title, takenAt, score: results.finalPct, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
     ...currentDashboard.exams
   ];
 
@@ -1059,6 +1067,8 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       examTitle: blueprint.title,
       takenAt,
       finalPct: results.finalPct,
+      passingScore,
+      passed,
       earnedMockPoints,
       durationSeconds,
       subjectScores: results.subjectScores,

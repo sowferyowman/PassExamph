@@ -11,6 +11,7 @@ import {
 } from "../../services/storage";
 
 const POSTS_PER_PAGE = 10;
+const forumCategories = ["Get Started", "Newsroom", "Share Knowledge", "Suggest an Idea", "Report an Issue"];
 const reactionOptions = [
   { type: "like", label: "Like", activeClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
   { type: "insightful", label: "Insightful", activeClass: "border-amber-200 bg-amber-50 text-amber-700" },
@@ -21,11 +22,12 @@ export default function CommunityForumPage() {
   const user = getCurrentUser();
   const [threads, setThreads] = useState(() => getForumThreads());
   const [showTopicForm, setShowTopicForm] = useState(false);
-  const [topicForm, setTopicForm] = useState({ title: "", body: "", tag: "English / GK" });
+  const [topicForm, setTopicForm] = useState({ title: "", body: "", tag: "Share Knowledge" });
   const [replyDrafts, setReplyDrafts] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const [expandedThreadIds, setExpandedThreadIds] = useState({});
 
   const summary = useMemo(() => getCommunityRewardSummary(user?.email), [user?.email]);
   const leaderboard = useMemo(() => getLeaderboard(user?.email), [user?.email, summary.totalPoints]);
@@ -33,7 +35,7 @@ export default function CommunityForumPage() {
   const topRows = leaderboard.slice(0, 5);
   const percentile = currentRow && leaderboard.length ? Math.round(((leaderboard.length - currentRow.rank + 1) / leaderboard.length) * 100) : 0;
 
-  const subjectTags = useMemo(() => [...new Set(threads.map((thread) => thread.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [threads]);
+  const subjectTags = useMemo(() => [...new Set([...forumCategories, ...threads.map((thread) => thread.tag).filter(Boolean)])], [threads]);
   const filteredThreads = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return threads.filter((thread) => {
@@ -69,7 +71,7 @@ export default function CommunityForumPage() {
     if (!topicForm.title.trim() || !topicForm.body.trim()) return;
     createForumThread(user, topicForm);
     setThreads(getForumThreads());
-    setTopicForm({ title: "", body: "", tag: "English / GK" });
+    setTopicForm({ title: "", body: "", tag: "Share Knowledge" });
     setShowTopicForm(false);
   }
 
@@ -101,6 +103,12 @@ export default function CommunityForumPage() {
           </button>
         </header>
 
+        <section className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-wider text-emerald-700">New to the forum?</p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">Ask kindly, share what works, and help fellow test takers improve.</h2>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600"><span className="rounded-full bg-white px-3 py-1.5">Ask a focused question</span><span className="rounded-full bg-white px-3 py-1.5">Share a practical study tip</span><span className="rounded-full bg-white px-3 py-1.5">Keep feedback respectful</span></div>
+        </section>
+
         <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
           <main className="space-y-5">
             <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -120,14 +128,14 @@ export default function CommunityForumPage() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <FilterChip active={tagFilter === "all"} onClick={() => setTagFilter("all")}>All</FilterChip>
-                {subjectTags.map((tag) => <FilterChip key={tag} active={tagFilter === tag} onClick={() => setTagFilter(tag)}>{tag}</FilterChip>)}
+                {forumCategories.map((tag) => <FilterChip key={tag} active={tagFilter === tag} onClick={() => setTagFilter(tag)}>{tag}</FilterChip>)}
               </div>
 
               {showTopicForm && (
                 <form onSubmit={submitTopic} className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
                   <div className="grid gap-3 md:grid-cols-[1fr_12rem]">
                     <input value={topicForm.title} onChange={(event) => setTopicForm((current) => ({ ...current, title: event.target.value }))} className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Topic title" />
-                    <input value={topicForm.tag} onChange={(event) => setTopicForm((current) => ({ ...current, tag: event.target.value }))} className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Tag" />
+                    <select value={topicForm.tag} onChange={(event) => setTopicForm((current) => ({ ...current, tag: event.target.value }))} className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">{forumCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
                   </div>
                   <textarea value={topicForm.body} onChange={(event) => setTopicForm((current) => ({ ...current, body: event.target.value }))} className="mt-3 h-28 w-full resize-none rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="What do you want to discuss?" />
                   <div className="mt-3 flex justify-end">
@@ -153,14 +161,15 @@ export default function CommunityForumPage() {
                     <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{thread.tag}</span>
                   </div>
 
-                  <p className="mt-4 text-sm leading-relaxed text-slate-600">{thread.body}</p>
+                  <p className="mt-4 text-sm leading-relaxed text-slate-600">{expandedThreadIds[thread.id] ? thread.body : `${thread.body.slice(0, 170)}${thread.body.length > 170 ? "…" : ""}`}</p>
+                  <button type="button" onClick={() => setExpandedThreadIds((current) => ({ ...current, [thread.id]: !current[thread.id] }))} className="mt-3 text-xs font-black text-emerald-700 hover:text-emerald-900">{expandedThreadIds[thread.id] ? "Show less" : "Read full post"}</button>
 
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-stone-100 pt-4">
                     <ReactionBar thread={thread} userId={user?.id} onToggle={(reactionType) => toggleReaction(thread.id, reactionType)} />
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400"><FaCommentDots /> {thread.replies?.length || 0} Replies</div>
                   </div>
 
-                  {!!thread.replies?.length && (
+                  {expandedThreadIds[thread.id] && !!thread.replies?.length && (
                     <div className="mt-4 max-h-56 space-y-2.5 overflow-y-auto border-l-2 border-stone-200 pl-4">
                       {thread.replies.map((reply) => (
                         <div key={reply.id} className="rounded-xl bg-stone-50 p-4 text-sm">
@@ -171,17 +180,18 @@ export default function CommunityForumPage() {
                     </div>
                   )}
 
-                  <div className="mt-5 flex gap-2.5">
+                  {expandedThreadIds[thread.id] && <div className="mt-5 flex gap-2.5">
                     <input value={replyDrafts[thread.id] || ""} onChange={(event) => setReplyDrafts((current) => ({ ...current, [thread.id]: event.target.value }))} className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Write a supportive reply..." />
                     <button onClick={() => submitReply(thread.id)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800"><FaReply /> Reply</button>
-                  </div>
+                  </div>}
                 </article>
               ))}
 
               {!paginatedThreads.length && (
                 <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
                   <p className="text-lg font-black text-slate-950">No discussions yet.</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">Start the first real student conversation.</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">Be the first to start a helpful conversation in this category.</p>
+                  <button type="button" onClick={() => setShowTopicForm(true)} className="mt-4 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white">Create a topic</button>
                 </div>
               )}
             </section>
@@ -190,11 +200,11 @@ export default function CommunityForumPage() {
           </main>
 
           <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            {topRows.length > 1 ? <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
               <p className="text-xs font-black uppercase tracking-wider text-amber-700">Global Standings</p>
               <h2 className="mt-1 text-xl font-black text-slate-950">Top 5 Scholar Scorers</h2>
               <div className="mt-5 space-y-2.5">{topRows.map((row) => <LeaderboardRow key={row.email} row={row} />)}</div>
-            </section>
+            </section> : <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-amber-700">Community Progress</p><h2 className="mt-1 text-xl font-black text-slate-950">Standings unlock as classmates join.</h2><p className="mt-3 text-sm font-semibold leading-6 text-slate-500">Complete exams, contribute helpful posts, and invite your study group to build a meaningful leaderboard.</p></section>}
             <section className="rounded-2xl border border-stone-200 bg-amber-50 p-5 shadow-sm">
               <p className="text-xs font-black uppercase tracking-wider text-amber-700">Your Placement</p>
               <p className="mt-3 text-5xl font-black text-slate-950">{percentile}%</p>

@@ -13,6 +13,7 @@ import { Line } from "react-chartjs-2";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function shortLabel(point, index) {
+  if (point.isAggregate) return point.label;
   const title = point.examTitle || point.label || "";
   const number = /(?:mock|exam|simulation|attempt|practice)\s*#?(\d+)/i.exec(title)?.[1];
   return number ? `Mock ${number}` : `Attempt ${index + 1}`;
