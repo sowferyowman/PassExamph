@@ -2,8 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 import CommunityForumPage from "./features/community/CommunityForumPage";
-import RewardsBadgesPage from "./features/community/RewardsBadgesPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
+import CreateExamPage from "./pages/CreateExamPage";
 import AdminReviewDashboard from "./pages/AdminReviewDashboard";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import CreateDrill from "./pages/CreateDrill";
@@ -47,9 +46,6 @@ export default function App() {
         <Route path="/community" element={<DashboardLayout />}>
           <Route index element={<CommunityForumPage />} />
         </Route>
-        <Route path="/rewards" element={<DashboardLayout />}>
-          <Route index element={<RewardsBadgesPage />} />
-        </Route>
         <Route path="/settings" element={<DashboardLayout />}>
           <Route index element={<SettingsPage />} />
         </Route>
@@ -59,7 +55,7 @@ export default function App() {
         <Route path="/admin/dashboard" element={<AdminReviewDashboard />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/admin/dashboard-home" element={<AdminReviewDashboard />} />
-        <Route path="/admin/exams" element={<AdminDashboardPage />} />
+        <Route path="/admin/create-exam" element={<CreateExamPage />} />
         <Route path="/admin/drills" element={<CreateDrill />} />
       </Route>
 

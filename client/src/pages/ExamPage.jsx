@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, 
-  FaPlay, FaHourglassHalf, FaCheckCircle, FaFileAlt, FaChartLine, 
-  FaTrophy, FaArrowUp, FaArrowDown, FaMinus, FaSearch, FaFilter,
-  FaDownload, FaTimes
+  FaPlay, FaArrowUp, FaArrowDown, FaMinus, FaSearch
 } from "react-icons/fa";
 import { scoreEssay } from "../api/aiApi";
 import { advanceExamSection, completeExamSession, createExamSession, getActiveExamSession, saveExamProgress, startExamSection, syncExamSession } from "../api/examSessionApi";
@@ -151,12 +149,11 @@ export default function ExamPage({ historyOnly = false }) {
   // Calculate stats
   const stats = useMemo(() => {
     const total = filteredExams.length;
-    const scores = filteredExams.map(e => e.score).filter(s => s !== undefined && s !== null);
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-    const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const passedCount = filteredExams.filter(e => e.passed === true).length;
+    const failedCount = filteredExams.filter(e => e.passed === false).length;
     const pendingCount = filteredExams.filter(e => e.status === "Pending Review").length;
     
-    return { total, avgScore, bestScore, pendingCount };
+    return { total, passedCount, failedCount, pendingCount };
   }, [filteredExams]);
 
   // Compare scores for trend
@@ -713,66 +710,34 @@ function EnhancedExamHistorySection({
         </div>
       </header>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
-          <div className="flex items-center justify-between">
-            <FaFileAlt className="text-blue-400" />
-            <span className="text-xs font-bold text-white/30">STATS</span>
-          </div>
-          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.total}</p>
-          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Total Exams</p>
-        </div>
-        
-        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
-          <div className="flex items-center justify-between">
-            <FaChartLine className="text-emerald-400" />
-            <span className="text-xs font-bold text-white/30">STATS</span>
-          </div>
-          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.avgScore}%</p>
-          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Average Score</p>
-        </div>
-        
-        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
-          <div className="flex items-center justify-between">
-            <FaTrophy className="text-yellow-400" />
-            <span className="text-xs font-bold text-white/30">STATS</span>
-          </div>
-          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.bestScore}%</p>
-          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Best Score</p>
-        </div>
-        
-        <div className={`rounded-xl border p-4 ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
-          <div className="flex items-center justify-between">
-            <FaHourglassHalf className="text-amber-400" />
-            <span className="text-xs font-bold text-white/30">STATS</span>
-          </div>
-          <p className={`text-2xl font-black mt-2 ${dark ? "text-white" : "text-slate-900"}`}>{stats.pendingCount}</p>
-          <p className={`text-xs ${dark ? "text-white/40" : "text-slate-400"}`}>Pending Reviews</p>
-        </div>
-      </div>
-
-      {/* Search and Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 ${dark ? "text-white/20" : "text-slate-400"}`} />
+      {/* Search, compact stats, and status filter — one toolbar row */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
+        <div className="relative flex-1 lg:min-w-[220px]">
+          <FaSearch className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs ${dark ? "text-white/20" : "text-slate-400"}`} />
           <input
             type="text"
             placeholder="Search exams by name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full rounded-xl border px-4 py-2.5 pl-10 text-sm outline-none focus:ring-2 ${
+            className={`h-full w-full rounded-xl border px-4 py-2.5 pl-9 text-sm outline-none focus:ring-2 ${
               dark 
                 ? "bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-blue-500 focus:ring-blue-500/20" 
                 : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500/20"
             }`}
           />
         </div>
-        
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:shrink-0 lg:gap-2">
+          <StatChip dark={dark} value={stats.total} label="Total" />
+          <StatChip dark={dark} value={stats.passedCount} label="Passed" />
+          <StatChip dark={dark} value={stats.failedCount} label="Failed" />
+          <StatChip dark={dark} value={stats.pendingCount} label="Pending" />
+        </div>
+
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className={`rounded-xl border px-4 py-2.5 text-sm outline-none focus:ring-2 ${
+          className={`rounded-xl border px-4 py-2.5 text-sm outline-none focus:ring-2 lg:shrink-0 ${
             dark 
               ? "bg-white/5 border-white/10 text-white focus:border-blue-500 focus:ring-blue-500/20" 
               : "bg-white border-slate-200 text-slate-900 focus:border-blue-500 focus:ring-blue-500/20"
@@ -783,39 +748,6 @@ function EnhancedExamHistorySection({
           <option value="analyzed">Analyzed</option>
           <option value="reviewed">Reviewed</option>
         </select>
-
-        <button 
-          onClick={() => {
-            // Export functionality
-            const data = exams.map(e => ({
-              name: e.name,
-              date: e.takenAt,
-              score: e.score,
-              status: e.status,
-              duration: e.duration,
-              points: e.pointsEarned
-            }));
-            const csv = [
-              ['Exam Name', 'Date', 'Score', 'Status', 'Duration (min)', 'Points'],
-              ...data.map(e => [e.name, e.date, e.score, e.status, e.duration, e.points])
-            ].map(row => row.join(',')).join('\n');
-            
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `exam_records_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          className={`flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-bold transition ${
-            dark 
-              ? "border-white/10 text-white hover:bg-white/5" 
-              : "border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}
-        >
-          <FaDownload className="text-xs" /> Export
-        </button>
       </div>
 
       {/* Exam Table */}
@@ -824,8 +756,8 @@ function EnhancedExamHistorySection({
       }`}>
         <div className="max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-sm">
-            <thead className={`sticky top-0 text-[10px] font-black uppercase tracking-wider shadow-sm z-10 ${
-              dark ? "bg-[#00254b] text-blue-300" : "bg-slate-50 text-slate-500"
+            <thead className={`sticky top-0 text-xs font-black uppercase tracking-wider shadow-sm z-10 ${
+              dark ? "bg-gradient-to-r from-blue-800 to-blue-900 text-blue-100" : "bg-blue-600 text-white"
             }`}>
               <tr>
                 <th className="px-6 py-4">Exam Name</th>
@@ -863,7 +795,7 @@ function EnhancedExamHistorySection({
                         </span>
                       </td>
                       
-                      <td className={`px-6 py-4 text-lg font-black ${dark ? "text-blue-400" : "text-blue-600"}`}>
+                      <td className={`px-6 py-4 font-mono text-sm font-semibold tabular-nums ${dark ? "text-slate-200" : "text-slate-700"}`}>
                         {exam.status === "Pending Review" ? "—" : `${exam.score}%`}
                       </td>
                       
@@ -876,29 +808,31 @@ function EnhancedExamHistorySection({
                       </td>
                       
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
+                        <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                           isPending
-                            ? "border-amber-700/40 bg-amber-500/10 text-amber-400"
-                            : "border-emerald-700/40 bg-emerald-500/10 text-emerald-400"
+                            ? "border-amber-700/30 bg-amber-500/5 text-amber-500/90"
+                            : "border-emerald-700/30 bg-emerald-500/5 text-emerald-500/90"
                         }`}>
-                          {isPending ? <FaHourglassHalf /> : <FaCheckCircle />}
+                          <span className={`h-1.5 w-1.5 rounded-full ${isPending ? "bg-amber-500/70" : "bg-emerald-500/70"}`} />
                           {exam.status || "Analyzed"}
                         </span>
                       </td>
                       
                       <td className="px-6 py-4">
-                        {trend === 'up' && <FaArrowUp className="text-emerald-400" title="Improving" />}
-                        {trend === 'down' && <FaArrowDown className="text-rose-400" title="Declining" />}
-                        {trend === 'same' && <FaMinus className="text-slate-400" title="Stable" />}
+                        {trend === 'up' && <FaArrowUp className="text-xs text-emerald-500/80" title="Improving" />}
+                        {trend === 'down' && <FaArrowDown className="text-xs text-rose-500/80" title="Declining" />}
+                        {trend === 'same' && <FaMinus className="text-xs text-slate-400" title="Stable" />}
                         {!trend && <span className="text-xs text-white/20">—</span>}
                       </td>
                       
                       <td className="px-6 py-4">
                         {!isPending && exam.passed !== undefined && (
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
-                            exam.passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                          <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                            exam.passed
+                              ? dark ? "border-emerald-700/30 bg-emerald-500/5 text-emerald-500/90" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : dark ? "border-rose-700/30 bg-rose-500/5 text-rose-500/90" : "border-rose-200 bg-rose-50 text-rose-700"
                           }`}>
-                            {exam.passed ? "PASS" : "FAIL"}
+                            {exam.passed ? "Pass" : "Fail"}
                           </span>
                         )}
                       </td>
@@ -919,6 +853,15 @@ function EnhancedExamHistorySection({
         </div>
       )}
     </section>
+  );
+}
+
+function StatChip({ dark, value, label }) {
+  return (
+    <div className={`rounded-xl border px-3.5 py-2 leading-tight ${dark ? "bg-white/5 border-white/10" : "bg-white border-slate-200"}`}>
+      <p className={`text-sm font-black ${dark ? "text-white" : "text-slate-900"}`}>{value}</p>
+      <p className={`mt-0.5 text-[9px] font-bold uppercase tracking-wider ${dark ? "text-white/40" : "text-slate-400"}`}>{label}</p>
+    </div>
   );
 }
 

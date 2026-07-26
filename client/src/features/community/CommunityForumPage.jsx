@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { FaCommentDots, FaFilter, FaPlus, FaReply, FaSearch, FaTrophy, FaUserCircle } from "react-icons/fa";
+import {
+  FaArrowLeft,
+  FaBookOpen,
+  FaBug,
+  FaCommentDots,
+  FaFilter,
+  FaLightbulb,
+  FaNewspaper,
+  FaPlus,
+  FaQuestionCircle,
+  FaReply,
+  FaSearch,
+  FaTrophy,
+  FaUserCircle
+} from "react-icons/fa";
 import {
   addForumReply,
   createForumThread,
@@ -12,6 +26,36 @@ import {
 
 const POSTS_PER_PAGE = 10;
 const forumCategories = ["Get Started", "Newsroom", "Share Knowledge", "Suggest an Idea", "Report an Issue"];
+
+// Extra display metadata for the category picker cards. Keys must match forumCategories exactly.
+const categoryMeta = {
+  "Get Started": {
+    icon: FaBookOpen,
+    iconClass: "bg-emerald-50 text-emerald-600",
+    description: "New to the forum? Here's what you need to know."
+  },
+  "Newsroom": {
+    icon: FaNewspaper,
+    iconClass: "bg-violet-50 text-violet-600",
+    description: "Announcements, AMA events, and sneak previews of what's next."
+  },
+  "Share Knowledge": {
+    icon: FaQuestionCircle,
+    iconClass: "bg-lime-50 text-lime-600",
+    description: "Ask questions, show off your study skills, or simply browse around."
+  },
+  "Suggest an Idea": {
+    icon: FaLightbulb,
+    iconClass: "bg-amber-50 text-amber-600",
+    description: "Got an idea for the platform? Share it here and upvote your favorites."
+  },
+  "Report an Issue": {
+    icon: FaBug,
+    iconClass: "bg-rose-50 text-rose-600",
+    description: "Ran into an issue? Not sure if it's a bug? You can share it right here."
+  }
+};
+
 const reactionOptions = [
   { type: "like", label: "Like", activeClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
   { type: "insightful", label: "Insightful", activeClass: "border-amber-200 bg-amber-50 text-amber-700" },
@@ -28,6 +72,10 @@ export default function CommunityForumPage() {
   const [tagFilter, setTagFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [expandedThreadIds, setExpandedThreadIds] = useState({});
+
+  // Controls whether the category picker or the thread list is shown.
+  // Starts true so the forum opens on the category grid (matches the reference layout).
+  const [browsingCategory, setBrowsingCategory] = useState(true);
 
   const summary = useMemo(() => getCommunityRewardSummary(user?.email), [user?.email]);
   const leaderboard = useMemo(() => getLeaderboard(user?.email), [user?.email, summary.totalPoints]);
@@ -89,6 +137,19 @@ export default function CommunityForumPage() {
     setThreads(getForumThreads());
   }
 
+  // Clicking a category card jumps into the filtered thread view for that category.
+  function openCategory(category) {
+    setTagFilter(category);
+    setSearchTerm("");
+    setBrowsingCategory(false);
+  }
+
+  function backToCategories() {
+    setBrowsingCategory(true);
+    setTagFilter("all");
+    setSearchTerm("");
+  }
+
   return (
     <div className="min-h-screen bg-stone-50 px-5 py-8 text-slate-900 md:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -103,122 +164,158 @@ export default function CommunityForumPage() {
           </button>
         </header>
 
-        <section className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-wider text-emerald-700">New to the forum?</p>
-          <h2 className="mt-1 text-xl font-black text-slate-950">Ask kindly, share what works, and help fellow test takers improve.</h2>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600"><span className="rounded-full bg-white px-3 py-1.5">Ask a focused question</span><span className="rounded-full bg-white px-3 py-1.5">Share a practical study tip</span><span className="rounded-full bg-white px-3 py-1.5">Keep feedback respectful</span></div>
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
-          <main className="space-y-5">
-            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <div className="grid gap-3 xl:grid-cols-[1fr_16rem]">
-                <label className="relative block">
-                  <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-xl border border-stone-200 bg-stone-50 py-3 pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Search titles and discussion content..." />
-                </label>
-                <label className="relative block">
-                  <FaFilter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} className="w-full appearance-none rounded-xl border border-stone-200 bg-stone-50 py-3 pl-11 pr-4 text-sm font-black outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-                    <option value="all">All subject tags</option>
-                    {subjectTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
-                  </select>
-                </label>
+        {showTopicForm && (
+          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <form onSubmit={submitTopic}>
+              <div className="grid gap-3 md:grid-cols-[1fr_12rem]">
+                <input value={topicForm.title} onChange={(event) => setTopicForm((current) => ({ ...current, title: event.target.value }))} className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Topic title" />
+                <select value={topicForm.tag} onChange={(event) => setTopicForm((current) => ({ ...current, tag: event.target.value }))} className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">{forumCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
               </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <FilterChip active={tagFilter === "all"} onClick={() => setTagFilter("all")}>All</FilterChip>
-                {forumCategories.map((tag) => <FilterChip key={tag} active={tagFilter === tag} onClick={() => setTagFilter(tag)}>{tag}</FilterChip>)}
+              <textarea value={topicForm.body} onChange={(event) => setTopicForm((current) => ({ ...current, body: event.target.value }))} className="mt-3 h-28 w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="What do you want to discuss?" />
+              <div className="mt-3 flex justify-end">
+                <button className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-emerald-700">Post Topic</button>
               </div>
+            </form>
+          </section>
+        )}
 
-              {showTopicForm && (
-                <form onSubmit={submitTopic} className="mt-5 rounded-xl border border-stone-200 bg-stone-50 p-4">
-                  <div className="grid gap-3 md:grid-cols-[1fr_12rem]">
-                    <input value={topicForm.title} onChange={(event) => setTopicForm((current) => ({ ...current, title: event.target.value }))} className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Topic title" />
-                    <select value={topicForm.tag} onChange={(event) => setTopicForm((current) => ({ ...current, tag: event.target.value }))} className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">{forumCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
-                  </div>
-                  <textarea value={topicForm.body} onChange={(event) => setTopicForm((current) => ({ ...current, body: event.target.value }))} className="mt-3 h-28 w-full resize-none rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="What do you want to discuss?" />
-                  <div className="mt-3 flex justify-end">
-                    <button className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-emerald-700">Post Topic</button>
-                  </div>
-                </form>
-              )}
-            </section>
-
-            <section className="space-y-3">
-              {paginatedThreads.map((thread) => (
-                <article key={thread.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-emerald-200 hover:shadow-md">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-stone-100 text-slate-500">
-                        <FaUserCircle className="text-xl" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-black text-slate-950">{thread.title}</h3>
-                        <p className="mt-0.5 text-xs font-semibold text-slate-400">{thread.author} <span className="mx-1">|</span> {formatElapsed(thread.createdAt)}</p>
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{thread.tag}</span>
-                  </div>
-
-                  <p className="mt-4 text-sm leading-relaxed text-slate-600">{expandedThreadIds[thread.id] ? thread.body : `${thread.body.slice(0, 170)}${thread.body.length > 170 ? "…" : ""}`}</p>
-                  <button type="button" onClick={() => setExpandedThreadIds((current) => ({ ...current, [thread.id]: !current[thread.id] }))} className="mt-3 text-xs font-black text-emerald-700 hover:text-emerald-900">{expandedThreadIds[thread.id] ? "Show less" : "Read full post"}</button>
-
-                  <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-stone-100 pt-4">
-                    <ReactionBar thread={thread} userId={user?.id} onToggle={(reactionType) => toggleReaction(thread.id, reactionType)} />
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400"><FaCommentDots /> {thread.replies?.length || 0} Replies</div>
-                  </div>
-
-                  {expandedThreadIds[thread.id] && !!thread.replies?.length && (
-                    <div className="mt-4 max-h-56 space-y-2.5 overflow-y-auto border-l-2 border-stone-200 pl-4">
-                      {thread.replies.map((reply) => (
-                        <div key={reply.id} className="rounded-xl bg-stone-50 p-4 text-sm">
-                          <p className="font-bold text-slate-800">{reply.author} <span className="ml-1.5 text-xs font-semibold text-slate-400">{formatElapsed(reply.createdAt)}</span></p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-600">{reply.body}</p>
-                        </div>
-                      ))}
-                    </div>
+        {browsingCategory ? (
+          // ── Category picker (landing view) ──────────────────────────────
+          <section className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-5">
+            <div className="divide-y divide-stone-100">
+              {forumCategories.map((category) => {
+                const meta = categoryMeta[category];
+                const Icon = meta.icon;
+                const count = threads.filter((thread) => thread.tag === category).length;
+                return (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => openCategory(category)}
+                    className="flex w-full items-center gap-4 py-4 text-left transition hover:bg-stone-50 sm:rounded-xl sm:px-3"
+                  >
+                    <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl ${meta.iconClass}`}>
+                      <Icon />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-black text-slate-950">{category}</span>
+                      <span className="mt-0.5 block text-sm font-semibold text-slate-500">{meta.description}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-[10px] font-black text-slate-500">{count} {count === 1 ? "post" : "posts"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          // ── Filtered thread view ─────────────────────────────────────────
+          <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
+            <main className="space-y-5">
+              <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button type="button" onClick={backToCategories} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-700 hover:text-emerald-900">
+                    <FaArrowLeft /> All Categories
+                  </button>
+                  {tagFilter !== "all" && (
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{tagFilter}</span>
                   )}
-
-                  {expandedThreadIds[thread.id] && <div className="mt-5 flex gap-2.5">
-                    <input value={replyDrafts[thread.id] || ""} onChange={(event) => setReplyDrafts((current) => ({ ...current, [thread.id]: event.target.value }))} className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Write a supportive reply..." />
-                    <button onClick={() => submitReply(thread.id)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800"><FaReply /> Reply</button>
-                  </div>}
-                </article>
-              ))}
-
-              {!paginatedThreads.length && (
-                <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
-                  <p className="text-lg font-black text-slate-950">No discussions yet.</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">Be the first to start a helpful conversation in this category.</p>
-                  <button type="button" onClick={() => setShowTopicForm(true)} className="mt-4 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white">Create a topic</button>
                 </div>
-              )}
-            </section>
 
-            <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
-          </main>
-
-          <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-            {topRows.length > 1 ? <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-amber-700">Global Standings</p>
-              <h2 className="mt-1 text-xl font-black text-slate-950">Top 5 Scholar Scorers</h2>
-              <div className="mt-5 space-y-2.5">{topRows.map((row) => <LeaderboardRow key={row.email} row={row} />)}</div>
-            </section> : <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-amber-700">Community Progress</p><h2 className="mt-1 text-xl font-black text-slate-950">Standings unlock as classmates join.</h2><p className="mt-3 text-sm font-semibold leading-6 text-slate-500">Complete exams, contribute helpful posts, and invite your study group to build a meaningful leaderboard.</p></section>}
-            <section className="rounded-2xl border border-stone-200 bg-amber-50 p-5 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-amber-700">Your Placement</p>
-              <p className="mt-3 text-5xl font-black text-slate-950">{percentile}%</p>
-              <p className="mt-1.5 text-xs font-semibold text-slate-500">Estimated standing relative to local student points.</p>
-              {currentRow && (
-                <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
-                  <p className="text-xs font-black uppercase tracking-wider text-amber-700">Rank #{currentRow.rank}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-800">{currentRow.totalPoints.toLocaleString()} reward points</p>
-                  <p className="text-[10px] text-slate-400">Latest diagnostic: {currentRow.latestScore}%</p>
+                <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_16rem]">
+                  <label className="relative block">
+                    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-xl border border-stone-200 bg-stone-50 py-3 pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Search titles and discussion content..." />
+                  </label>
+                  <label className="relative block">
+                    <FaFilter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} className="w-full appearance-none rounded-xl border border-stone-200 bg-stone-50 py-3 pl-11 pr-4 text-sm font-black outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+                      <option value="all">All subject tags</option>
+                      {subjectTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                    </select>
+                  </label>
                 </div>
-              )}
-            </section>
-          </aside>
-        </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <FilterChip active={tagFilter === "all"} onClick={() => setTagFilter("all")}>All</FilterChip>
+                  {forumCategories.map((tag) => <FilterChip key={tag} active={tagFilter === tag} onClick={() => setTagFilter(tag)}>{tag}</FilterChip>)}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                {paginatedThreads.map((thread) => (
+                  <article key={thread.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-emerald-200 hover:shadow-md">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-stone-100 text-slate-500">
+                          <FaUserCircle className="text-xl" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-black text-slate-950">{thread.title}</h3>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-400">{thread.author} <span className="mx-1">|</span> {formatElapsed(thread.createdAt)}</p>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{thread.tag}</span>
+                    </div>
+
+                    <p className="mt-4 text-sm leading-relaxed text-slate-600">{expandedThreadIds[thread.id] ? thread.body : `${thread.body.slice(0, 170)}${thread.body.length > 170 ? "…" : ""}`}</p>
+                    <button type="button" onClick={() => setExpandedThreadIds((current) => ({ ...current, [thread.id]: !current[thread.id] }))} className="mt-3 text-xs font-black text-emerald-700 hover:text-emerald-900">{expandedThreadIds[thread.id] ? "Show less" : "Read full post"}</button>
+
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-stone-100 pt-4">
+                      <ReactionBar thread={thread} userId={user?.id} onToggle={(reactionType) => toggleReaction(thread.id, reactionType)} />
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400"><FaCommentDots /> {thread.replies?.length || 0} Replies</div>
+                    </div>
+
+                    {expandedThreadIds[thread.id] && !!thread.replies?.length && (
+                      <div className="mt-4 max-h-56 space-y-2.5 overflow-y-auto border-l-2 border-stone-200 pl-4">
+                        {thread.replies.map((reply) => (
+                          <div key={reply.id} className="rounded-xl bg-stone-50 p-4 text-sm">
+                            <p className="font-bold text-slate-800">{reply.author} <span className="ml-1.5 text-xs font-semibold text-slate-400">{formatElapsed(reply.createdAt)}</span></p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-600">{reply.body}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {expandedThreadIds[thread.id] && <div className="mt-5 flex gap-2.5">
+                      <input value={replyDrafts[thread.id] || ""} onChange={(event) => setReplyDrafts((current) => ({ ...current, [thread.id]: event.target.value }))} className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" placeholder="Write a supportive reply..." />
+                      <button onClick={() => submitReply(thread.id)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800"><FaReply /> Reply</button>
+                    </div>}
+                  </article>
+                ))}
+
+                {!paginatedThreads.length && (
+                  <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
+                    <p className="text-lg font-black text-slate-950">No discussions yet.</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">Be the first to start a helpful conversation in this category.</p>
+                    <button type="button" onClick={() => setShowTopicForm(true)} className="mt-4 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white">Create a topic</button>
+                  </div>
+                )}
+              </section>
+
+              <PaginationControls page={page} totalPages={totalPages} onPageChange={setPage} />
+            </main>
+
+            <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
+              {topRows.length > 1 ? <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-wider text-amber-700">Global Standings</p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">Top 5 Scholar Scorers</h2>
+                <div className="mt-5 space-y-2.5">{topRows.map((row) => <LeaderboardRow key={row.email} row={row} />)}</div>
+              </section> : <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-amber-700">Community Progress</p><h2 className="mt-1 text-xl font-black text-slate-950">Standings unlock as classmates join.</h2><p className="mt-3 text-sm font-semibold leading-6 text-slate-500">Complete exams, contribute helpful posts, and invite your study group to build a meaningful leaderboard.</p></section>}
+              <section className="rounded-2xl border border-stone-200 bg-amber-50 p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-wider text-amber-700">Your Placement</p>
+                <p className="mt-3 text-5xl font-black text-slate-950">{percentile}%</p>
+                <p className="mt-1.5 text-xs font-semibold text-slate-500">Estimated standing relative to local student points.</p>
+                {currentRow && (
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
+                    <p className="text-xs font-black uppercase tracking-wider text-amber-700">Rank #{currentRow.rank}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-800">{currentRow.totalPoints.toLocaleString()} reward points</p>
+                    <p className="text-[10px] text-slate-400">Latest diagnostic: {currentRow.latestScore}%</p>
+                  </div>
+                )}
+              </section>
+            </aside>
+          </div>
+        )}
       </div>
     </div>
   );

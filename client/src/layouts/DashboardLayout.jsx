@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { FaAngleDoubleLeft, FaAngleDoubleRight, FaBookOpen, FaBrain, FaBars, FaChartLine, FaClipboardCheck, FaClipboardList, FaCog, FaComments, FaGraduationCap, FaSignOutAlt, FaTimes, FaTrophy } from "react-icons/fa";
+import { FaAngleDoubleLeft, FaAngleDoubleRight, FaBookOpen, FaBrain, FaBars, FaChartLine, FaClipboardCheck, FaClipboardList, FaCog, FaComments, FaGraduationCap, FaSignOutAlt, FaTimes } from "react-icons/fa";
 import { getCurrentUser, logoutUser } from "../services/storage";
 
 const navItems = [
@@ -9,7 +9,6 @@ const navItems = [
   { to: "/reviewers", label: "Study Plan", icon: FaBookOpen },
   { to: "/weakness-drills", label: "Weakness Drills", icon: FaBrain },
   { to: "/community", label: "Community Forum", icon: FaComments },
-  { to: "/rewards", label: "Rewards & Badges", icon: FaTrophy },
   { to: "/settings", label: "Settings", icon: FaCog }
 ];
 

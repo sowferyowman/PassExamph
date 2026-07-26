@@ -479,6 +479,7 @@ export function loginUser(identifier, password) {
     role: user.role,
     name: user.name,
     nickname: user.nickname,
+    school: user.school || "",
     smsNumber: user.smsNumber,
     isGoogleLinked: Boolean(user.isGoogleLinked),
     profileCompleted: Boolean(user.profileCompleted),
@@ -502,6 +503,7 @@ export function createStudentAccount({ email, password, smsNumber }) {
     id: crypto.randomUUID(),
     name: "",
     nickname: "",
+    school: "",
     email: normalizedEmail,
     password,
     smsNumber: String(smsNumber || "").trim(),
@@ -527,7 +529,8 @@ export function signInWithGoogleProfile(profile = {}) {
     : {
         id: crypto.randomUUID(),
         name: googleProfile.name,
-        nickname: "",
+    nickname: "",
+    school: "",
         email: googleProfile.email,
         password: "",
         smsNumber: "",
@@ -564,6 +567,50 @@ export function updateCurrentStudentProfile(updates) {
   return setCurrentActiveUser(nextAccount);
 }
 
+export function updateStudentAccount(studentId, updates) {
+  const accounts = getUserAccounts();
+  const existing = accounts.find((account) => account.id === studentId && account.role === "student");
+  if (!existing) return null;
+  const allowed = {
+    name: String(updates?.name || "").trim(),
+    nickname: String(updates?.nickname || "").trim(),
+    school: String(updates?.school || "").trim(),
+    smsNumber: String(updates?.smsNumber || "").trim(),
+    recoveryEmail: String(updates?.recoveryEmail || "").trim().toLowerCase()
+  };
+  const nextAccount = { ...existing, ...allowed };
+  writeJson(USER_ACCOUNTS_KEY, accounts.map((account) => account.id === studentId ? nextAccount : account));
+  return nextAccount;
+}
+
+export function resetStudentPassword(studentId) {
+  const accounts = getUserAccounts();
+  const existing = accounts.find((account) => account.id === studentId && account.role === "student");
+  if (!existing) return null;
+  const temporaryPassword = `ACET-${Math.random().toString(36).slice(2, 8).toUpperCase()}!`;
+  const nextAccount = { ...existing, password: temporaryPassword, passwordResetAt: new Date().toISOString() };
+  writeJson(USER_ACCOUNTS_KEY, accounts.map((account) => account.id === studentId ? nextAccount : account));
+  return { student: nextAccount, temporaryPassword };
+}
+
+export function deleteStudentAccount(studentId) {
+  const accounts = getUserAccounts();
+  const existing = accounts.find((account) => account.id === studentId && account.role === "student");
+  if (!existing) return false;
+  writeJson(USER_ACCOUNTS_KEY, accounts.filter((account) => account.id !== studentId));
+
+  const dashboard = readJson(DASHBOARD_KEY, {});
+  const reviewerProgress = readJson(REVIEWER_PROGRESS_KEY, {});
+  const drillSessions = readJson(DRILL_SESSIONS_KEY, {});
+  delete dashboard[existing.email];
+  delete reviewerProgress[existing.email];
+  delete drillSessions[existing.email];
+  writeJson(DASHBOARD_KEY, dashboard);
+  writeJson(REVIEWER_PROGRESS_KEY, reviewerProgress);
+  writeJson(DRILL_SESSIONS_KEY, drillSessions);
+  return true;
+}
+
 export function getCurrentUser() {
   initializeLocalStorage();
   return readJson(CURRENT_ACTIVE_USER_KEY, readJson(SESSION_KEY, null));
@@ -580,6 +627,7 @@ function normalizeLegacyUserAccount(user) {
     username: user.username,
     name: user.name || "",
     nickname: user.nickname || "",
+    school: user.school || "",
     email: user.email || "",
     password: user.password || "",
     smsNumber: user.smsNumber || "",
@@ -612,6 +660,7 @@ function setCurrentActiveUser(user) {
     role: user.role || "student",
     name: user.name || "",
     nickname: user.nickname || "",
+    school: user.school || "",
     smsNumber: user.smsNumber || "",
     isGoogleLinked: Boolean(user.isGoogleLinked),
     profileCompleted: Boolean(user.profileCompleted),

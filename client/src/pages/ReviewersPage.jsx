@@ -90,7 +90,7 @@ export default function ReviewersPage() {
 
   if (!reviewer || !activeModule) {
     return <div className="min-h-screen bg-slate-50 p-4 sm:p-6"><div className="mx-auto max-w-6xl">
-      <header className="mb-8"><p className="text-xs font-black uppercase tracking-wider text-blue-600">Learning Path</p><h1 className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">Choose your reviewer</h1><p className="mt-2 text-sm font-semibold text-slate-500">Structured lessons, clear progress, and a saved place to resume.</p></header>
+      <header className="mb-8"><p className="text-xs font-black uppercase tracking-wider text-blue-600">Learning Path</p><h1 className="mt-2 text-3xl font-black text-slate-950 sm:text-4xl">Study Modules & Reviewers </h1><p className="mt-2 text-sm font-semibold text-slate-500">Select a module below to start and track your progress</p></header>
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{reviewers.map((item) => {
         const done = progress[item.id] || [];
         const total = item.modules?.length || 0;

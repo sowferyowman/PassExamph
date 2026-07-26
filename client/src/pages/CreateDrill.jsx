@@ -334,7 +334,6 @@ export default function CreateDrill() {
                     value={form.subjectTitle}
                     onChange={(event) => setForm((current) => ({ ...current, subjectTitle: event.target.value }))}
                     className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="e.g., Mathematics, English"
                   />
                 </label>
                 <label className="block">
@@ -343,7 +342,6 @@ export default function CreateDrill() {
                     value={form.diagnosticSubcategory}
                     onChange={(event) => setForm((current) => ({ ...current, diagnosticSubcategory: event.target.value }))}
                     className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="e.g., Algebra, Reading Inference"
                   />
                 </label>
                 <label className="block">
@@ -352,7 +350,6 @@ export default function CreateDrill() {
                     value={form.diagnosticSkillTag}
                     onChange={(event) => setForm((current) => ({ ...current, diagnosticSkillTag: event.target.value }))}
                     className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="e.g., Double Negatives, Rate Problems"
                   />
                 </label>
               </div>

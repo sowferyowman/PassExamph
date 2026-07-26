@@ -8,6 +8,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState({
     name: currentUser?.name || "",
     nickname: currentUser?.nickname || "",
+    school: currentUser?.school || "",
     smsNumber: currentUser?.smsNumber || "",
     recoveryEmail: currentUser?.recoveryEmail || currentUser?.email || ""
   });
@@ -25,6 +26,7 @@ export default function SettingsPage() {
     updateCurrentStudentProfile({
       name: form.name.trim(),
       nickname: form.nickname.trim(),
+      school: form.school.trim(),
       smsNumber: form.smsNumber.trim(),
       recoveryEmail: form.recoveryEmail.trim()
     });
@@ -59,6 +61,7 @@ export default function SettingsPage() {
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <Field label="Name" value={form.name} onChange={(name) => setForm((current) => ({ ...current, name }))} placeholder="Full name" autoComplete="name" />
               <Field label="Display name or nickname" value={form.nickname} onChange={(nickname) => setForm((current) => ({ ...current, nickname }))} placeholder="Name shown in the app" />
+              <Field label="School / Institution" value={form.school} onChange={(school) => setForm((current) => ({ ...current, school }))} placeholder="Ateneo de Manila University" autoComplete="organization" />
             </div>
           </div>
 
@@ -90,6 +93,7 @@ export default function SettingsPage() {
             <div className="mt-4 space-y-3">
               <ChecklistItem complete={Boolean(form.name.trim())} label="Name added" />
               <ChecklistItem complete={Boolean(form.nickname.trim())} label="Display name or nickname added" />
+              <ChecklistItem complete={Boolean(form.school.trim())} label="School or institution added" />
               <ChecklistItem complete={Boolean(form.smsNumber.trim()) && smsIsValid} label="Recovery number added" />
               <ChecklistItem complete={Boolean(form.recoveryEmail.trim())} label="Recovery email added" />
             </div>

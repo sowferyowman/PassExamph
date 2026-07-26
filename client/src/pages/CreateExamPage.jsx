@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FaPlus, FaSave, FaTrash, FaUnlock, FaLock, FaUsers, FaEdit, FaEye, FaEyeSlash, FaTimes } from "react-icons/fa";
+import { 
+  FaPlus, FaSave, FaTrash, FaUnlock, FaLock, FaUsers, 
+  FaEdit, FaEye, FaEyeSlash, FaTimes, FaEllipsisV,
+  FaChevronLeft, FaChevronRight, FaFileImport, FaDownload,
+  FaCheckCircle, FaExclamationTriangle
+} from "react-icons/fa";
 import AdminSidebar from "../components/AdminSidebar";
 import TinyMCEEditor from "../components/TinyMCEEditor";
 import {
@@ -68,6 +73,137 @@ function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmText
 }
 
 // ============================================
+// ACTION DROPDOWN COMPONENT
+// ============================================
+function ExamActionsDropdown({ blueprint, onEdit, onToggleVisibility, onDelete }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="p-2.5 hover:bg-slate-100 rounded-lg transition-all duration-200"
+        aria-label="More actions"
+      >
+        <FaEllipsisV className="w-5 h-5 text-slate-500" />
+      </button>
+      
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsOpen(false)} 
+          />
+          
+          <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 z-20 py-1.5">
+            <button
+              onClick={() => {
+                onEdit();
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-3 hover:bg-slate-50 transition-colors"
+            >
+              <FaEdit className="w-4 h-4 text-blue-500" />
+              <span className="font-medium text-slate-700">Edit Exam</span>
+            </button>
+            
+            <button
+              onClick={() => {
+                onToggleVisibility();
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-3 hover:bg-slate-50 transition-colors"
+            >
+              {blueprint.isHidden ? (
+                <>
+                  <FaEye className="w-4 h-4 text-amber-500" />
+                  <span className="font-medium text-slate-700">Show Exam</span>
+                </>
+              ) : (
+                <>
+                  <FaEyeSlash className="w-4 h-4 text-slate-500" />
+                  <span className="font-medium text-slate-700">Hide Exam</span>
+                </>
+              )}
+            </button>
+            
+            <hr className="my-1 border-slate-100" />
+            
+            <button
+              onClick={() => {
+                onDelete();
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-3 hover:bg-rose-50 transition-colors"
+            >
+              <FaTrash className="w-4 h-4 text-rose-500" />
+              <span className="font-medium text-rose-600">Delete Exam</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReviewerActionsDropdown({ reviewer, onEdit, onDelete }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="p-2.5 hover:bg-slate-100 rounded-lg transition-all duration-200"
+        aria-label="More actions"
+      >
+        <FaEllipsisV className="w-5 h-5 text-slate-500" />
+      </button>
+      
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsOpen(false)} 
+          />
+          
+          <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 z-20 py-1.5">
+            <button
+              onClick={() => {
+                onEdit();
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-3 hover:bg-slate-50 transition-colors"
+            >
+              <FaEdit className="w-4 h-4 text-blue-500" />
+              <span className="font-medium text-slate-700">Edit Reviewer</span>
+            </button>
+            
+            <hr className="my-1 border-slate-100" />
+            
+            <button
+              onClick={() => {
+                onDelete();
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-sm text-left flex items-center gap-3 hover:bg-rose-50 transition-colors"
+            >
+              <FaTrash className="w-4 h-4 text-rose-500" />
+              <span className="font-medium text-rose-600">Delete Reviewer</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // MAIN COMPONENT
 // ============================================
 
@@ -129,7 +265,181 @@ function getOptionLabel(index) {
   return String.fromCharCode(65 + index); // A, B, C, D, ...
 }
 
-export default function AdminDashboardPage() {
+// ============================================
+// CSV BULK IMPORT HELPERS
+// ============================================
+
+// Column layout expected in the uploaded CSV (header row required, order does not matter):
+// subject_category, time_minutes, question_type, question_text,
+// option_a, option_b, option_c, option_d, option_e, option_f,
+// correct_answer, correct_text, rubric, points,
+// diagnostic_subcategory, diagnostic_skill_tag
+const CSV_TEMPLATE_HEADERS = [
+  "subject_category", "time_minutes", "question_type", "question_text", "question_image_url",
+  "option_a", "option_b", "option_c", "option_d", "option_e", "option_f",
+  "correct_answer", "correct_text", "rubric", "points",
+  "diagnostic_subcategory", "diagnostic_skill_tag"
+];
+
+const CSV_TEMPLATE_ROWS = [
+  ["Mathematics", "15", "multiple_choice", "What is 2 + 2?", "", "2", "3", "4", "5", "", "", "C", "", "", "1", "Arithmetic", "Addition"],
+  ["Mathematics", "15", "multiple_choice", "Based on the graph below, what is the slope of the line?", "https://example.com/images/slope-graph.png", "1", "2", "3", "4", "", "", "B", "", "", "1", "Algebra", "Graph Reading"],
+  ["Mathematics", "15", "checkboxes", "Which of the following are prime numbers?", "", "2", "3", "4", "5", "", "", "A;B", "", "", "1", "Number Theory", "Primes"],
+  ["English", "10", "short_answer", "What is the past tense of 'go'?", "", "", "", "", "", "", "", "", "went", "", "1", "Grammar", "Verb Tenses"],
+  ["English", "10", "paragraph", "Explain the theme of the poem.", "", "", "", "", "", "", "", "", "", "Look for discussion of loss and renewal.", "2", "Literature", "Theme Analysis"]
+];
+
+function csvEscapeField(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function buildCsvTemplateContent() {
+  const lines = [CSV_TEMPLATE_HEADERS.join(",")];
+  CSV_TEMPLATE_ROWS.forEach((row) => lines.push(row.map(csvEscapeField).join(",")));
+  return lines.join("\n");
+}
+
+// Minimal RFC4180-ish CSV parser: handles quoted fields, escaped quotes ("") and embedded commas/newlines.
+function parseCsvText(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  const endField = () => { row.push(field); field = ""; };
+  const endRow = () => { endField(); rows.push(row); row = []; };
+
+  const normalized = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i];
+    const next = normalized[i + 1];
+
+    if (inQuotes) {
+      if (char === '"' && next === '"') { field += '"'; i++; }
+      else if (char === '"') { inQuotes = false; }
+      else { field += char; }
+      continue;
+    }
+
+    if (char === '"') { inQuotes = true; }
+    else if (char === ",") { endField(); }
+    else if (char === "\n") { endRow(); }
+    else { field += char; }
+  }
+  if (field.length > 0 || row.length > 0) endRow();
+
+  return rows.filter((cells) => cells.some((cell) => cell.trim() !== ""));
+}
+
+function csvRowsToObjects(rows) {
+  if (!rows.length) return [];
+  const headers = rows[0].map((header) => header.trim().toLowerCase());
+  return rows.slice(1).map((cells) => {
+    const record = {};
+    headers.forEach((header, index) => { record[header] = (cells[index] ?? "").trim(); });
+    return record;
+  });
+}
+
+function csvEscapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function isLikelyImageUrl(url) {
+  return /^https?:\/\/\S+$/i.test(String(url || "").trim());
+}
+
+function buildStemHtml(questionText, imageUrl) {
+  const parts = [];
+  if (questionText) parts.push(`<p>${csvEscapeHtml(questionText)}</p>`);
+  const trimmedUrl = String(imageUrl || "").trim();
+  if (trimmedUrl && isLikelyImageUrl(trimmedUrl)) {
+    parts.push(`<p><img src="${trimmedUrl}" alt="Question image" style="max-width:100%;height:auto;" /></p>`);
+  }
+  return parts.join("");
+}
+
+function csvLetterToIndex(letter) {
+  const code = String(letter || "").trim().toUpperCase().charCodeAt(0);
+  return code >= 65 && code <= 90 ? code - 65 : -1;
+}
+
+const CSV_QUESTION_TYPES = ["multiple_choice", "checkboxes", "short_answer", "paragraph"];
+const CSV_OPTION_KEYS = ["option_a", "option_b", "option_c", "option_d", "option_e", "option_f"];
+
+function buildQuestionFromCsvRecord(record) {
+  const rawType = String(record.question_type || "multiple_choice").trim().toLowerCase().replace(/\s+/g, "_");
+  const type = CSV_QUESTION_TYPES.includes(rawType) ? rawType : "multiple_choice";
+
+  let choiceOpts = CSV_OPTION_KEYS.map((key) => record[key] || "");
+  while (choiceOpts.length > 2 && choiceOpts[choiceOpts.length - 1].trim() === "") choiceOpts.pop();
+  if (choiceOpts.length < 2) choiceOpts = ["", ""];
+
+  const question = {
+    type,
+    stem: buildStemHtml(record.question_text, record.question_image_url),
+    choiceOpts,
+    answerIdx: 0,
+    correctAnswers: [],
+    correctText: record.correct_text || "",
+    rubric: record.rubric || "",
+    diagnosticSubcategory: record.diagnostic_subcategory || "",
+    diagnosticSkillTag: record.diagnostic_skill_tag || "",
+    points: Number(record.points) > 0 ? Number(record.points) : 1
+  };
+
+  if (type === "multiple_choice") {
+    const idx = csvLetterToIndex(record.correct_answer);
+    question.answerIdx = idx >= 0 && idx < choiceOpts.length ? idx : 0;
+  } else if (type === "checkboxes") {
+    question.correctAnswers = String(record.correct_answer || "")
+      .split(/[;,|]/)
+      .map((part) => csvLetterToIndex(part))
+      .filter((idx) => idx >= 0 && idx < choiceOpts.length)
+      .sort((a, b) => a - b);
+  }
+
+  return question;
+}
+
+// Groups CSV rows into { subjectTitle, allottedTimeSec, questions[] } sections, collecting row-level errors.
+function buildSectionsFromCsvRecords(records) {
+  const errors = [];
+  const sectionsByKey = new Map();
+
+  records.forEach((record, index) => {
+    const rowNumber = index + 2; // +1 for header row, +1 for 1-based row count
+    const subjectTitle = String(record.subject_category || "").trim();
+    const questionText = String(record.question_text || "").trim();
+
+    if (!subjectTitle) { errors.push(`Row ${rowNumber}: missing subject_category`); return; }
+    if (!questionText) { errors.push(`Row ${rowNumber}: missing question_text`); return; }
+
+    const imageUrl = String(record.question_image_url || "").trim();
+    if (imageUrl && !isLikelyImageUrl(imageUrl)) {
+      errors.push(`Row ${rowNumber}: question_image_url doesn't look like a valid link, image was skipped`);
+    }
+
+    const key = subjectTitle.toLowerCase();
+    if (!sectionsByKey.has(key)) {
+      const minutes = Number(record.time_minutes);
+      sectionsByKey.set(key, {
+        subjectTitle,
+        allottedTimeSec: minutes > 0 ? minutes * 60 : 600,
+        questions: []
+      });
+    }
+    sectionsByKey.get(key).questions.push(buildQuestionFromCsvRecord(record));
+  });
+
+  return { importedSections: Array.from(sectionsByKey.values()), errors };
+}
+
+export default function CreateExamPage() {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get("mode") === "reviewer" ? "reviewer" : "exam";
   const [mode, setMode] = useState(initialMode);
@@ -140,7 +450,7 @@ export default function AdminDashboardPage() {
   const [message, setMessage] = useState("");
   const [editingExamId, setEditingExamId] = useState(null);
   const [editingReviewerId, setEditingReviewerId] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
   // Confirmation Dialog State
   const [confirmDialog, setConfirmDialog] = useState({
@@ -151,6 +461,8 @@ export default function AdminDashboardPage() {
     confirmText: "Delete",
     isDanger: true
   });
+
+  const [csvImportResult, setCsvImportResult] = useState(null); // { importedCount, errors: [] } | null
 
   const totalQuestions = useMemo(
     () => examForm.sections.reduce((sum, section) => sum + section.questions.length, 0),
@@ -204,13 +516,29 @@ export default function AdminDashboardPage() {
     const reviewer = reviewers.find((item) => item.id === reviewerId);
     if (!reviewer) return;
     setEditingReviewerId(reviewerId);
-    setReviewerForm({ title: reviewer.title || "", subjectCategory: reviewer.subjectCategory || "", modules: (reviewer.modules || []).map((module) => ({ ...module, description: module.description || "", estimatedMinutes: Number(module.estimatedMinutes) || 15 })) });
+    setReviewerForm({ 
+      title: reviewer.title || "", 
+      subjectCategory: reviewer.subjectCategory || "", 
+      modules: (reviewer.modules || []).map((module) => ({ 
+        ...module, 
+        description: module.description || "", 
+        estimatedMinutes: Number(module.estimatedMinutes) || 15 
+      })) 
+    });
     setMessage(`Editing: "${reviewer.title}"`);
   }
 
   function handleDeleteReviewer(reviewerId) {
     const reviewer = reviewers.find((item) => item.id === reviewerId);
-    showConfirm({ title: "Delete Reviewer", message: `Delete "${reviewer?.title || "this reviewer"}"?`, onConfirm: () => { deleteReviewerBlueprint(reviewerId); setReviewers(getReviewerBlueprints()); setMessage("Reviewer deleted successfully."); } });
+    showConfirm({ 
+      title: "Delete Reviewer", 
+      message: `Delete "${reviewer?.title || "this reviewer"}"?`, 
+      onConfirm: () => { 
+        deleteReviewerBlueprint(reviewerId); 
+        setReviewers(getReviewerBlueprints()); 
+        setMessage("Reviewer deleted successfully."); 
+      } 
+    });
   }
 
   function handleDeleteExam(examId) {
@@ -221,7 +549,6 @@ export default function AdminDashboardPage() {
       onConfirm: () => {
         deleteExamBlueprint(examId);
         setBlueprints(getExamBlueprints());
-        setShowDeleteConfirm(null);
         setMessage("Exam deleted successfully.");
       }
     });
@@ -260,20 +587,18 @@ export default function AdminDashboardPage() {
     updateQuestion(sectionIndex, questionIndex, { choiceOpts: nextOptions });
   }
 
-  // NEW: Add option to question
+  // Add option to question
   function addOption(sectionIndex, questionIndex) {
     const question = examForm.sections[sectionIndex].questions[questionIndex];
     const newOptions = [...question.choiceOpts, ""];
     updateQuestion(sectionIndex, questionIndex, { 
       choiceOpts: newOptions,
-      // Reset answerIdx if it's now out of bounds
       answerIdx: question.answerIdx >= newOptions.length ? 0 : question.answerIdx,
-      // Reset correctAnswers if any are now out of bounds
       correctAnswers: question.correctAnswers.filter(idx => idx < newOptions.length)
     });
   }
 
-  // NEW: Remove option from question
+  // Remove option from question
   function removeOption(sectionIndex, questionIndex, optionIndex) {
     const question = examForm.sections[sectionIndex].questions[questionIndex];
     if (question.choiceOpts.length <= 2) {
@@ -284,15 +609,71 @@ export default function AdminDashboardPage() {
     const newOptions = question.choiceOpts.filter((_, idx) => idx !== optionIndex);
     updateQuestion(sectionIndex, questionIndex, { 
       choiceOpts: newOptions,
-      // Adjust answerIdx if it was the removed option or beyond
       answerIdx: question.answerIdx >= newOptions.length ? 0 : 
                   (question.answerIdx === optionIndex ? 0 : 
                    question.answerIdx > optionIndex ? question.answerIdx - 1 : question.answerIdx),
-      // Filter out removed option from correctAnswers
       correctAnswers: question.correctAnswers
         .filter(idx => idx !== optionIndex)
         .map(idx => idx > optionIndex ? idx - 1 : idx)
     });
+  }
+
+  function downloadCsvTemplate() {
+    const blob = new Blob([buildCsvTemplateContent()], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "exam_questions_template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleCsvUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // reset so the same filename can be re-uploaded later
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "");
+        const records = csvRowsToObjects(parseCsvText(text));
+        const { importedSections, errors } = buildSectionsFromCsvRecords(records);
+
+        if (!importedSections.length) {
+          setCsvImportResult({ importedCount: 0, errors: errors.length ? errors : ["No valid question rows were found in that file."] });
+          return;
+        }
+
+        setExamForm((current) => {
+          const nextSections = current.sections.map((section) => ({ ...section, questions: [...section.questions] }));
+          importedSections.forEach((imported) => {
+            const existing = nextSections.find(
+              (section) => section.subjectTitle.trim().toLowerCase() === imported.subjectTitle.toLowerCase()
+            );
+            if (existing) {
+              existing.questions.push(...imported.questions);
+            } else {
+              nextSections.push(imported);
+            }
+          });
+          return { ...current, sections: nextSections };
+        });
+
+        const importedCount = importedSections.reduce((sum, section) => sum + section.questions.length, 0);
+        setCsvImportResult({ importedCount, errors });
+        setMessage(
+          errors.length
+            ? `Imported ${importedCount} question(s) from CSV, ${errors.length} row(s) skipped.`
+            : `Imported ${importedCount} question(s) from CSV successfully.`
+        );
+      } catch (error) {
+        setCsvImportResult({ importedCount: 0, errors: ["Could not read that file. Make sure it's a valid CSV export."] });
+      }
+    };
+    reader.readAsText(file);
   }
 
   function addSubject() {
@@ -494,25 +875,54 @@ export default function AdminDashboardPage() {
 
   return (
     <main className="flex h-screen overflow-hidden bg-slate-100">
+      {/* Enlarge the rich-text editor so it uses the available width/height instead of a cramped box */}
+      <style>{`
+        .tox-tinymce {
+          min-height: 340px !important;
+          border-radius: 0.5rem !important;
+        }
+        .tox .tox-edit-area,
+        .tox .tox-edit-area__iframe {
+          min-height: 260px !important;
+        }
+        .tox .tox-toolbar__group {
+          flex-wrap: wrap;
+        }
+      `}</style>
+
       <AdminSidebar active={mode} onModeChange={setMode} />
 
       <div className="flex-1 overflow-y-auto">
         <header className="border-b border-slate-200 bg-white px-6 py-4">
-          <div className="mx-auto max-w-7xl">
-            <p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Workspace</p>
-            <h1 className="text-2xl font-black text-slate-950">
-              {editingExamId ? "Edit Exam" : `Create ${mode === "exam" ? "Exam" : "Reviewer"}`}
-            </h1>
-            <p className="mt-1 text-sm font-semibold text-slate-500">
-              {mode === "exam"
-                ? "Build scored questionnaire blocks for students."
-                : "Build course-style study modules with readings and video resources."}
-            </p>
+          <div className="mx-auto max-w-[1800px] flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Workspace</p>
+              <h1 className="text-2xl font-black text-slate-950">
+                {editingExamId ? "Edit Exam" : `Create ${mode === "exam" ? "Exam" : "Reviewer"}`}
+              </h1>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                {mode === "exam"
+                  ? "Build scored questionnaire blocks for students."
+                  : "Build course-style study modules with readings and video resources."}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsPanelCollapsed((current) => !current)}
+              className="hidden lg:inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-50 transition whitespace-nowrap"
+              title={isPanelCollapsed ? "Show published list" : "Hide published list for more editing space"}
+            >
+              {isPanelCollapsed ? <FaChevronLeft /> : <FaChevronRight />}
+              {isPanelCollapsed ? "Show List" : "Widen Editor"}
+            </button>
           </div>
         </header>
 
-        <div className="mx-auto grid max-w-7xl gap-6 p-6 lg:grid-cols-[1fr_20rem]">
-          <section className="space-y-5">
+        <div
+          className={`mx-auto grid max-w-[1800px] gap-6 p-6 transition-all duration-200 ${
+            isPanelCollapsed ? "grid-cols-1" : "lg:grid-cols-[1fr_24rem]"
+          }`}
+        >
+          <section className="space-y-5 min-w-0">
             {(editingExamId || editingReviewerId) && (
               <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <p className="text-sm font-semibold text-blue-700">Editing {editingExamId ? "Exam" : "Reviewer"} - Make your changes and click update</p>
@@ -541,117 +951,120 @@ export default function AdminDashboardPage() {
             {message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">{message}</p>}
           </section>
 
-          <aside className="space-y-5">
-            {mode === "exam" ? <div className="glass-card p-5">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Current Draft</p>
-              <p className="mt-3 text-3xl font-black text-slate-950">{mode === "exam" ? totalQuestions : reviewerForm.modules.length}</p>
-              <p className="text-sm font-semibold text-slate-500">
-                {mode === "exam" 
-                  ? `${totalQuestions} question${totalQuestions > 1 ? "s" : ""} across ${examForm.sections.length} subject${examForm.sections.length > 1 ? "s" : ""}` 
-                  : `${reviewerForm.modules.length} module${reviewerForm.modules.length > 1 ? "s" : ""} in ${reviewerForm.subjectCategory || "uncategorized"}`}
-              </p>
-              {mode === "exam" && examForm.title && (
-                <p className="mt-2 text-xs font-semibold text-slate-400 truncate">{examForm.title}</p>
-              )}
-              {mode === "exam" && examForm.accessType && (
-                <p className="mt-1 text-xs font-semibold text-slate-400">
-                  {examForm.accessType === "once" && "One attempt only"}
-                  {examForm.accessType === "limited" && `${examForm.maxAttempts || 3} attempts allowed`}
-                  {examForm.accessType === "unlimited" && "Unlimited attempts"}
+          {!isPanelCollapsed && (
+            <aside className="space-y-5 min-w-0">
+              {mode === "exam" ? <div className="glass-card p-5">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">Current Draft</p>
+                <p className="mt-3 text-3xl font-black text-slate-950">{mode === "exam" ? totalQuestions : reviewerForm.modules.length}</p>
+                <p className="text-sm font-semibold text-slate-500">
+                  {mode === "exam" 
+                    ? `${totalQuestions} question${totalQuestions > 1 ? "s" : ""} across ${examForm.sections.length} subject${examForm.sections.length > 1 ? "s" : ""}` 
+                    : `${reviewerForm.modules.length} module${reviewerForm.modules.length > 1 ? "s" : ""} in ${reviewerForm.subjectCategory || "uncategorized"}`}
                 </p>
-              )}
-            </div> : <div className="glass-card p-5">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Reviewers</p>
-              <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
-                {reviewers.length ? reviewers.map((reviewer) => (
-                  <div key={reviewer.id} className="rounded-lg border border-slate-200 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0"><p className="truncate font-black text-slate-900">{reviewer.title}</p><p className="mt-1 text-xs font-semibold text-slate-500">{reviewer.subjectCategory} · {reviewer.modules?.length || 0} modules</p><span className="text-xs font-semibold text-emerald-600">Published</span></div>
-                      <div className="flex shrink-0 gap-1"><button onClick={() => loadReviewerForEdit(reviewer.id)} className="rounded p-1.5 text-blue-600 hover:bg-blue-50" title="Edit reviewer"><FaEdit /></button><button onClick={() => handleDeleteReviewer(reviewer.id)} className="rounded p-1.5 text-rose-600 hover:bg-rose-50" title="Delete reviewer"><FaTrash /></button></div>
+                {mode === "exam" && examForm.title && (
+                  <p className="mt-2 text-xs font-semibold text-slate-400 truncate">{examForm.title}</p>
+                )}
+                {mode === "exam" && examForm.accessType && (
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    {examForm.accessType === "once" && "One attempt only"}
+                    {examForm.accessType === "limited" && `${examForm.maxAttempts || 3} attempts allowed`}
+                    {examForm.accessType === "unlimited" && "Unlimited attempts"}
+                  </p>
+                )}
+              </div> : <div className="glass-card p-5">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Reviewers</p>
+                <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
+                  {reviewers.length ? reviewers.map((reviewer) => (
+                    <div key={reviewer.id} className="rounded-lg border border-slate-200 p-4 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-black text-slate-900 text-base truncate">{reviewer.title}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            {reviewer.subjectCategory} · {reviewer.modules?.length || 0} modules
+                          </p>
+                          <span className="text-xs font-semibold text-emerald-600">Published</span>
+                        </div>
+                        <ReviewerActionsDropdown
+                          reviewer={reviewer}
+                          onEdit={() => loadReviewerForEdit(reviewer.id)}
+                          onDelete={() => handleDeleteReviewer(reviewer.id)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )) : <p className="text-sm text-slate-500">No published reviewers yet.</p>}
-              </div>
-            </div>}
+                  )) : <p className="text-sm text-slate-500">No published reviewers yet.</p>}
+                </div>
+              </div>}
 
-            {mode === "exam" && <div className="glass-card p-5">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Exams</p>
-              <div className="mt-4 space-y-3 max-h-96 overflow-y-auto">
-                {blueprints.length > 0 ? blueprints.map((blueprint) => (
-                  <div key={blueprint.id} className="rounded-lg border border-slate-200 p-3 hover:bg-slate-50 transition">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-slate-900 truncate flex items-center gap-2">
-                          {blueprint.isHidden && <FaEyeSlash className="text-slate-400 text-xs" />}
-                          {blueprint.title || "Untitled Exam"}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold text-slate-500">{blueprint.sections?.length || 0} subjects</span>
-                          <span className="text-xs text-slate-300">•</span>
-                          <span className="text-xs font-semibold text-slate-500">
-                            {blueprint.accessType === "once" && "Once"}
-                            {blueprint.accessType === "limited" && `${blueprint.maxAttempts || 3}x`}
-                            {(!blueprint.accessType || blueprint.accessType === "unlimited") && "Unlimited"}
-                          </span>
-                          <span className="text-xs text-slate-300">•</span>
-                          {blueprint.isHidden ? (
-                            <span className="text-xs text-amber-600 font-semibold">Hidden</span>
-                          ) : (
-                            <span className="text-xs text-emerald-600 font-semibold">Published</span>
-                          )}
+              {mode === "exam" && (
+                <div className="glass-card p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Exams</p>
+                    <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                      {blueprints.length}
+                    </span>
+                  </div>
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                    {blueprints.length > 0 ? blueprints.map((blueprint) => (
+                      <div 
+                        key={blueprint.id} 
+                        className="rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-md transition-all duration-200"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-2">
+                              {blueprint.isHidden && (
+                                <FaEyeSlash className="text-slate-400 text-sm flex-shrink-0 mt-0.5" />
+                              )}
+                              <p className="font-bold text-slate-900 text-base break-words leading-tight">
+                                {blueprint.title || "Untitled Exam"}
+                              </p>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap">
+                                📚 {blueprint.sections?.length || 0} subjects
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap">
+                                {blueprint.accessType === "once" && "🔒 Once"}
+                                {blueprint.accessType === "limited" && `🔄 ${blueprint.maxAttempts || 3}x`}
+                                {(!blueprint.accessType || blueprint.accessType === "unlimited") && "♾️ Unlimited"}
+                              </span>
+                              {blueprint.isHidden ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 whitespace-nowrap">
+                                  👁️ Hidden
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 whitespace-nowrap">
+                                  ✅ Published
+                                </span>
+                              )}
+                            </div>
+                            {blueprint.description && (
+                              <p className="mt-2 text-xs text-slate-500 line-clamp-2 break-words">
+                                {blueprint.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex-shrink-0 mt-0.5">
+                            <ExamActionsDropdown
+                              blueprint={blueprint}
+                              onEdit={() => loadExamForEdit(blueprint.id)}
+                              onToggleVisibility={() => handleToggleVisibility(blueprint.id)}
+                              onDelete={() => handleDeleteExam(blueprint.id)}
+                            />
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 ml-2">
-                        <button
-                          onClick={() => loadExamForEdit(blueprint.id)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"
-                          title="Edit exam"
-                        >
-                          <FaEdit className="text-sm" />
-                        </button>
-                        <button
-                          onClick={() => handleToggleVisibility(blueprint.id)}
-                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition"
-                          title={blueprint.isHidden ? "Show exam" : "Hide exam"}
-                        >
-                          {blueprint.isHidden ? <FaEye className="text-sm" /> : <FaEyeSlash className="text-sm" />}
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(blueprint.id)}
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition"
-                          title="Delete exam"
-                        >
-                          <FaTrash className="text-sm" />
-                        </button>
-                      </div>
-                    </div>
-                    {showDeleteConfirm === blueprint.id && (
-                      <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-lg">
-                        <p className="text-sm font-semibold text-rose-700">Delete "{blueprint.title}"?</p>
-                        <p className="text-xs text-rose-600 mb-2">This action cannot be undone.</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleDeleteExam(blueprint.id)}
-                            className="px-3 py-1.5 bg-rose-600 text-white text-xs font-bold rounded hover:bg-rose-700"
-                          >
-                            Yes, Delete
-                          </button>
-                          <button
-                            onClick={() => setShowDeleteConfirm(null)}
-                            className="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded hover:bg-slate-300"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                    )) : (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-slate-500">No published exams yet.</p>
+                        <p className="text-xs text-slate-400 mt-1">Create and publish your first exam above.</p>
                       </div>
                     )}
                   </div>
-                )) : (
-                  <p className="text-sm text-slate-500">No published exams yet. Create and publish your first exam above.</p>
-                )}
-              </div>
-            </div>}
-          </aside>
+                </div>
+              )}
+            </aside>
+          )}
         </div>
       </div>
 
@@ -774,6 +1187,70 @@ export default function AdminDashboardPage() {
           )}
         </div>
 
+        <div className="glass-card p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Bulk Import Questions (CSV)</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Upload a CSV with many questions at once instead of adding them one by one. Rows are grouped into subjects by the
+                <span className="font-black text-slate-500"> subject_category</span> column — matching an existing subject name adds
+                to it, a new name creates a new subject.
+              </p>
+            </div>
+            <div className="flex flex-shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={downloadCsvTemplate}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50 transition whitespace-nowrap"
+              >
+                <FaDownload /> Download Template
+              </button>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-blue-800 transition whitespace-nowrap">
+                <FaFileImport /> Upload CSV
+                <input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="hidden" />
+              </label>
+            </div>
+          </div>
+
+          <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-500">
+            <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-slate-600">CSV column format</summary>
+            <div className="mt-3 space-y-1.5">
+              <p><span className="font-black text-slate-700">subject_category</span> — subject/section name for this question</p>
+              <p><span className="font-black text-slate-700">time_minutes</span> — allotted time for the subject (only needs to be set once per subject)</p>
+              <p><span className="font-black text-slate-700">question_type</span> — one of: multiple_choice, checkboxes, short_answer, paragraph</p>
+              <p><span className="font-black text-slate-700">question_text</span> — the question itself</p>
+              <p><span className="font-black text-slate-700">question_image_url</span> — optional link to an image hosted online (Drive, Imgur, your own server, etc.) shown under the question. CSV can't embed actual picture files, only links.</p>
+              <p><span className="font-black text-slate-700">option_a</span> to <span className="font-black text-slate-700">option_f</span> — choices for multiple_choice / checkboxes</p>
+              <p><span className="font-black text-slate-700">correct_answer</span> — letter (e.g. C) for multiple_choice, or letters separated by ; for checkboxes (e.g. A;C)</p>
+              <p><span className="font-black text-slate-700">correct_text</span> — answer key for short_answer questions</p>
+              <p><span className="font-black text-slate-700">rubric</span> — grading notes for paragraph questions (optional)</p>
+              <p><span className="font-black text-slate-700">points</span> — point value (defaults to 1 if blank)</p>
+              <p><span className="font-black text-slate-700">diagnostic_subcategory</span> / <span className="font-black text-slate-700">diagnostic_skill_tag</span> — optional tags</p>
+            </div>
+          </details>
+
+          {csvImportResult && (
+            <div className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${
+              csvImportResult.importedCount > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}>
+              <div className="flex items-center gap-2">
+                {csvImportResult.importedCount > 0 ? <FaCheckCircle /> : <FaExclamationTriangle />}
+                <span>
+                  {csvImportResult.importedCount > 0
+                    ? `Imported ${csvImportResult.importedCount} question(s) successfully.`
+                    : "No questions were imported."}
+                </span>
+              </div>
+              {csvImportResult.errors.length > 0 && (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs font-semibold text-rose-600">
+                  {csvImportResult.errors.slice(0, 8).map((err, index) => <li key={index}>{err}</li>)}
+                  {csvImportResult.errors.length > 8 && <li>...and {csvImportResult.errors.length - 8} more row(s) skipped.</li>}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
         {examForm.sections.map((section, sectionIndex) => (
           <article key={`${section.subjectTitle || sectionIndex}-${sectionIndex}`} className="glass-card p-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -818,23 +1295,31 @@ export default function AdminDashboardPage() {
   }
 
   // ============================================
-  // RENDER QUESTION CARD (UPDATED)
+  // RENDER QUESTION CARD
   // ============================================
   function renderQuestionCard(sectionIndex, questionIndex, question) {
     return (
       <div key={`${sectionIndex}-${questionIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <label className="block flex-1">
+        {/* Header row: question number + type/points now live above the editor, freeing full width for it */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-black">
+              {questionIndex + 1}
+            </span>
             <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text <span className="text-rose-500">*</span></span>
-            <TinyMCEEditor
-              value={question.stem}
-              onChange={(value) => updateQuestion(sectionIndex, questionIndex, { stem: value })}
-              placeholder="Type your question here..."
-            />
-          </label>
-          <button onClick={() => removeQuestion(sectionIndex, questionIndex)} className="icon-button text-rose-500 hover:text-rose-700 transition" aria-label="Remove question">
+          </div>
+          <button onClick={() => removeQuestion(sectionIndex, questionIndex)} className="icon-button text-rose-500 hover:text-rose-700 transition flex-shrink-0" aria-label="Remove question">
             <FaTrash />
           </button>
+        </div>
+
+        {/* Editor now spans the full width of the card instead of squeezing next to the delete button */}
+        <div className="w-full">
+          <TinyMCEEditor
+            value={question.stem}
+            onChange={(value) => updateQuestion(sectionIndex, questionIndex, { stem: value })}
+            placeholder="Type your question here..."
+          />
         </div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -899,7 +1384,7 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {question.choiceOpts.map((option, optionIndex) => (
                 <div key={optionIndex} className="flex items-center gap-2">
                   <span className="w-8 text-sm font-bold text-slate-500 text-center">
@@ -915,7 +1400,7 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => updateQuestion(sectionIndex, questionIndex, { answerIdx: optionIndex })}
-                      className={`px-3 py-1.5 text-xs font-bold rounded transition ${
+                      className={`px-3 py-1.5 text-xs font-bold rounded transition whitespace-nowrap ${
                         question.answerIdx === optionIndex
                           ? "bg-emerald-500 text-white"
                           : "bg-slate-200 text-slate-600 hover:bg-slate-300"
@@ -934,7 +1419,7 @@ export default function AdminDashboardPage() {
                           : [...currentCorrect, optionIndex].sort((a, b) => a - b);
                         updateQuestion(sectionIndex, questionIndex, { correctAnswers: newCorrect });
                       }}
-                      className={`px-3 py-1.5 text-xs font-bold rounded transition ${
+                      className={`px-3 py-1.5 text-xs font-bold rounded transition whitespace-nowrap ${
                         (question.correctAnswers || []).includes(optionIndex)
                           ? "bg-emerald-500 text-white"
                           : "bg-slate-200 text-slate-600 hover:bg-slate-300"
@@ -1001,7 +1486,6 @@ export default function AdminDashboardPage() {
               value={question.diagnosticSubcategory || ""}
               onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSubcategory: event.target.value })}
               className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="e.g., Algebra, Reading Comprehension"
             />
           </label>
           <label>
@@ -1010,7 +1494,6 @@ export default function AdminDashboardPage() {
               value={question.diagnosticSkillTag || ""}
               onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSkillTag: event.target.value })}
               className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="e.g., Quadratic Equations, Inference"
             />
           </label>
         </div>
@@ -1044,55 +1527,63 @@ export default function AdminDashboardPage() {
 
         {reviewerForm.modules.map((module) => (
           <article key={module.id} className="glass-card p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Module Title <span className="text-rose-500">*</span></span>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <label className="flex-1 block">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Module Title <span className="text-rose-500">*</span></span>
                 <input
                   value={module.title}
-                    onChange={(event) => updateReviewerModule(module.id, { title: event.target.value })}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="Module title"
+                  onChange={(event) => updateReviewerModule(module.id, { title: event.target.value })}
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                  placeholder="Module title"
                 />
-                </label>
-                <input
-                  value={module.description || ""}
-                  onChange={(event) => updateReviewerModule(module.id, { description: event.target.value })}
-                  className="mt-3 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Short module description"
-                />
-                <label className="mt-3 block">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Estimated completion time (minutes)</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={module.estimatedMinutes || 15}
-                    onChange={(event) => updateReviewerModule(module.id, { estimatedMinutes: Math.max(1, Number(event.target.value)) })}
-                    className="mt-2 w-40 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  />
-                </label>
-                <label className="block mt-3">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Reading Material <span className="text-rose-500">*</span></span>
-                  <TinyMCEEditor
-                    value={module.content}
-                    onChange={(value) => updateReviewerModule(module.id, { content: value })}
-                    placeholder="Write the reading material here..."
-                  />
-                </label>
-                <label className="block mt-3">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Video URL <span className="text-slate-400">(optional)</span></span>
-                  <input
-                    value={module.videoUrl || ""}
-                    onChange={(event) => updateReviewerModule(module.id, { videoUrl: event.target.value })}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="https://youtube.com/..."
-                  />
-                </label>
-              </div>
-              <button onClick={() => removeReviewerModule(module.id)} className="icon-button text-rose-500 hover:text-rose-700 transition" aria-label="Remove module">
+              </label>
+              <button onClick={() => removeReviewerModule(module.id)} className="icon-button text-rose-500 hover:text-rose-700 transition flex-shrink-0 mt-6" aria-label="Remove module">
                 <FaTrash />
               </button>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Short Description <span className="text-slate-400">(optional)</span></span>
+                <input
+                  value={module.description || ""}
+                  onChange={(event) => updateReviewerModule(module.id, { description: event.target.value })}
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Short module description"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Estimated Completion Time (minutes)</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={module.estimatedMinutes || 15}
+                  onChange={(event) => updateReviewerModule(module.id, { estimatedMinutes: Math.max(1, Number(event.target.value)) })}
+                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Estimated minutes"
+                />
+              </label>
+            </div>
+
+            <label className="block mt-3">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Reading Material <span className="text-rose-500">*</span></span>
+              <div className="w-full mt-2">
+                <TinyMCEEditor
+                  value={module.content}
+                  onChange={(value) => updateReviewerModule(module.id, { content: value })}
+                  placeholder="Write the reading material here..."
+                />
+              </div>
+            </label>
+            <label className="block mt-3">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Video URL <span className="text-slate-400">(optional)</span></span>
+              <input
+                value={module.videoUrl || ""}
+                onChange={(event) => updateReviewerModule(module.id, { videoUrl: event.target.value })}
+                className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="https://youtube.com/..."
+              />
+            </label>
           </article>
         ))}
       </>

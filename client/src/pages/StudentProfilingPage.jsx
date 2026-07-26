@@ -13,6 +13,7 @@ export default function StudentProfilingPage() {
   const [form, setForm] = useState({
     name: currentUser?.name || "",
     nickname: currentUser?.nickname || "",
+    school: currentUser?.school || "",
     target: currentUser?.academicMetrics?.target || "ACET",
     strengths: currentUser?.academicMetrics?.strengths?.join(", ") || "",
     weakTags: currentUser?.academicMetrics?.weakTags?.join(", ") || ""
@@ -35,6 +36,7 @@ export default function StudentProfilingPage() {
     const profile = {
       name: form.name.trim(),
       nickname: form.nickname.trim(),
+      school: form.school.trim(),
       profileCompleted: true,
       academicMetrics: {
         target: form.target,
@@ -72,6 +74,7 @@ export default function StudentProfilingPage() {
             <div className="space-y-4">
               <Field label="Full Name" value={form.name} onChange={(name) => setForm((current) => ({ ...current, name }))} placeholder="Stanly Mejia" />
               <Field label="Nickname" value={form.nickname} onChange={(nickname) => setForm((current) => ({ ...current, nickname }))} placeholder="Stan" />
+              <Field label="School / Institution" value={form.school} onChange={(school) => setForm((current) => ({ ...current, school }))} placeholder="e.g., Ateneo de Manila University" />
             </div>
           )}
 

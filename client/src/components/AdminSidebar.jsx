@@ -20,7 +20,7 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
 
   function goToBuilder(mode) {
     onModeChange?.(mode);
-    navigate(`/admin/exams?mode=${mode}`);
+    navigate(`/admin/create-exam?mode=${mode}`);
   }
 
   function logout() {
