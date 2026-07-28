@@ -1,4 +1,5 @@
 const USERS_KEY = "exams_ph_users";
+const APP_STUDENTS_KEY = "app_students";
 const SESSION_KEY = "exams_ph_current_user";
 const USER_ACCOUNTS_KEY = "userAccounts";
 const CURRENT_ACTIVE_USER_KEY = "currentActiveUser";
@@ -1047,7 +1048,7 @@ function normalizeDashboardAnalytics(dashboard, email) {
       {
         label: "Study Points",
         value: studyPoints.toLocaleString(),
-        detail: "From exams, reviewers, and badges",
+        detail: "From exams and reviewers",
         accent: "teal",
         progress: studyPointsProgress,
         progressLabel: `${studyPoints.toLocaleString()} / ${studyPointsGoal.toLocaleString()} pts to Magis Elite`
@@ -1164,7 +1165,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       { label: "Latest Mock Score", value: latestCompletedAttempt ? `${Number(latestCompletedAttempt.finalPct ?? latestCompletedAttempt.score ?? 0)}%` : "0%", detail: latestCompletedAttempt ? `Scored from ${latestCompletedAttempt.examTitle || latestCompletedAttempt.name || "completed mock exam"}` : "No completed exam attempts yet", accent: "blue" },
       { label: "Total Tests Taken", value: String(exams.length), detail: `${exams.length} completed mock exam${exams.length === 1 ? "" : "s"} out of ${getExamBlueprints().length} available`, accent: "purple" },
       { label: "Leaderboard Placement", value: placement.rank ? `#${placement.rank}` : "-", detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet", accent: "indigo" },
-      { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exams, reviewers, and badges", accent: "teal", progress: Math.min(100, Math.round((rewardSummary.totalPoints / 5000) * 100)), progressLabel: `${rewardSummary.totalPoints.toLocaleString()} / 5,000 pts to Magis Elite` }
+      { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exam and reviewers", accent: "teal", progress: Math.min(100, Math.round((rewardSummary.totalPoints / 5000) * 100)), progressLabel: `${rewardSummary.totalPoints.toLocaleString()} / 5,000 pts to Magis Elite` }
     ],
     progression,
     subjects,
@@ -1374,45 +1375,53 @@ function buildCommunityRewardSummary(email, dashboard) {
   const reviewers = getReviewerBlueprints();
   const progress = getReviewerProgress(email);
   const attempts = dashboard.attempts || [];
-  const uniqueCompletedExams = new Set(attempts.map((attempt) => attempt.examId).filter(Boolean));
   const mockPoints = attempts.reduce((sum, attempt) => sum + Number(attempt.earnedMockPoints || calculateAttemptPoints(attempt.finalPct, attempt.durationSeconds)), 0);
   const reviewerModules = reviewers.flatMap((reviewer) => reviewer.modules.map((module) => ({ reviewerId: reviewer.id, moduleId: module.id })));
   const completedReviewerModules = reviewerModules.filter((module) => progress[module.reviewerId]?.includes(module.moduleId));
   const reviewerPoints = completedReviewerModules.length * 75;
-  const examCompletionist = exams.length > 0 && uniqueCompletedExams.size >= exams.length;
-  const reviewerMaster = reviewerModules.length > 0 && completedReviewerModules.length >= reviewerModules.length;
-  const speedDemon = hasSpeedDemonAttempt(attempts);
-
-  const badges = [
-    examCompletionist && { title: "Exam Completionist", description: "Finished all available mock exams.", points: 500 },
-    reviewerMaster && { title: "Reviewer Master", description: "Completed every published reviewer module.", points: 400 },
-    speedDemon && { title: "Speed Demon", description: "Finished an exam far faster than the current average.", points: 350 }
-  ].filter(Boolean);
-
-  const badgePoints = badges.reduce((sum, badge) => sum + badge.points, 0);
-  const totalPoints = mockPoints + reviewerPoints + badgePoints;
+  const totalPoints = mockPoints + reviewerPoints;
 
   return {
     totalPoints,
     mockPoints,
     reviewerPoints,
-    badgePoints,
-    badges,
-    tier: getRewardTier(totalPoints),
     completedReviewerModules: completedReviewerModules.length,
     totalReviewerModules: reviewerModules.length,
-    completedExams: uniqueCompletedExams.size,
+    completedExams: new Set(attempts.map((attempt) => attempt.examId).filter(Boolean)).size,
     totalExams: exams.length,
     latestScore: attempts[0]?.finalPct || 0
   };
 }
 
 export function getLeaderboard(currentEmail) {
-  const students = getUsers().filter((user) => user.role === "student");
+  initializeLocalStorage();
+  // `userAccounts` is the active account store. Keep `app_students` in the
+  // merge for installations that still persist their student records there.
+  // Do not fall back to the legacy `exams_ph_users` list: it is not updated by
+  // the current sign-up flow.
+  const activeAccounts = readJson(USER_ACCOUNTS_KEY, defaultUserAccounts);
+  const appStudents = readJson(APP_STUDENTS_KEY, []);
+  const students = mergeUserAccounts(
+    Array.isArray(activeAccounts) ? activeAccounts : [],
+    Array.isArray(appStudents) ? appStudents : []
+  ).filter((student) => student?.role === "student" && typeof student.email === "string" && student.email.trim());
+
   const rows = students.map((student) => {
     const summary = getCommunityRewardSummary(student.email);
-    return { id: student.id, email: student.email, name: student.name, totalPoints: summary.totalPoints, latestScore: summary.latestScore, isCurrent: student.email === currentEmail };
-  }).sort((a, b) => b.totalPoints - a.totalPoints);
+    // Some active-account records carry their latest aggregate directly,
+    // while older records derive it from dashboard data. Nullish checks retain
+    // legitimate zero scores and zero-point accounts.
+    const totalPoints = Number(student.totalPoints ?? student.points ?? summary.totalPoints) || 0;
+    const latestScore = Number(student.latestScore ?? student.score ?? summary.latestScore) || 0;
+    return {
+      id: student.id,
+      email: student.email,
+      name: student.name || student.username || student.email,
+      totalPoints,
+      latestScore,
+      isCurrent: student.email === currentEmail
+    };
+  }).sort((a, b) => b.totalPoints - a.totalPoints || b.latestScore - a.latestScore || a.email.localeCompare(b.email));
   return rows.map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
@@ -1574,19 +1583,6 @@ function calculateAttemptPoints(finalPct, durationSeconds = 0) {
   return base + speedBonus;
 }
 
-function hasSpeedDemonAttempt(attempts) {
-  const timedAttempts = attempts.filter((attempt) => Number(attempt.durationSeconds) > 0);
-  if (!timedAttempts.length) return false;
-  const average = timedAttempts.reduce((sum, attempt) => sum + Number(attempt.durationSeconds), 0) / timedAttempts.length;
-  return timedAttempts.some((attempt) => Number(attempt.durationSeconds) <= average * 0.65 || Number(attempt.durationSeconds) < 600);
-}
-
-function getRewardTier(points) {
-  if (points >= 5000) return { label: "Magis Elite", percent: 100, color: "bg-yellow-500" };
-  if (points >= 2500) return { label: "Blue Eagle", percent: 75, color: "bg-blue-600" };
-  if (points >= 1000) return { label: "Rising Scholar", percent: 45, color: "bg-emerald-500" };
-  return { label: "Getting Started", percent: 18, color: "bg-slate-400" };
-}
 
 function buildExplanation(question) {
   const type = question.type || "multiple_choice";
@@ -1612,17 +1608,28 @@ function buildItemDiagnostic({ section, question, response, isCorrect, metrics =
     const lastSecondWindow = !responseDurationSeconds || Number(event.elapsedMs || 0) >= responseDurationSeconds * 1000 - 15000;
     return wasCorrect && becameIncorrect && lastSecondWindow;
   });
-
+  const points = Math.max(1, Number(question.points || 1));
   return {
     ...tags,
+    // --- new fields needed for the exam submissions viewer ---
+    questionId: question.id || null,
+    questionText: question.stem || "",
+    questionType: question.type || "multiple_choice",
+    choiceOpts: question.choiceOpts || [],
+    studentAnswer: response ?? null,
+    correctAnswerIdx: question.answerIdx ?? null,
+    correctAnswers: question.correctAnswers || [],
+    correctText: question.correctText || "",
+    points,
+    earnedPoints: isCorrect ? points : 0,
+    // --- existing fields ---
     responseDurationSeconds,
     isCorrect,
     errorFlag: isCorrect === false,
     changedCorrectToIncorrect,
-    changedAnswerCount: Math.max(0, answerEvents.length - 1),
-    questionType: question.type || "multiple_choice"
+    changedAnswerCount: Math.max(0, answerEvents.length - 1)
   };
-}
+} 
 
 function getDiagnosticTags(section, question) {
   const category = cleanLabel(question.category || question.subjectTitle || section.subjectTitle, "General Practice");

@@ -11,19 +11,14 @@ import {
   FaFilter
 } from "react-icons/fa";
 import AdminSidebar from "../components/AdminSidebar";
-import { deleteStudentAccount, getDashboardStore, getDrillSessions, getEssayResponses, getReviewerProgress, getUserAccounts, resetStudentPassword, updateLatestEssayReview, updateStudentAccount } from "../services/storage";
+import { deleteAdminStudent, getAdminStudents, resetAdminStudentPassword, updateAdminStudent } from "../api/adminApi";
+import { getDashboardStore, getDrillSessions, getEssayResponses, getReviewerProgress, updateLatestEssayReview } from "../services/storage";
 
-const STUDENTS_PER_PAGE = 6;
+const STUDENTS_PER_PAGE = 15;
 
 // Placeholder for whoever is logged into the admin panel. Swap for real auth/session data
 // once you have it — this only feeds the audit-trail fields below.
 const CURRENT_ADMIN_NAME = "Admin Workspace";
-
-// Define test accounts to filter out
-const TEST_ACCOUNTS = {
-  emails: ['student1@exams.ph', 'markzuckerberg@gmail.com', 'elonmusk@gmail.com'],
-  names: ['Stanley Mejia', 'mark zuckerberg', 'Elon Musk']
-};
 
 export default function AdminReviewDashboard() {
   const [refresh, setRefresh] = useState(0);
@@ -46,41 +41,54 @@ export default function AdminReviewDashboard() {
   const [studentModal, setStudentModal] = useState(null);
   const [studentAction, setStudentAction] = useState(null);
   const [temporaryPassword, setTemporaryPassword] = useState(null);
+  const [examHistoryStudent, setExamHistoryStudent] = useState(null);
 
-  // Filter states - hide test accounts by default
+  // Filter states
   const [statusFilter, setStatusFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [examFilter, setExamFilter] = useState("all");
-  const [hideTestAccounts, setHideTestAccounts] = useState(true); // TRUE by default
+  const [hideTestAccounts, setHideTestAccounts] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    try {
-      const store = getDashboardStore();
-      const studentAccounts = getUserAccounts().filter((user) => user.role === "student");
-      const pendingItems = studentAccounts.flatMap((student) =>
-        (store[student.email]?.attempts || []).flatMap((attempt) =>
-          getEssayResponses(attempt)
-            .filter((essay) => ["pending_review", "ai_graded"].includes(essay.status))
-            .map((essay) => ({
-              ...essay,
-              email: student.email,
-              studentName: student.name || student.email,
-              examTitle: attempt.examTitle || "Essay Exam"
-            }))
-        )
-      );
-      const examCount = studentAccounts.reduce((sum, student) => sum + (store[student.email]?.attempts?.length || 0), 0);
+    let cancelled = false;
 
-      setStudents(studentAccounts.map((student) => buildStudentRow(student, store)));
-      setPending(pendingItems);
-      setTotalExams(examCount);
-    } catch (err) {
-      setError(err?.message || "Something went wrong loading the dashboard data.");
-    } finally {
-      setLoading(false);
+    async function loadDashboard() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [studentAccounts, store] = await Promise.all([getAdminStudents(), Promise.resolve(getDashboardStore())]);
+        if (cancelled) return;
+        const normalizedStudents = studentAccounts.map((student) => ({
+          ...student,
+          name: student.displayName || student.name || student.username || student.email,
+          dateJoined: student.createdAt
+        }));
+        const pendingItems = normalizedStudents.flatMap((student) =>
+          (store[student.email]?.attempts || []).flatMap((attempt) =>
+            getEssayResponses(attempt)
+              .filter((essay) => ["pending_review", "ai_graded"].includes(essay.status))
+              .map((essay) => ({
+                ...essay,
+                email: student.email,
+                studentName: student.name || student.email,
+                examTitle: attempt.examTitle || "Essay Exam"
+              }))
+          )
+        );
+        const examCount = normalizedStudents.reduce((sum, student) => sum + (store[student.email]?.attempts?.length || 0), 0);
+
+        setStudents(normalizedStudents.map((student) => buildStudentRow(student, store)));
+        setPending(pendingItems);
+        setTotalExams(examCount);
+      } catch (err) {
+        if (!cancelled) setError(err?.message || "Something went wrong loading the dashboard data.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
+
+    loadDashboard();
+    return () => { cancelled = true; };
   }, [refresh]);
 
   const filteredSortedStudents = useMemo(() => {
@@ -92,10 +100,10 @@ export default function AdminReviewDashboard() {
         return false;
       }
 
-      // Hide test accounts filter - TRUE by default
+      // Optional local display filter; disabled by default so every database
+      // student returned by the API is visible.
       if (hideTestAccounts) {
-        if (TEST_ACCOUNTS.emails.includes(student.email) || 
-            TEST_ACCOUNTS.names.includes(student.name)) {
+        if (student.email?.endsWith("@acet.local")) {
           return false;
         }
       }
@@ -202,6 +210,10 @@ export default function AdminReviewDashboard() {
     setStudentMenuOpenId(null);
     setStudentModal({ type: "view", student });
   }
+  function handleViewExamSubmissions(student) {
+    setStudentMenuOpenId(null);
+    setExamHistoryStudent(student);
+  }
   function handleResetPassword(student) {
     setStudentMenuOpenId(null);
     setStudentAction({ type: "reset-password", student });
@@ -214,18 +226,22 @@ export default function AdminReviewDashboard() {
     setStudentModal(null);
     setStudentAction({ type: "edit", student, changes });
   }
-  function runConfirmedStudentAction() {
+  async function runConfirmedStudentAction() {
     if (!studentAction) return;
     const { student, type, changes } = studentAction;
-    if (type === "edit") {
-      updateStudentAccount(student.id, changes);
-      showToast(`${changes.name || student.email}'s profile was updated.`);
-    } else if (type === "reset-password") {
-      const result = resetStudentPassword(student.id);
-      if (result) setTemporaryPassword({ name: student.name || student.email, password: result.temporaryPassword });
-    } else if (type === "delete") {
-      deleteStudentAccount(student.id);
-      showToast(`${student.name || student.email}'s account and local learning data were deleted.`);
+    try {
+      if (type === "edit") {
+        await updateAdminStudent(student.id, changes);
+        showToast(`${changes.name || student.email}'s profile was updated.`);
+      } else if (type === "reset-password") {
+        const result = await resetAdminStudentPassword(student.id);
+        setTemporaryPassword({ name: student.name || student.email, password: result.temporaryPassword });
+      } else if (type === "delete") {
+        await deleteAdminStudent(student.id);
+        showToast(`${student.name || student.email}'s account was deleted.`);
+      }
+    } catch (error) {
+      showToast(error.response?.data?.error || "Could not update the student account.");
     }
     setStudentAction(null);
     setRefresh((value) => value + 1);
@@ -235,7 +251,7 @@ export default function AdminReviewDashboard() {
     setStatusFilter("all");
     setScoreFilter("all");
     setExamFilter("all");
-    setHideTestAccounts(true);
+    setHideTestAccounts(false);
     setStudentSearch("");
   }
 
@@ -253,7 +269,7 @@ export default function AdminReviewDashboard() {
       <div className="flex-1 overflow-y-auto p-6 md:p-8">
         <div className="mx-auto max-w-7xl space-y-6">
           <header>
-            <p className="text-[10px] font-black uppercase tracking-wider text-blue-600">Dashboard</p>
+            <p className="text-[10px] font-black uppercase tracking-wider text-[#003A6C]">Dashboard</p>
             <h1 className="mt-1 text-2xl font-black text-slate-950">Admin Control Center</h1>
             <p className="mt-1 text-xs font-semibold text-slate-500">Your central command for user management and AI evaluation approvals.</p>
           </header>
@@ -271,13 +287,13 @@ export default function AdminReviewDashboard() {
 
           {!error && (
             <>
-              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-5">
                   <div className="flex items-center gap-2.5">
-                    <FaUsers className="text-blue-600 text-sm" />
+                    <FaUsers className="text-[#003A6C] text-sm" />
                     <h2 className="text-base font-black text-slate-950">Student Accounts</h2>
                     {activeFilterCount > 0 && (
-                      <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-black text-blue-700">
+                      <span className="rounded-full bg-[#003A6C]/10 px-2.5 py-1 text-[10px] font-black text-[#003A6C]">
                         {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
                       </span>
                     )}
@@ -297,7 +313,7 @@ export default function AdminReviewDashboard() {
                         <FaFilter className="text-[10px]" />
                         Filter
                         {activeFilterCount > 0 && (
-                          <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] text-blue-700">
+                          <span className="ml-0.5 rounded-full bg-[#003A6C]/10 px-1.5 py-0.5 text-[9px] text-[#003A6C]">
                             {activeFilterCount}
                           </span>
                         )}
@@ -312,7 +328,7 @@ export default function AdminReviewDashboard() {
                             <select 
                               value={statusFilter} 
                               onChange={(e) => setStatusFilter(e.target.value)}
-                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
                             >
                               <option value="all">All Status</option>
                               <option value="active">Active</option>
@@ -324,7 +340,7 @@ export default function AdminReviewDashboard() {
                             <select 
                               value={scoreFilter} 
                               onChange={(e) => setScoreFilter(e.target.value)}
-                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
                             >
                               <option value="all">All Scores</option>
                               <option value="passed">Passed</option>
@@ -337,7 +353,7 @@ export default function AdminReviewDashboard() {
                             <select 
                               value={examFilter} 
                               onChange={(e) => setExamFilter(e.target.value)}
-                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
                             >
                               <option value="all">All Students</option>
                               <option value="has-exams">Has Exams</option>
@@ -350,7 +366,7 @@ export default function AdminReviewDashboard() {
                               id="hideTestAccounts"
                               checked={hideTestAccounts}
                               onChange={(e) => setHideTestAccounts(e.target.checked)}
-                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                              className="rounded border-slate-300 text-[#003A6C] focus:ring-[#003A6C] h-3.5 w-3.5"
                             />
                             <label htmlFor="hideTestAccounts" className="text-[11px] font-semibold text-slate-600">
                               Hide test accounts {hideTestAccounts ? "(on)" : "(off)"}
@@ -374,7 +390,7 @@ export default function AdminReviewDashboard() {
                         value={studentSearch} 
                         onChange={(event) => setStudentSearch(event.target.value)} 
                         placeholder="Search..." 
-                        className="w-48 rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-xs font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50" 
+                        className="w-48 rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-xs font-semibold outline-none focus:border-[#003A6C] focus:ring-4 focus:ring-[#003A6C]/10"
                       />
                     </label>
                   </div>
@@ -387,62 +403,63 @@ export default function AdminReviewDashboard() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-[11px]">
                         <thead>
-                          <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                            <th className="px-4 py-3 w-10">#</th>
-                            <th className="px-4 py-3 w-36">Student ID</th>
-                            <th className="px-4 py-3 w-32">
-                              <button onClick={() => setStudentSort((current) => ({ key: "name", asc: current.key === "name" ? !current.asc : true }))} className="inline-flex items-center gap-1.5 hover:text-slate-600">Name <FaSort className="text-[8px]" /></button>
+                          <tr className="bg-[#003A6C] text-[10px] font-black uppercase tracking-wider text-white">
+                            <th className="px-6 py-4 w-10">#</th>
+                            <th className="px-6 py-4 w-36">Student ID</th>
+                            <th className="px-6 py-4 w-32">
+                              <button onClick={() => setStudentSort((current) => ({ key: "name", asc: current.key === "name" ? !current.asc : true }))} className="inline-flex items-center gap-1.5 hover:text-blue-200 text-white">Name <FaSort className="text-[8px]" /></button>
                             </th>
-                            <th className="px-4 py-3 w-40">
-                              <button onClick={() => setStudentSort((current) => ({ key: "email", asc: current.key === "email" ? !current.asc : true }))} className="inline-flex items-center gap-1.5 hover:text-slate-600">Email <FaSort className="text-[8px]" /></button>
+                            <th className="px-6 py-4 w-40">
+                              <button onClick={() => setStudentSort((current) => ({ key: "email", asc: current.key === "email" ? !current.asc : true }))} className="inline-flex items-center gap-1.5 hover:text-blue-200 text-white">Email <FaSort className="text-[8px]" /></button>
                             </th>
-                            <th className="px-4 py-3 w-28">School</th>
-                            <th className="px-4 py-3 w-28">Latest Score</th>
-                            <th className="px-4 py-3 w-16 text-center">Exams</th>
-                            <th className="px-4 py-3 w-16 text-center">Modules</th>
-                            <th className="px-4 py-3 w-28">Activity</th>
-                            <th className="px-4 py-3 w-20">Status</th>
-                            <th className="px-4 py-3 w-24">Joined</th>
-                            <th className="px-4 py-3 w-14 text-right">Actions</th>
+                            <th className="px-6 py-4 w-28">School</th>
+                            <th className="px-6 py-4 w-28">Latest Score</th>
+                            <th className="px-6 py-4 w-16 text-center">Exams</th>
+                            <th className="px-6 py-4 w-16 text-center">Modules</th>
+                            <th className="px-6 py-4 w-28">Activity</th>
+                            <th className="px-6 py-4 w-20">Status</th>
+                            <th className="px-6 py-4 w-24">Joined</th>
+                            <th className="px-6 py-4 w-14 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-[11px]">
                           {paginatedStudents.map((student, index) => {
                             const key = student.id || student.email;
                             return (
-                              <tr key={key} className="hover:bg-slate-50">
-                                <td className="px-4 py-3.5 font-bold text-slate-400 text-center">{(studentPage - 1) * STUDENTS_PER_PAGE + index + 1}</td>
-                                <td className="px-4 py-3.5 font-mono text-[10px] font-bold text-slate-500 truncate max-w-36">{student.id || "—"}</td>
-                                <td className="px-4 py-3.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-blue-50 text-[9px] font-black text-blue-700">{getInitials(student.name || student.email)}</span>
+                              <tr key={key} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-6 py-4 font-bold text-slate-400 text-center">{(studentPage - 1) * STUDENTS_PER_PAGE + index + 1}</td>
+                                <td className="px-6 py-4 font-mono text-[10px] font-bold text-slate-500 truncate max-w-36">{student.id || "—"}</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#003A6C]/10 text-[10px] font-black text-[#003A6C]">{getInitials(student.name || student.email)}</span>
                                     <span className="font-black text-slate-900 truncate max-w-24">{student.name || "Student"}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3.5 text-slate-500 truncate max-w-40">{student.email}</td>
-                                <td className="px-4 py-3.5 text-slate-500 text-[10px] truncate max-w-28">{student.school || "Not provided"}</td>
-                                <td className="px-4 py-3.5">
-                                  <span className={`rounded-full px-2.5 py-1 text-[9px] font-black whitespace-nowrap ${student.passed ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+                                <td className="px-6 py-4 text-slate-500 truncate max-w-40">{student.email}</td>
+                                <td className="px-6 py-4 text-slate-500 text-[10px] truncate max-w-28">{student.school || "Not provided"}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`rounded-full px-3 py-1.5 text-[9px] font-black whitespace-nowrap ${student.passed ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
                                     {student.latestScore === null ? "No score" : `${student.latestScore}%`}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3.5 font-black text-slate-700 text-center">{student.totalExams}</td>
-                                <td className="px-4 py-3.5 font-black text-slate-700 text-center">{student.totalModules}</td>
-                                <td className="px-4 py-3.5 text-[10px] font-semibold text-slate-500 truncate max-w-28">{formatLastActivity(student.lastActivity)}</td>
-                                <td className="px-4 py-3.5">
-                                  <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase whitespace-nowrap ${student.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                                <td className="px-6 py-4 font-black text-slate-700 text-center">{student.totalExams}</td>
+                                <td className="px-6 py-4 font-black text-slate-700 text-center">{student.totalModules}</td>
+                                <td className="px-6 py-4 text-[10px] font-semibold text-slate-500 truncate max-w-28">{formatLastActivity(student.lastActivity)}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`rounded-full px-3 py-1.5 text-[9px] font-black uppercase whitespace-nowrap ${student.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                                     {student.status}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3.5 text-[10px] text-slate-500 truncate max-w-24">{student.dateJoined ? new Date(student.dateJoined).toLocaleDateString() : "—"}</td>
-                                <td className="px-4 py-3.5 text-right">
-                                  <button onClick={() => setStudentMenuOpenId(studentMenuOpenId === key ? null : key)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                                <td className="px-6 py-4 text-[10px] text-slate-500 truncate max-w-24">{student.dateJoined ? new Date(student.dateJoined).toLocaleDateString() : "—"}</td>
+                                <td className="px-6 py-4 text-right relative">
+                                  <button onClick={() => setStudentMenuOpenId(studentMenuOpenId === key ? null : key)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                                     <FaEllipsisV className="text-[10px]" />
                                   </button>
                                   {studentMenuOpenId === key && (
-                                    <div className="absolute right-4 top-11 z-10 w-40 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg">
+                                    <div className="absolute right-6 top-11 z-10 w-44 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg">
                                       <button onClick={() => handleViewProfile(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">View profile</button>
                                       <button onClick={() => handleEditStudent(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">Edit details</button>
+                                      <button onClick={() => handleViewExamSubmissions(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">View exam submissions</button>
                                       <button onClick={() => handleResetPassword(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">Reset password</button>
                                       <button onClick={() => handleDeleteStudent(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-rose-600 hover:bg-rose-50">Delete account</button>
                                     </div>
@@ -461,8 +478,8 @@ export default function AdminReviewDashboard() {
                         {activeFilterCount > 0 && ` (filtered)`}
                       </p>
                       <div className="flex gap-2">
-                        <button onClick={() => setStudentPage((value) => Math.max(1, value - 1))} disabled={studentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 disabled:cursor-not-allowed disabled:opacity-30 hover:bg-slate-50"><FaChevronLeft className="text-[10px]" /></button>
-                        <button onClick={() => setStudentPage((value) => Math.min(totalStudentPages, value + 1))} disabled={studentPage === totalStudentPages} className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 disabled:cursor-not-allowed disabled:opacity-30 hover:bg-slate-50"><FaChevronRight className="text-[10px]" /></button>
+                        <button onClick={() => setStudentPage((value) => Math.max(1, value - 1))} disabled={studentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 disabled:cursor-not-allowed disabled:opacity-30 hover:bg-slate-50 transition-colors"><FaChevronLeft className="text-[10px]" /></button>
+                        <button onClick={() => setStudentPage((value) => Math.min(totalStudentPages, value + 1))} disabled={studentPage === totalStudentPages} className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 disabled:cursor-not-allowed disabled:opacity-30 hover:bg-slate-50 transition-colors"><FaChevronRight className="text-[10px]" /></button>
                       </div>
                     </div>
                   </>
@@ -476,7 +493,7 @@ export default function AdminReviewDashboard() {
                     {(studentSearch || activeFilterCount > 0) && (
                       <button 
                         onClick={clearAllFilters}
-                        className="mt-3 rounded-lg bg-blue-50 px-3.5 py-2 text-[10px] font-black text-blue-600 hover:bg-blue-100"
+                        className="mt-3 rounded-lg bg-[#003A6C]/10 px-3.5 py-2 text-[10px] font-black text-[#003A6C] hover:bg-[#003A6C]/20"
                       >
                         Clear all filters
                       </button>
@@ -485,7 +502,7 @@ export default function AdminReviewDashboard() {
                 )}
               </section>
 
-              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="border-b border-slate-100 px-6 py-5">
                   <h2 className="text-base font-black text-slate-950">Pending Essay Reviews</h2>
                   <p className="mt-1 text-[10px] font-semibold text-slate-400">Click Review to inspect the full response and AI rationale before deciding.</p>
@@ -497,39 +514,39 @@ export default function AdminReviewDashboard() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-[11px]">
                       <thead>
-                        <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          <th className="px-6 py-3 w-32">Student</th>
-                          <th className="px-6 py-3">Essay / Exam</th>
-                          <th className="px-6 py-3 w-28">Score</th>
-                          <th className="px-6 py-3 w-24">Status</th>
-                          <th className="px-6 py-3 w-20 text-right">Action</th>
+                        <tr className="bg-[#003A6C] text-[10px] font-black uppercase tracking-wider text-white">
+                          <th className="px-6 py-4 w-32">Student</th>
+                          <th className="px-6 py-4">Essay / Exam</th>
+                          <th className="px-6 py-4 w-28">Score</th>
+                          <th className="px-6 py-4 w-24">Status</th>
+                          <th className="px-6 py-4 w-20 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-[11px]">
                         {pending.map((item) => {
                           const maxPoints = Math.max(1, Number(item.points || 1));
                           return (
-                            <tr key={`${item.email}-${item.id}`} className="hover:bg-slate-50">
-                              <td className="px-6 py-3.5">
+                            <tr key={`${item.email}-${item.id}`} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="px-6 py-4">
                                 <p className="font-black text-slate-900 text-[11px] truncate max-w-28">{item.studentName}</p>
                                 <p className="text-[9px] font-semibold text-slate-400 truncate max-w-28">{item.email}</p>
                               </td>
-                              <td className="px-6 py-3.5">
+                              <td className="px-6 py-4">
                                 <p className="font-bold text-slate-700 text-[11px] truncate max-w-xs">{item.examTitle}</p>
                                 {item.reviewedBy && (
                                   <p className="mt-0.5 text-[9px] font-semibold text-slate-400">By {item.reviewedBy}</p>
                                 )}
                               </td>
-                              <td className="px-6 py-3.5 font-black text-slate-900">
+                              <td className="px-6 py-4 font-black text-slate-900">
                                 {item.aiScore ?? "—"} <span className="text-[9px] font-semibold text-slate-400">/ {maxPoints}</span>
                               </td>
-                              <td className="px-6 py-3.5">
-                                <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider whitespace-nowrap ${item.status === "ai_graded" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>
+                              <td className="px-6 py-4">
+                                <span className={`rounded-full px-3 py-1.5 text-[9px] font-black uppercase tracking-wider whitespace-nowrap ${item.status === "ai_graded" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>
                                   {item.status === "ai_graded" ? "AI Graded" : "Pending"}
                                 </span>
                               </td>
-                              <td className="px-6 py-3.5 text-right">
-                                <button onClick={() => setReviewItem(item)} className="rounded-lg bg-blue-600 px-3.5 py-2 text-[10px] font-black text-white hover:bg-blue-700">Review</button>
+                              <td className="px-6 py-4 text-right">
+                                <button onClick={() => setReviewItem(item)} className="rounded-lg bg-[#003A6C] px-4 py-2 text-[10px] font-black text-white hover:bg-[#002A4C] transition-colors">Review</button>
                               </td>
                             </tr>
                           );
@@ -603,6 +620,14 @@ export default function AdminReviewDashboard() {
         />
       )}
 
+      {examHistoryStudent && (
+        <ExamSubmissionsModal
+          student={examHistoryStudent}
+          attempts={getDashboardStore()[examHistoryStudent.email]?.attempts || []}
+          onClose={() => setExamHistoryStudent(null)}
+        />
+      )}
+
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-lg">
           {toast}
@@ -665,7 +690,7 @@ function ReviewWorkbench({ item, score, onScoreChange, onClose, onApprove, onRej
       <div className="flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-blue-600">{item.examTitle}</p>
+            <p className="text-[10px] font-black uppercase tracking-wider text-[#003A6C]">{item.examTitle}</p>
             <h2 className="mt-1 text-lg font-black text-slate-950">{item.studentName}</h2>
             <p className="text-[10px] font-semibold text-slate-400">{item.email}</p>
           </div>
@@ -745,7 +770,7 @@ function StudentProfileModal({ mode, student, onClose, onSave }) {
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-5">
       <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
-          <div><p className="text-[10px] font-black uppercase tracking-wider text-blue-600">Student profile</p><h3 className="mt-1 text-lg font-black text-slate-950">{viewOnly ? "Profile details" : "Edit student details"}</h3></div>
+          <div><p className="text-[10px] font-black uppercase tracking-wider text-[#003A6C]">Student profile</p><h3 className="mt-1 text-lg font-black text-slate-950">{viewOnly ? "Profile details" : "Edit student details"}</h3></div>
           <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><FaTimes className="text-sm" /></button>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -757,7 +782,7 @@ function StudentProfileModal({ mode, student, onClose, onSave }) {
           <AdminField label="Recovery email" value={form.recoveryEmail} disabled={viewOnly} onChange={(recoveryEmail) => setForm((current) => ({ ...current, recoveryEmail }))} />
         </div>
         {viewOnly && <p className="mt-4 text-[10px] font-semibold text-slate-500">Student ID: <span className="font-mono text-slate-700">{student.id}</span></p>}
-        <div className="mt-6 flex justify-end gap-3"><button onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-black text-slate-600 hover:bg-slate-50">{viewOnly ? "Close" : "Cancel"}</button>{!viewOnly && <button onClick={() => onSave(form)} className="rounded-lg bg-blue-600 px-4 py-2 text-[10px] font-black text-white hover:bg-blue-700">Review changes</button>}</div>
+        <div className="mt-6 flex justify-end gap-3"><button onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-black text-slate-600 hover:bg-slate-50">{viewOnly ? "Close" : "Cancel"}</button>{!viewOnly && <button onClick={() => onSave(form)} className="rounded-lg bg-[#003A6C] px-4 py-2 text-[10px] font-black text-white hover:bg-[#002A4C]">Review changes</button>}</div>
       </div>
     </div>
   );
@@ -768,7 +793,7 @@ function AdminField({ label, value, onChange, disabled = false }) {
 }
 
 function TemporaryPasswordDialog({ name, password, onClose }) {
-  return <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-5"><div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Password reset complete</p><h3 className="mt-1 text-base font-black text-slate-950">Temporary password for {name}</h3><p className="mt-3 rounded-lg bg-slate-100 px-4 py-3 font-mono text-sm font-black text-slate-900">{password}</p><p className="mt-3 text-[10px] font-semibold text-slate-500">Give this to the student securely. They should change it after signing in.</p><div className="mt-6 flex justify-end"><button onClick={onClose} className="rounded-lg bg-blue-600 px-4 py-2 text-[10px] font-black text-white hover:bg-blue-700">Done</button></div></div></div>;
+  return <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-5"><div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Password reset complete</p><h3 className="mt-1 text-base font-black text-slate-950">Temporary password for {name}</h3><p className="mt-3 rounded-lg bg-slate-100 px-4 py-3 font-mono text-sm font-black text-slate-900">{password}</p><p className="mt-3 text-[10px] font-semibold text-slate-500">Give this to the student securely. They should change it after signing in.</p><div className="mt-6 flex justify-end"><button onClick={onClose} className="rounded-lg bg-[#003A6C] px-4 py-2 text-[10px] font-black text-white hover:bg-[#002A4C]">Done</button></div></div></div>;
 }
 
 function ConfirmDialog({ title, message, confirmLabel, tone, onCancel, onConfirm }) {
@@ -785,4 +810,261 @@ function ConfirmDialog({ title, message, confirmLabel, tone, onCancel, onConfirm
       </div>
     </div>
   );
+}
+
+// ============================================
+// EXAM SUBMISSIONS VIEWER
+// ============================================
+
+function ExamSubmissionsModal({ student, attempts, onClose }) {
+  const [selectedAttemptId, setSelectedAttemptId] = useState(null);
+  const selectedAttempt = attempts.find((attempt) => attempt.id === selectedAttemptId) || null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            {selectedAttempt && (
+              <button
+                onClick={() => setSelectedAttemptId(null)}
+                className="mb-1 flex items-center gap-1 text-[10px] font-black text-[#003A6C] hover:underline"
+              >
+                <FaChevronLeft className="text-[8px]" /> Back to all exams
+              </button>
+            )}
+            <h2 className="text-base font-black text-slate-950">
+              {selectedAttempt ? selectedAttempt.examTitle : "Exam Submissions"}
+            </h2>
+            <p className="text-[10px] font-semibold text-slate-400">
+              {student.name || student.email} · {student.email}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <FaTimes className="text-sm" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {!selectedAttempt ? (
+            <AttemptListView attempts={attempts} onSelect={(id) => setSelectedAttemptId(id)} />
+          ) : (
+            <AttemptDetailView attempt={selectedAttempt} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AttemptListView({ attempts, onSelect }) {
+  if (!attempts.length) {
+    return <p className="p-8 text-center text-xs font-semibold text-slate-500">This student hasn't taken any exams yet.</p>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200">
+      <table className="w-full text-left text-[11px]">
+        <thead>
+          <tr className="bg-[#003A6C] text-[10px] font-black uppercase tracking-wider text-white">
+            <th className="px-5 py-3">Exam</th>
+            <th className="px-5 py-3 w-28">Date Taken</th>
+            <th className="px-5 py-3 w-24">Score</th>
+            <th className="px-5 py-3 w-24">Status</th>
+            <th className="px-5 py-3 w-16 text-right">View</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {attempts.map((attempt) => (
+            <tr key={attempt.id} className="hover:bg-slate-50/80 transition-colors">
+              <td className="px-5 py-3.5 font-black text-slate-900">{attempt.examTitle}</td>
+              <td className="px-5 py-3.5 text-slate-500">{attempt.takenAt ? new Date(attempt.takenAt).toLocaleDateString() : "—"}</td>
+              <td className="px-5 py-3.5">
+                <span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${attempt.passed ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+                  {attempt.finalPct}%
+                </span>
+              </td>
+              <td className="px-5 py-3.5">
+                <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase ${attempt.hasPendingEssays ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
+                  {attempt.status}
+                </span>
+              </td>
+              <td className="px-5 py-3.5 text-right">
+                <button onClick={() => onSelect(attempt.id)} className="rounded-lg bg-[#003A6C] px-3 py-1.5 text-[10px] font-black text-white hover:bg-[#002A4C]">
+                  Open
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AttemptDetailView({ attempt }) {
+  const items = attempt.itemDiagnostics || [];
+  const essays = getEssayResponses(attempt);
+  const hasLegacyItems = items.length > 0 && items.every((item) => !item.questionText);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <span className={`rounded-full px-3 py-1.5 text-xs font-black ${attempt.passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+          {attempt.finalPct}%
+        </span>
+        <span className="text-[10px] font-semibold text-slate-500">
+          {attempt.takenAt ? new Date(attempt.takenAt).toLocaleString() : "—"}
+        </span>
+        {Number.isFinite(Number(attempt.passingScore)) && (
+          <span className="text-[10px] font-semibold text-slate-500">
+            Passing score: {attempt.passingScore}%
+          </span>
+        )}
+        {Number.isFinite(Number(attempt.earnedPoints)) && Number.isFinite(Number(attempt.totalPoints)) && (
+          <span className="text-[10px] font-semibold text-slate-500">
+            {attempt.earnedPoints} / {attempt.totalPoints} pts
+          </span>
+        )}
+      </div>
+
+      {hasLegacyItems && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+          <FaExclamationTriangle className="mt-0.5 shrink-0 text-amber-500 text-xs" />
+          <p className="text-[10px] font-semibold text-amber-700">
+            Detailed answer data (question text, points, student's answer) isn't available for this attempt because it was
+            taken before per-question tracking was added. Newer attempts will show the full breakdown.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <QuestionBreakdownCard key={item.questionId || index} item={item} index={index} />
+        ))}
+
+        {essays.map((essay, index) => (
+          <EssayBreakdownCard key={essay.id} essay={essay} index={items.length + index} />
+        ))}
+
+        {!items.length && !essays.length && (
+          <p className="p-6 text-center text-xs font-semibold text-slate-500">No per-question details are stored for this attempt.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function QuestionBreakdownCard({ item, index }) {
+  const isMultiChoiceLike = item.questionType === "multiple_choice" || item.questionType === "mcq";
+  const isCheckbox = item.questionType === "checkboxes";
+  const isShort = item.questionType === "short_answer";
+  const hasQuestionData = Boolean(item.questionText);
+
+  return (
+    <div className={`rounded-xl border p-4 ${item.isCorrect ? "border-emerald-200 bg-emerald-50/30" : "border-rose-200 bg-rose-50/30"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-white text-[10px] font-black text-slate-500 border border-slate-200">{index + 1}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase text-slate-500">
+            {typeLabel(item.questionType)}
+          </span>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[9px] font-black ${item.isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+          {Number.isFinite(Number(item.points)) ? `${item.earnedPoints ?? 0}/${item.points} pts` : (item.isCorrect ? "Correct" : "Incorrect")}
+        </span>
+      </div>
+
+      {hasQuestionData ? (
+        <p className="mt-2.5 text-[11px] font-bold text-slate-800" dangerouslySetInnerHTML={{ __html: item.questionText }} />
+      ) : (
+        <p className="mt-2.5 text-[11px] font-semibold italic text-slate-400">Question text not available for this attempt.</p>
+      )}
+
+      {hasQuestionData && (isMultiChoiceLike || isCheckbox) && (
+        <div className="mt-3 space-y-1.5">
+          {(item.choiceOpts || []).map((opt, optIndex) => {
+            const studentPicked = isCheckbox
+              ? (item.studentAnswer || []).includes(optIndex)
+              : item.studentAnswer === optIndex;
+            const isCorrectOpt = isCheckbox
+              ? (item.correctAnswers || []).includes(optIndex)
+              : item.correctAnswerIdx === optIndex;
+
+            return (
+              <div
+                key={optIndex}
+                className={`rounded-lg border px-3 py-2 text-[10px] font-semibold ${
+                  isCorrectOpt
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : studentPicked
+                    ? "border-rose-300 bg-rose-50 text-rose-800"
+                    : "border-slate-200 bg-white text-slate-500"
+                }`}
+              >
+                {studentPicked && <span className="mr-1.5 font-black">Student's answer →</span>}
+                {isCorrectOpt && <span className="mr-1.5 font-black">✓ Correct →</span>}
+                {opt}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {hasQuestionData && isShort && (
+        <div className="mt-3 grid grid-cols-2 gap-3 text-[10px]">
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+            <p className="font-black text-slate-400 uppercase text-[9px]">Student's answer</p>
+            <p className="mt-1 font-semibold text-slate-700">{item.studentAnswer || "(no answer)"}</p>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+            <p className="font-black text-emerald-600 uppercase text-[9px]">Correct answer</p>
+            <p className="mt-1 font-semibold text-emerald-800">{item.correctText}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EssayBreakdownCard({ essay, index }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-white text-[10px] font-black text-slate-500 border border-slate-200">{index + 1}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase text-slate-500">Essay</span>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black text-slate-700">
+          {essay.finalScore ?? essay.aiScore ?? "—"} / {essay.points} pts
+        </span>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <p className="text-[9px] font-black uppercase text-slate-400">Student's response</p>
+        <p className="mt-1 whitespace-pre-wrap text-[11px] font-medium text-slate-700">{essay.response || "(no answer)"}</p>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+          <p className="text-[9px] font-black uppercase text-amber-600">AI score</p>
+          <p className="mt-1 text-[11px] font-black text-amber-800">{essay.aiScore ?? "Not yet graded"}</p>
+        </div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-2.5">
+          <p className="text-[9px] font-black uppercase text-blue-600">Admin approval</p>
+          <p className="mt-1 text-[11px] font-black text-blue-800">
+            {essay.status === "approved" ? `Approved: ${essay.finalScore}` : "Pending"}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function typeLabel(type) {
+  if (type === "multiple_choice" || type === "mcq") return "Multiple Choice";
+  if (type === "checkboxes") return "Checkbox";
+  if (type === "short_answer") return "Short Answer";
+  if (type === "paragraph" || type === "essay") return "Essay";
+  return type || "Question";
 }

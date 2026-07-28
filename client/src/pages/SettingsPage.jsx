@@ -30,7 +30,7 @@ export default function SettingsPage() {
       smsNumber: form.smsNumber.trim(),
       recoveryEmail: form.recoveryEmail.trim()
     });
-    try { await updateProfile({ name: form.name.trim(), nickname: form.nickname.trim(), phoneNumber: form.smsNumber.trim(), recoveryEmail: form.recoveryEmail.trim() }); } catch (error) { setMessage(error.response?.data?.error || "Profile saved locally, but changes could not be synced."); return; }
+    try { await updateProfile({ name: form.name.trim(), nickname: form.nickname.trim(), school: form.school.trim(), phoneNumber: form.smsNumber.trim(), recoveryEmail: form.recoveryEmail.trim() }); } catch (error) { setMessage(error.response?.data?.error || "Profile saved locally, but changes could not be synced."); return; }
     setMessage("Settings saved. Your profile has been updated.");
   }
 

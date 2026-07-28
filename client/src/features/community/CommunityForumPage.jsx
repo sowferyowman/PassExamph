@@ -17,7 +17,6 @@ import {
 import {
   addForumReply,
   createForumThread,
-  getCommunityRewardSummary,
   getCurrentUser,
   getForumThreads,
   getLeaderboard,
@@ -77,8 +76,7 @@ export default function CommunityForumPage() {
   // Starts true so the forum opens on the category grid (matches the reference layout).
   const [browsingCategory, setBrowsingCategory] = useState(true);
 
-  const summary = useMemo(() => getCommunityRewardSummary(user?.email), [user?.email]);
-  const leaderboard = useMemo(() => getLeaderboard(user?.email), [user?.email, summary.totalPoints]);
+  const [leaderboard, setLeaderboard] = useState(() => getLeaderboard(user?.email));
   const currentRow = leaderboard.find((row) => row.isCurrent);
   const topRows = leaderboard.slice(0, 5);
   const percentile = currentRow && leaderboard.length ? Math.round(((leaderboard.length - currentRow.rank + 1) / leaderboard.length) * 100) : 0;
@@ -102,17 +100,19 @@ export default function CommunityForumPage() {
   }, [page, totalPages]);
 
   useEffect(() => {
-    function refreshThreads() {
+    function refreshCommunityData() {
       setThreads(getForumThreads());
+      setLeaderboard(getLeaderboard(user?.email));
     }
 
-    window.addEventListener("forumPostsUpdated", refreshThreads);
-    window.addEventListener("storage", refreshThreads);
+    refreshCommunityData();
+    window.addEventListener("forumPostsUpdated", refreshCommunityData);
+    window.addEventListener("storage", refreshCommunityData);
     return () => {
-      window.removeEventListener("forumPostsUpdated", refreshThreads);
-      window.removeEventListener("storage", refreshThreads);
+      window.removeEventListener("forumPostsUpdated", refreshCommunityData);
+      window.removeEventListener("storage", refreshCommunityData);
     };
-  }, []);
+  }, [user?.email]);
 
   function submitTopic(event) {
     event.preventDefault();

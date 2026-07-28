@@ -51,7 +51,25 @@ function verifyToken(value) {
 
 function requestMeta(req) { return { ip: req.ip || req.socket?.remoteAddress || "unknown", userAgent: req.get("user-agent") || "unknown" }; }
 function recordLogin(db, userId, email, req, status) { const meta = requestMeta(req); db.prepare("INSERT INTO login_history (id,user_id,email,ip_address,user_agent,status) VALUES (?,?,?,?,?,?)").run(crypto.randomUUID(), userId || null, email, meta.ip, meta.userAgent, status); return meta; }
-function publicUser(user) { return { id: user.id, email: user.email, username: user.username, role: user.role, name: user.name || user.displayName, nickname: user.nickname, phoneNumber: user.phone_number || user.sms_number || "", smsNumber: user.sms_number || user.phone_number || "", recoveryEmail: user.recovery_email || "", isVerified: Boolean(user.is_verified), profileCompleted: Boolean(user.name) }; }
+function publicUser(user) {
+  const profile = user.targetSchool !== undefined
+    ? { targetSchool: user.targetSchool }
+    : getDb().prepare("SELECT target_school AS targetSchool FROM student_profiles WHERE user_id=?").get(user.id);
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    role: user.role,
+    name: user.name || user.displayName,
+    nickname: user.nickname,
+    school: profile?.targetSchool || "",
+    phoneNumber: user.phone_number || user.sms_number || "",
+    smsNumber: user.sms_number || user.phone_number || "",
+    recoveryEmail: user.recovery_email || "",
+    isVerified: Boolean(user.is_verified),
+    profileCompleted: Boolean(user.name)
+  };
+}
 
 async function ensureDefaultAdmin() {
   const db = getDb();
@@ -202,17 +220,33 @@ async function resetPasswordWithEmail(code, newPassword) {
   return { success: true };
 }
 
-function updateProfile(userId, { name, nickname, phoneNumber, recoveryEmail }) {
+function updateProfile(userId, { name, nickname, school, phoneNumber, recoveryEmail }) {
   const phone = normalizePhone(phoneNumber);
   if (phone && !/^\+?\d{10,15}$/.test(phone)) throw Object.assign(new Error("Enter a valid phone number."), { status: 400 });
   const profileName = String(name || "").trim();
   const displayNickname = String(nickname || "").trim();
   const email = String(recoveryEmail || "").trim().toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error("Enter a valid recovery email."), { status: 400 });
-  getDb().prepare("UPDATE users SET name=CASE WHEN ? <> '' THEN ? ELSE name END,nickname=?,phone_number=?,sms_number=?,recovery_email=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(profileName, profileName, displayNickname || null, phone || null, phone || null, email || null, userId);
-  return { name: profileName, nickname: displayNickname, phoneNumber: phone, recoveryEmail: email };
+  const targetSchool = String(school || "").trim();
+  const db = getDb();
+  db.prepare("UPDATE users SET name=CASE WHEN ? <> '' THEN ? ELSE name END,nickname=?,phone_number=?,sms_number=?,recovery_email=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(profileName, profileName, displayNickname || null, phone || null, phone || null, email || null, userId);
+  const existingProfile = db.prepare("SELECT user_id FROM student_profiles WHERE user_id=?").get(userId);
+  if (existingProfile) db.prepare("UPDATE student_profiles SET display_name=CASE WHEN ? <> '' THEN ? ELSE display_name END,target_school=? WHERE user_id=?").run(profileName, profileName, targetSchool, userId);
+  else db.prepare("INSERT INTO student_profiles (user_id,display_name,target_school) VALUES (?,?,?)").run(userId, profileName || "Student", targetSchool);
+  return { name: profileName, nickname: displayNickname, school: targetSchool, phoneNumber: phone, recoveryEmail: email };
+}
+
+async function resetStudentPasswordByAdmin(userId) {
+  const db = getDb();
+  const student = db.prepare("SELECT id FROM users WHERE id=? AND role='student'").get(userId);
+  if (!student) throw Object.assign(new Error("Student account not found."), { status: 404 });
+  const temporaryPassword = `ACET-${crypto.randomBytes(4).toString("hex").toUpperCase()}!`;
+  const credentials = await hashPassword(temporaryPassword);
+  db.prepare("UPDATE users SET password_hash=?,password_salt=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(credentials.hash, credentials.salt, userId);
+  revokeAll(userId);
+  return temporaryPassword;
 }
 
 function verifyEmail(value) { const db = getDb(); const row = db.prepare("SELECT * FROM email_verification_tokens WHERE token=? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP").get(value); if (!row) throw Object.assign(new Error("Verification token is invalid or expired."), { status: 400 }); db.prepare("UPDATE users SET is_verified=1 WHERE id=?").run(row.user_id); db.prepare("UPDATE email_verification_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?").run(row.id); }
 
-module.exports = { ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile };
+module.exports = { ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };
