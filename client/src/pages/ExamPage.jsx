@@ -12,11 +12,24 @@
     getCurrentUser,
     getExamBlueprints,
     getStudentDashboard,
+    hydrateDashboardStoreFromServer,
     saveExamAttemptForStudent,
     scoreBlueprintAttempt,
     updateLatestEssayReview
   } from "../services/storage";
 
+  function formatPHTimestamp(date = new Date()) {
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(date);
+}
   function createEmptyResponses(sections) {
     return sections.map((section) => section.questions.map(() => null));
   }
@@ -60,6 +73,8 @@
       async function loadExam() {
         try {
           const user = getCurrentUser();
+          // Exam Records must use the server copy after an admin reviews an essay.
+          await hydrateDashboardStoreFromServer().catch(() => false);
           const dashboard = getStudentDashboard(user?.email);
           
           // Process exams with additional data
@@ -68,8 +83,8 @@
             return {
               ...exam,
               status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed"),
-              duration: exam.duration || Math.floor(Math.random() * 30) + 15, // Mock duration in minutes
-              pointsEarned: exam.pointsEarned || Math.floor(Math.random() * 100) + 50,
+              duration: exam.duration || 0,
+              pointsEarned: exam.earnedPoints,
               passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
               passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
               previousScore: prevExam?.score || null
@@ -239,14 +254,14 @@
                   ? {
                       ...item,
                       answerEvents: [
-                        ...(item.answerEvents || []),
-                        {
-                          at: new Date().toISOString(),
-                          elapsedMs,
-                          from: previousResponse,
-                          to: value
-                        }
-                      ]
+  ...(item.answerEvents || []),
+  {
+    at: formatPHTimestamp(),   // was: new Date().toISOString()
+    elapsedMs,
+    from: previousResponse,
+    to: value
+  }
+]
                     }
                   : item
               )
@@ -297,8 +312,8 @@
           const prevExam = arr[index + 1];
           return {
             ...exam,
-            duration: Math.floor(Math.random() * 30) + 15,
-            pointsEarned: Math.floor(Math.random() * 100) + 50,
+            duration: exam.duration || 0,
+            pointsEarned: exam.earnedPoints,
               passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
               passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
             previousScore: prevExam?.score || null
@@ -328,7 +343,6 @@
 
     const next = useCallback(async () => {
       recordActiveQuestionTime();
-      await flushProgress();
       const section = sections[activeSection];
       if (!section) return;
 
@@ -336,28 +350,28 @@
         const nextQuestion = activeQuestion + 1;
         positionRef.current = { section: activeSection, question: nextQuestion };
         setActiveQuestion(nextQuestion);
+        // Navigate first: an unavailable autosave must never trap a student on an item.
         queueProgressSave();
         return;
       }
+      await flushProgress();
       finishCurrentSection();
     }, [activeQuestion, activeSection, finishCurrentSection, flushProgress, recordActiveQuestionTime, sections]);
 
     const previous = useCallback(async () => {
       recordActiveQuestionTime();
-      await flushProgress();
       const nextQuestion = Math.max(0, activeQuestion - 1);
       positionRef.current = { section: activeSection, question: nextQuestion };
       setActiveQuestion(nextQuestion);
       queueProgressSave();
-    }, [activeQuestion, activeSection, flushProgress, recordActiveQuestionTime]);
+    }, [activeQuestion, activeSection, queueProgressSave, recordActiveQuestionTime]);
 
     const jump = useCallback(async (questionIndex) => {
       recordActiveQuestionTime();
-      await flushProgress();
       positionRef.current = { section: activeSection, question: questionIndex };
       setActiveQuestion(questionIndex);
       queueProgressSave();
-    }, [activeSection, flushProgress, recordActiveQuestionTime]);
+    }, [activeSection, queueProgressSave, recordActiveQuestionTime]);
 
     async function updatePhase(nextPhase) {
       if (nextPhase === "testing") {
@@ -790,9 +804,9 @@
                       >
                         <td className={`px-6 py-4 font-bold ${dark ? "text-white" : "text-slate-900"}`}>
                           {exam.name}
-                          <span className={`block text-[10px] font-semibold mt-1 ${dark ? "text-slate-400" : "text-slate-400"}`}>
-                            {exam.takenAt}
-                          </span>
+                         <span className={`block text-[10px] font-semibold mt-1 ${dark ? "text-slate-400" : "text-slate-400"}`}>
+  {exam.takenAt ? formatPHTimestamp(new Date(exam.takenAt)) : "—"}
+</span>
                         </td>
                         
                         <td className={`px-6 py-4 font-mono text-sm font-semibold tabular-nums ${dark ? "text-slate-200" : "text-slate-700"}`}>
@@ -849,8 +863,7 @@
         {exams.length > 0 && (
           <div className={`flex items-center justify-between text-sm ${dark ? "text-slate-400" : "text-slate-500"}`}>
             <span>Showing {exams.length} exam{exams.length > 1 ? 's' : ''}</span>
-            <span>Last updated: {new Date().toLocaleString()}</span>
-          </div>
+<span>Last updated: {formatPHTimestamp()}</span>          </div>
         )}
       </section>
     );
@@ -892,11 +905,11 @@
     return (exam.sections || []).reduce((total, section) => total + (section.questions?.length || 0), 0);
   }
 
-  function getDurationMinutes(exam) {
-    if (Number(exam.duration) > 0) return Number(exam.duration);ad
-    const durationSeconds = (exam.sections || []).reduce((total, section) => total + Number(section.allottedTimeSec || 0), 0);
-    return durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : null;
-  }
+function getDurationMinutes(exam) {
+  if (Number(exam.duration) > 0) return Number(exam.duration);ad   // <-- stray "ad" was a syntax error
+  const durationSeconds = (exam.sections || []).reduce((total, section) => total + Number(section.allottedTimeSec || 0), 0);
+  return durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : null;
+}
 
   function hydrateResponses(sections, saved = []) {
     return sections.map((section, sectionIndex) => section.questions.map((_, questionIndex) => saved?.[sectionIndex]?.[questionIndex] ?? null));

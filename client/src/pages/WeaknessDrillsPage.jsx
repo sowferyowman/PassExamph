@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaBrain, FaCheckCircle, FaPlay, FaRoute, FaSpinner, FaTimesCircle, FaBolt, FaRedo, FaTrophy, FaCircle } from "react-icons/fa";
 import { routeAdaptiveLearning } from "../api/aiApi";
 import { loadDrillSessions, saveDrillSessionToApi } from "../api/drillApi";
@@ -27,6 +27,7 @@ function GlobalStyle() {
 }
 
 export default function WeaknessDrillsPage() {
+  const location = useLocation();
   const user = getCurrentUser();
   const analysis = useMemo(() => getWeaknessAnalysis(user?.email), [user?.email]);
   const dashboard = useMemo(() => getStudentDashboard(user?.email), [user?.email]);
@@ -38,6 +39,7 @@ export default function WeaknessDrillsPage() {
   const [results, setResults] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [sessions, setSessions] = useState(() => getDrillSessions(user?.email));
+  const routedDrillStarted = useRef(false);
 
   useEffect(() => {
     loadDrillSessions().then((remote) => {
@@ -95,15 +97,24 @@ export default function WeaknessDrillsPage() {
     };
   }, [analysis, dashboard.attempts]);
 
-  function startDrill(subject) {
+  function startDrill(subject, questionLimit = 10) {
     const diagnosticFocus = analysis.diagnosticInsights?.find((item) => item.category === subject.subject);
-    const pulledQuestions = getQuestionsForSubject(subject.subject, 10, diagnosticFocus).slice(0, 10);
+    const limit = Math.max(1, Number(questionLimit) || 10);
+    const pulledQuestions = getQuestionsForSubject(subject.subject, limit, diagnosticFocus).slice(0, limit);
     setActiveSubject(subject.subject);
     setQuestions(pulledQuestions);
     setResponses({});
     setResults(null);
     setActiveIndex(0);
   }
+
+  useEffect(() => {
+    const focusSubject = location.state?.focusSubject;
+    if (routedDrillStarted.current || !focusSubject || !analysis.hasAttempts) return;
+    const subject = rankedWeakSubjects.find((item) => item.subject === focusSubject) || { subject: focusSubject };
+    routedDrillStarted.current = true;
+    startDrill(subject, location.state?.questionLimit || 5);
+  }, [analysis.hasAttempts, location.state, rankedWeakSubjects]);
 
   function saveResponse(index, value) {
     setResponses((current) => ({ ...current, [index]: value }));
@@ -266,15 +277,13 @@ export default function WeaknessDrillsPage() {
 
         <AdaptiveGatePanel gate={adaptiveGate} status={gateStatus} />
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-          <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
+<div className="mt-6 grid items-start gap-6 lg:grid-cols-[320px_1fr]">          <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
             {/* FIX: Ipinasa na ang adaptiveGate state para sumabay ang dynamic layout rendering */}
             <DiagnosticReport analysis={analysis} adaptiveGate={adaptiveGate} />
             {sessions.length > 0 && <PreviousDrillResults sessions={sessions} />}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {rankedWeakSubjects.map((subject) => (
+<div className="grid items-start gap-4 sm:grid-cols-2">            {rankedWeakSubjects.map((subject) => (
               <article
                 key={subject.subject}
                 className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white/90 p-5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.1)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_-16px_rgba(15,23,42,0.25)] ${

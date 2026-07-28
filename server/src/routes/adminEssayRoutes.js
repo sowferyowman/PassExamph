@@ -24,6 +24,117 @@ router.get("/students", (_req, res) => {
   res.json(students);
 });
 
+// Admin data must come from each student's persisted dashboard, not the
+// administrator browser's localStorage copy.
+router.get("/student-dashboards", (_req, res) => {
+  const rows = getDb().prepare(`
+    SELECT users.email, app_data.payload
+    FROM users
+    LEFT JOIN app_data ON app_data.user_id = users.id
+      AND app_data.namespace = 'legacy' AND app_data.data_key = 'acet_dashboard_data'
+    WHERE users.role = 'student'
+  `).all();
+  const dashboards = {};
+  rows.forEach((row) => {
+    if (!row.payload) return;
+    try {
+      const store = JSON.parse(row.payload);
+      // Each row belongs to one student. Old browser migrations may contain a
+      // copy of other accounts too, so only trust the owner's dashboard here.
+      if (store && typeof store === "object" && store[row.email]) dashboards[row.email] = store[row.email];
+    } catch (_error) {
+      // A malformed legacy value should not prevent the rest of the class list loading.
+    }
+  });
+  res.json(dashboards);
+});
+
+router.get("/students/:studentId/exam-submissions", (req, res) => {
+  const studentId = Number(req.params.studentId);
+  const db = getDb();
+  const student = db.prepare("SELECT id,email FROM users WHERE id=? AND role='student'").get(studentId);
+  if (!student) return res.status(404).json({ error: "Student account not found." });
+
+  const record = db.prepare("SELECT payload FROM app_data WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").get(studentId);
+  if (!record) return res.json({ attempts: [] });
+
+  try {
+    const store = JSON.parse(record.payload);
+    const dashboard = store?.[student.email] || {};
+    res.json({ attempts: Array.isArray(dashboard.attempts) ? dashboard.attempts : [] });
+  } catch (_error) {
+    res.status(500).json({ error: "The student's saved exam history could not be read." });
+  }
+});
+
+router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
+  const studentId = Number(req.params.studentId);
+  const { essayId } = req.params;
+  const db = getDb();
+  const student = db.prepare("SELECT id,email FROM users WHERE id=? AND role='student'").get(studentId);
+  if (!student) return res.status(404).json({ error: "Student account not found." });
+  const record = db.prepare("SELECT payload FROM app_data WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").get(studentId);
+  if (!record) return res.status(404).json({ error: "No saved exam history was found for this student." });
+
+  try {
+    const store = JSON.parse(record.payload);
+    const dashboard = store?.[student.email];
+    if (!dashboard) return res.status(404).json({ error: "No saved exam history was found for this student." });
+    let updated = false;
+    let updatedAttemptIndex = -1;
+    dashboard.attempts = (dashboard.attempts || []).map((attempt, attemptIndex) => {
+      const essayResponses = (attempt.essayResponses || []).map((essay) => {
+        if (essay.id !== essayId) return essay;
+        updated = true;
+        return { ...essay, ...req.body };
+      });
+      if (!essayResponses.some((essay) => essay.id === essayId)) return attempt;
+      updatedAttemptIndex = attemptIndex;
+      return recalculateEssayAttempt({ ...attempt, essayResponses });
+    });
+    if (!updated) return res.status(404).json({ error: "Essay response not found." });
+    const updatedAttempt = dashboard.attempts[updatedAttemptIndex];
+    // Keep the summary shown in Student Exam Records in sync with the reviewed attempt.
+    if (updatedAttempt && Array.isArray(dashboard.exams)) {
+      dashboard.exams = dashboard.exams.map((exam, index) => index === updatedAttemptIndex ? {
+        ...exam,
+        score: updatedAttempt.finalPct,
+        finalPct: updatedAttempt.finalPct,
+        earnedPoints: updatedAttempt.earnedPoints,
+        totalPoints: updatedAttempt.totalPoints,
+        passed: updatedAttempt.passed,
+        status: updatedAttempt.status,
+        hasPendingEssays: updatedAttempt.hasPendingEssays
+      } : exam);
+    }
+    db.prepare("UPDATE app_data SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").run(JSON.stringify(store), studentId);
+    res.json({ ok: true, attempt: updatedAttempt, dashboard });
+  } catch (_error) {
+    res.status(500).json({ error: "Could not update the saved exam score." });
+  }
+});
+
+function recalculateEssayAttempt(attempt) {
+  const essays = Array.isArray(attempt.essayResponses) ? attempt.essayResponses : [];
+  const essayIds = new Set(essays.map((essay) => essay.questionId).filter(Boolean));
+  const items = (attempt.itemDiagnostics || []).map((item) => {
+    const essay = essays.find((entry) => entry.questionId && entry.questionId === item.questionId);
+    if (!essay) return item;
+    const awarded = essay.status === "approved" && Number.isFinite(Number(essay.finalScore)) ? Number(essay.finalScore) : 0;
+    return { ...item, points: Number(essay.points || 0), earnedPoints: awarded };
+  });
+  const mcq = items.filter((item) => !essayIds.has(item.questionId) && item.questionType !== "paragraph" && item.questionType !== "essay");
+  const mcqTotal = mcq.reduce((sum, item) => sum + Math.max(0, Number(item.points || 0)), 0);
+  const mcqEarned = mcq.reduce((sum, item) => sum + Math.max(0, Number(item.earnedPoints || 0)), 0);
+  const essayTotal = essays.reduce((sum, essay) => sum + Math.max(0, Number(essay.points || 0)), 0);
+  const essayEarned = essays.reduce((sum, essay) => sum + Math.max(0, essay.status === "approved" && Number.isFinite(Number(essay.finalScore)) ? Number(essay.finalScore) : 0), 0);
+  const totalPoints = mcqTotal + essayTotal;
+  const earnedPoints = mcqEarned + essayEarned;
+  const finalPct = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : Number(attempt.finalPct || 0);
+  const reviewed = essays.length > 0 && essays.every((essay) => essay.status === "approved");
+  return { ...attempt, itemDiagnostics: items, earnedPoints, totalPoints, finalPct, passed: finalPct >= Number(attempt.passingScore || 75), status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed };
+}
+
 router.patch("/students/:studentId", (req, res) => {
   const studentId = Number(req.params.studentId);
   const student = getDb().prepare("SELECT id FROM users WHERE id=? AND role='student'").get(studentId);

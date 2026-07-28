@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentUser, getStudentDashboard } from "../services/storage";
+import { getCurrentUser, getStudentDashboard, hydrateDashboardStoreFromServer } from "../services/storage";
 
 export function useDashboardData() {
   const [data, setData] = useState(null);
@@ -17,6 +17,9 @@ export function useDashboardData() {
         setLoading(true);
         setError(null);
         const user = getCurrentUser();
+        // Always pull the current student's saved record before rendering it.
+        // This makes admin essay approvals visible without a logout/login cycle.
+        await hydrateDashboardStoreFromServer().catch(() => false);
         const dashboard = getStudentDashboard(user?.email);
         if (mounted) {
           setData(dashboard);

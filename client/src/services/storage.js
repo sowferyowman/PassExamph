@@ -15,6 +15,7 @@ const FORUM_KEY = "forumPosts";
 const NOTIFICATIONS_KEY = "notificationsData";
 const REVIEWER_PROGRESS_KEY = "reviewer_progress";
 const STAN_DASHBOARD_RESET_KEY = "acet_stan_dashboard_reset_20260715_v1";
+const EXAM_HISTORY_RESET_KEY = "acet_exam_history_reset_20260729_v1";
 
 // Authentication is handled by the server.  Never seed usernames, emails, or
 // passwords in the client bundle (the bundle is public and can be inspected).
@@ -356,6 +357,19 @@ function writeJson(key, value) {
 }
 
 const SERVER_AUTH_KEYS = new Set([USERS_KEY, USER_ACCOUNTS_KEY, SESSION_KEY, CURRENT_ACTIVE_USER_KEY]);
+
+// Do not overwrite an existing server dashboard with a browser's stale copy at
+// sign-in. This is especially important after an admin has reviewed an essay.
+export async function hydrateDashboardStoreFromServer() {
+  const response = await fetch("/api/data/legacy", { credentials: "include" });
+  if (!response.ok) return false;
+  const records = await response.json();
+  const dashboardRecord = Array.isArray(records) && records.find((record) => record.key === DASHBOARD_KEY);
+  if (!dashboardRecord || dashboardRecord.value === undefined) return false;
+  localStorage.setItem(DASHBOARD_KEY, JSON.stringify(dashboardRecord.value));
+  return true;
+}
+
 export async function migrateLocalStorageToServer() {
   const user = readJson(CURRENT_ACTIVE_USER_KEY, readJson(SESSION_KEY, null));
   if (!user?.email) return { migrated: 0 };
@@ -404,6 +418,22 @@ export function initializeLocalStorage() {
   if (!localStorage.getItem(FORUM_KEY) || !readJson(FORUM_KEY, []).length) writeJson(FORUM_KEY, defaultForumThreads);
   removeSeededForumUsers();
   if (!localStorage.getItem(NOTIFICATIONS_KEY)) writeJson(NOTIFICATIONS_KEY, []);
+
+  if (!localStorage.getItem(EXAM_HISTORY_RESET_KEY)) {
+    const dashboardStore = readJson(DASHBOARD_KEY, {});
+    const clearedDashboards = Object.fromEntries(Object.entries(dashboardStore).map(([email, dashboard]) => [email, {
+      ...dashboard,
+      attempts: [],
+      exams: [],
+      progression: [],
+      subjects: [],
+      rewards: [],
+      stats: createEmptyDashboard(email).stats,
+      hasDashboardData: false
+    }]));
+    writeJson(DASHBOARD_KEY, clearedDashboards);
+    localStorage.setItem(EXAM_HISTORY_RESET_KEY, "true");
+  }
 
   if (!localStorage.getItem(USER_ACCOUNTS_KEY)) {
     const legacyUsers = readJson(USERS_KEY, defaultUsers);
@@ -950,13 +980,48 @@ export function getDashboardStore() {
 export function getStudentDashboard(email) {
   const store = getDashboardStore();
   const dashboard = store[email] || createEmptyDashboard(email);
-  const normalizedDashboard = normalizeDashboardAnalytics(dashboard, email);
+  const normalizedDashboard = normalizeDashboardAnalytics(normalizeEssayReviewStatuses(dashboard), email);
 
   if (JSON.stringify(dashboard) !== JSON.stringify(normalizedDashboard)) {
     writeJson(DASHBOARD_KEY, { ...store, [email]: normalizedDashboard });
   }
 
   return normalizedDashboard;
+}
+
+// Repairs old attempts created before the exam summary was updated alongside an
+// approved essay. It also keeps the student record and admin history aligned.
+function normalizeEssayReviewStatuses(dashboard) {
+  const attempts = Array.isArray(dashboard?.attempts) ? dashboard.attempts : [];
+  let changed = false;
+  const nextAttempts = attempts.map((attempt) => {
+    const essays = getEssayResponses(attempt);
+    if (!essays.length) return attempt;
+    const reviewed = essays.every((essay) => essay.status === "approved");
+    const next = recalculateEssayAttempt({
+      ...attempt,
+      essayResponses: essays,
+      status: reviewed ? "Reviewed" : "Pending Review",
+      hasPendingEssays: !reviewed
+    });
+    if (JSON.stringify(next) !== JSON.stringify(attempt)) changed = true;
+    return next;
+  });
+  if (!changed) return dashboard;
+  const exams = (dashboard.exams || []).map((exam, index) => {
+    const attempt = nextAttempts[index];
+    return attempt?.essayResponses?.length ? {
+      ...exam,
+      score: attempt.finalPct,
+      finalPct: attempt.finalPct,
+      earnedPoints: attempt.earnedPoints,
+      totalPoints: attempt.totalPoints,
+      passed: attempt.passed,
+      status: attempt.status,
+      hasPendingEssays: attempt.hasPendingEssays
+    } : exam;
+  });
+  return { ...dashboard, attempts: nextAttempts, exams };
 }
 
 export function saveStudentDashboard(email, dashboard) {
@@ -1085,11 +1150,16 @@ function getRawLeaderboardPlacement(email, currentDashboard) {
 export function saveExamAttemptForStudent(user, blueprint, responses, results, meta = {}) {
   const currentDashboard = getStudentDashboard(user.email);
   const attemptNumber = currentDashboard.exams.length + 1;
-  const takenAt = new Date().toISOString().split("T")[0];
+  const takenAt = new Date().toISOString();
   const durationSeconds = Number(meta.durationSeconds || 0);
-  const earnedMockPoints = calculateAttemptPoints(results.finalPct, durationSeconds);
+  // Academic points are the single score basis: earned question points out of
+  // available question points. Community rewards never change an exam score.
+  const earnedMockPoints = Math.max(0, Number(results.earnedPoints || 0));
   const passingScore = Number.isFinite(Number(blueprint.passingScore)) ? Number(blueprint.passingScore) : 75;
   const passed = Number(results.finalPct) >= passingScore;
+  // Freeze all question fields with the attempt so admin history remains
+  // complete even if the exam blueprint is later edited or replaced.
+  const itemDiagnostics = snapshotAttemptDiagnostics(blueprint, responses, results.itemDiagnostics);
 
   const essayResponses = (blueprint.sections || []).flatMap((section, sectionIndex) =>
     (section.questions || []).flatMap((question, questionIndex) => {
@@ -1106,7 +1176,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   );
   const reviewStatus = essayResponses.length ? "Pending Review" : "Analyzed";
   const exams = [
-    { name: blueprint.title, takenAt, score: results.finalPct, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
+    { name: blueprint.title, takenAt, score: results.finalPct, finalPct: results.finalPct, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
     ...currentDashboard.exams
   ];
 
@@ -1120,9 +1190,11 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       passingScore,
       passed,
       earnedMockPoints,
+      earnedPoints: Number(results.earnedPoints || 0),
+      totalPoints: Number(results.totalPoints || 0),
       durationSeconds,
       subjectScores: results.subjectScores,
-      itemDiagnostics: results.itemDiagnostics || [],
+      itemDiagnostics,
       essayResponses,
       status: reviewStatus,
       hasPendingEssays: essayResponses.length > 0
@@ -1182,6 +1254,30 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   return nextDashboard;
 }
 
+function snapshotAttemptDiagnostics(blueprint, responses, diagnostics = []) {
+  let diagnosticIndex = 0;
+  return (blueprint.sections || []).flatMap((section, sectionIndex) =>
+    (section.questions || []).map((question, questionIndex) => {
+      const diagnostic = diagnostics[diagnosticIndex++] || {};
+      const points = Math.max(1, Number(question.points || diagnostic.points || 1));
+      const hasStudentAnswer = Object.prototype.hasOwnProperty.call(diagnostic, "studentAnswer");
+      return {
+        ...diagnostic,
+        questionId: diagnostic.questionId || question.id || null,
+        questionText: diagnostic.questionText || question.stem || "",
+        questionType: diagnostic.questionType || question.type || "multiple_choice",
+        choiceOpts: Array.isArray(diagnostic.choiceOpts) && diagnostic.choiceOpts.length ? diagnostic.choiceOpts : (question.choiceOpts || []),
+        studentAnswer: hasStudentAnswer ? diagnostic.studentAnswer : (responses?.[sectionIndex]?.[questionIndex] ?? null),
+        correctAnswerIdx: diagnostic.correctAnswerIdx ?? question.answerIdx ?? null,
+        correctAnswers: Array.isArray(diagnostic.correctAnswers) && diagnostic.correctAnswers.length ? diagnostic.correctAnswers : (question.correctAnswers || []),
+        correctText: diagnostic.correctText || question.correctText || "",
+        points,
+        earnedPoints: diagnostic.isCorrect === true ? points : 0
+      };
+    })
+  );
+}
+
 export function saveAiDiagnosticForLatestAttempt(email, diagnostic) {
   const dashboard = getStudentDashboard(email);
   const attempts = Array.isArray(dashboard.attempts) ? dashboard.attempts : [];
@@ -1228,16 +1324,15 @@ export function scoreBlueprintAttempt(blueprint, responses, meta = {}) {
     let sectionTotalPoints = 0;
 
     section.questions.forEach((question, questionIndex) => {
-      const points = Number(question.points || 1);
+      const points = Math.max(1, Number(question.points || 1));
       const response = sectionResponses[questionIndex];
       const correctItem = isCorrectAnswer(question, response);
       sectionTotal += 1;
       total += 1;
-      const isEssay = question.type === "paragraph" || question.type === "essay";
-      if (!isEssay) {
-        sectionTotalPoints += points;
-        totalPoints += points;
-      }
+      // Every item, including an essay awaiting review, belongs in the same
+      // total. A pending essay earns 0 until an admin assigns its final score.
+      sectionTotalPoints += points;
+      totalPoints += points;
 
       if (correctItem === true) {
         sectionCorrect += 1;
@@ -1375,7 +1470,7 @@ function buildCommunityRewardSummary(email, dashboard) {
   const reviewers = getReviewerBlueprints();
   const progress = getReviewerProgress(email);
   const attempts = dashboard.attempts || [];
-  const mockPoints = attempts.reduce((sum, attempt) => sum + Number(attempt.earnedMockPoints || calculateAttemptPoints(attempt.finalPct, attempt.durationSeconds)), 0);
+  const mockPoints = attempts.reduce((sum, attempt) => sum + Number(attempt.earnedMockPoints ?? attempt.earnedPoints ?? 0), 0);
   const reviewerModules = reviewers.flatMap((reviewer) => reviewer.modules.map((module) => ({ reviewerId: reviewer.id, moduleId: module.id })));
   const completedReviewerModules = reviewerModules.filter((module) => progress[module.reviewerId]?.includes(module.moduleId));
   const reviewerPoints = completedReviewerModules.length * 75;
@@ -1577,13 +1672,6 @@ function createNotification({ userId, type, message, metadata = {} }) {
   return nextNotification;
 }
 
-function calculateAttemptPoints(finalPct, durationSeconds = 0) {
-  const base = Math.round(Number(finalPct || 0) * 10);
-  const speedBonus = durationSeconds > 0 && durationSeconds < 600 ? 100 : 0;
-  return base + speedBonus;
-}
-
-
 function buildExplanation(question) {
   const type = question.type || "multiple_choice";
   if (type === "checkboxes") {
@@ -1760,12 +1848,40 @@ export function updateLatestEssayReview(email, essayId, updates) {
     if (!getEssayResponses(attempt).some((essay) => essay.id === essayId)) return attempt;
     const essayResponses = getEssayResponses(attempt).map((essay) => essay.id === essayId ? { ...essay, ...updates } : essay);
     const reviewed = essayResponses.length > 0 && essayResponses.every((essay) => essay.status === "approved");
-    return { ...attempt, essayResponses, status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed };
+    return recalculateEssayAttempt({ ...attempt, essayResponses, status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed });
   });
-  const latest = nextAttempts[0];
-  const exams = (dashboard.exams || []).map((exam, index) => index === 0 && latest ? { ...exam, status: latest.status, hasPendingEssays: latest.hasPendingEssays } : exam);
+  const updatedAttemptIndex = nextAttempts.findIndex((attempt) => getEssayResponses(attempt).some((essay) => essay.id === essayId));
+  const updatedAttempt = nextAttempts[updatedAttemptIndex];
+  const exams = (dashboard.exams || []).map((exam, index) => index === updatedAttemptIndex && updatedAttempt ? {
+    ...exam,
+    score: updatedAttempt.finalPct,
+    passed: updatedAttempt.passed,
+    status: updatedAttempt.status,
+    hasPendingEssays: updatedAttempt.hasPendingEssays
+  } : exam);
   saveStudentDashboard(email, { ...dashboard, attempts: nextAttempts, exams });
   return getStudentDashboard(email);
+}
+
+function recalculateEssayAttempt(attempt) {
+  const essayResponses = getEssayResponses(attempt);
+  const essayQuestionIds = new Set(essayResponses.map((essay) => essay.questionId).filter(Boolean));
+  const itemDiagnostics = (attempt.itemDiagnostics || []).map((item) => {
+    const essay = essayResponses.find((entry) => entry.questionId && entry.questionId === item.questionId);
+    if (!essay) return item;
+    const awarded = essay.status === "approved" && Number.isFinite(Number(essay.finalScore)) ? Number(essay.finalScore) : 0;
+    return { ...item, points: essay.points, earnedPoints: awarded };
+  });
+  const mcqItems = itemDiagnostics.filter((item) => !essayQuestionIds.has(item.questionId) && item.questionType !== "paragraph" && item.questionType !== "essay");
+  const mcqTotal = mcqItems.reduce((sum, item) => sum + Math.max(0, Number(item.points || 0)), 0);
+  const mcqEarned = mcqItems.reduce((sum, item) => sum + Math.max(0, Number(item.earnedPoints || 0)), 0);
+  const essayTotal = essayResponses.reduce((sum, essay) => sum + Math.max(0, Number(essay.points || 0)), 0);
+  const essayEarned = essayResponses.reduce((sum, essay) => sum + Math.max(0, essay.status === "approved" && Number.isFinite(Number(essay.finalScore)) ? Number(essay.finalScore) : 0), 0);
+  const totalPoints = mcqTotal + essayTotal;
+  const earnedPoints = mcqEarned + essayEarned;
+  const finalPct = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : Number(attempt.finalPct || 0);
+  const passingScore = Number(attempt.passingScore || 75);
+  return { ...attempt, itemDiagnostics, earnedPoints, totalPoints, finalPct, passed: finalPct >= passingScore };
 }
 
 export function getEssayResponses(attempt) {

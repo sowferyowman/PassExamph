@@ -1221,7 +1221,7 @@ export default function CreateExamPage() {
               <p><span className="font-black text-slate-700">question_text</span> — the question itself</p>
               <p><span className="font-black text-slate-700">question_image_url</span> — optional link to an image hosted online (Drive, Imgur, your own server, etc.) shown under the question. CSV can't embed actual picture files, only links.</p>
               <p><span className="font-black text-slate-700">option_a</span> to <span className="font-black text-slate-700">option_f</span> — choices for multiple_choice / checkboxes</p>
-              <p><span className="font-black text-slate-700">correct_answer</span> — letter (e.g. C) for multiple_choice, or letters separated by ; for checkboxes (e.g. A;C)</p>
+              <p><span className="font-black text-slate-700">correct_answer</span> — letter (C) for multiple_choice, or letters separated by ; for checkboxes (A;C)</p>
               <p><span className="font-black text-slate-700">correct_text</span> — answer key for short_answer questions</p>
               <p><span className="font-black text-slate-700">rubric</span> — grading notes for paragraph questions (optional)</p>
               <p><span className="font-black text-slate-700">points</span> — point value (defaults to 1 if blank)</p>
@@ -1520,7 +1520,7 @@ export default function CreateExamPage() {
               value={reviewerForm.subjectCategory}
               onChange={(event) => setReviewerForm((current) => ({ ...current, subjectCategory: event.target.value }))}
               className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="e.g., Mathematics, Science"
+              placeholder="Subject Category"
             />
           </label>
         </div>

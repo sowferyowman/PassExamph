@@ -96,7 +96,9 @@ async function register({ email, username, password, name }, req) {
   const verificationToken = crypto.randomBytes(32).toString("hex");
   db.prepare("INSERT INTO email_verification_tokens (id,user_id,token,expires_at) VALUES (?,?,?,?)").run(crypto.randomUUID(), userId, verificationToken, new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
   recordLogin(db, userId, email, req, "registered");
-  return { user: publicUser(db.prepare("SELECT * FROM users WHERE id=?").get(userId)), verificationToken };
+  const user = db.prepare("SELECT * FROM users WHERE id=?").get(userId);
+  const session = createSession(db, user, requestMeta(req));
+  return { ...session, verificationToken };
 }
 
 async function login(identifier, password, req) {

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaBrain, FaChartPie, FaSpinner, FaHourglassHalf, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import { diagnoseExam } from "../../api/aiApi";
 import { getCurrentUser, saveAiDiagnosticForLatestAttempt } from "../../services/storage";
 
 export default function ResultsView({ results, onBack }) {
+  const navigate = useNavigate();
   const [aiDiagnostic, setAiDiagnostic] = useState(null);
   const [diagnosticStatus, setDiagnosticStatus] = useState("loading");
 
@@ -156,7 +158,13 @@ export default function ResultsView({ results, onBack }) {
                   <p className="text-sm text-slate-500">
                     Focus required on <strong className="text-slate-700">{weakness.topicFocus}</strong>.
                   </p>
-                  <button className="mt-4 w-full rounded-lg bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800">Start 5-Min Drill</button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/weakness-drills", { state: { focusSubject: weakness.title, questionLimit: 5 } })}
+                    className="mt-4 w-full rounded-lg bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800"
+                  >
+                    Start 5-Min Drill
+                  </button>
                 </div>
               ))
             ) : (

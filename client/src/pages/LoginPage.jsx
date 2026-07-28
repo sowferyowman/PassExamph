@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register as apiRegister } from "../api/authApi";
 import { useAuthContext } from "../context/AuthContext";
 import { FaArrowLeft, FaEnvelope, FaGoogle, FaLock, FaUser, FaUserPlus } from "react-icons/fa";
-import { migrateLocalStorageToServer, setAuthenticatedUser } from "../services/storage";
+import { hydrateDashboardStoreFromServer, migrateLocalStorageToServer } from "../services/storage";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuthContext();
+  const { login, register } = useAuthContext();
   const [mode, setMode] = useState("signin");
   const [message, setMessage] = useState("");
   const [signInForm, setSignInForm] = useState({ email: "", password: "" });
@@ -25,14 +24,19 @@ export default function LoginPage() {
   async function handleSignIn(event) {
     event.preventDefault();
     setMessage("");
-    try { const user = await login(signInForm.email.trim(), signInForm.password); await migrateLocalStorageToServer().catch(() => {}); routeAfterAuth(user); }
+    try {
+      const user = await login(signInForm.email.trim(), signInForm.password);
+      const restoredDashboard = await hydrateDashboardStoreFromServer().catch(() => false);
+      if (!restoredDashboard) await migrateLocalStorageToServer().catch(() => {});
+      routeAfterAuth(user);
+    }
     catch (error) { setMessage(error.response?.data?.error || "Invalid email or password."); }
   }
 
   async function handleCreateAccount(event) {
     event.preventDefault();
     setMessage("");
-    try { const result = await apiRegister({ email: createForm.email.trim(), username: createForm.username.trim(), password: createForm.password, name: createForm.name.trim() }); const user = setAuthenticatedUser(result.user); await migrateLocalStorageToServer().catch(() => {}); routeAfterAuth(user); }
+    try { const user = await register({ email: createForm.email.trim(), username: createForm.username.trim(), password: createForm.password, name: createForm.name.trim() }); await migrateLocalStorageToServer().catch(() => {}); routeAfterAuth(user); }
     catch (error) { setMessage(error.response?.data?.error || "Could not create account."); }
   }
 

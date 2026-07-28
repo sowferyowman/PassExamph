@@ -11,8 +11,8 @@ import {
   FaFilter
 } from "react-icons/fa";
 import AdminSidebar from "../components/AdminSidebar";
-import { deleteAdminStudent, getAdminStudents, resetAdminStudentPassword, updateAdminStudent } from "../api/adminApi";
-import { getDashboardStore, getDrillSessions, getEssayResponses, getReviewerProgress, updateLatestEssayReview } from "../services/storage";
+import { deleteAdminStudent, getAdminStudentDashboards, getAdminStudentExamSubmissions, getAdminStudents, resetAdminStudentPassword, updateAdminStudent, updateAdminStudentEssay } from "../api/adminApi";
+import { getDrillSessions, getEssayResponses, getReviewerProgress } from "../services/storage";
 
 const STUDENTS_PER_PAGE = 15;
 
@@ -56,7 +56,7 @@ export default function AdminReviewDashboard() {
       setLoading(true);
       setError(null);
       try {
-        const [studentAccounts, store] = await Promise.all([getAdminStudents(), Promise.resolve(getDashboardStore())]);
+        const [studentAccounts, store] = await Promise.all([getAdminStudents(), getAdminStudentDashboards()]);
         if (cancelled) return;
         const normalizedStudents = studentAccounts.map((student) => ({
           ...student,
@@ -68,8 +68,9 @@ export default function AdminReviewDashboard() {
             getEssayResponses(attempt)
               .filter((essay) => ["pending_review", "ai_graded"].includes(essay.status))
               .map((essay) => ({
-                ...essay,
-                email: student.email,
+              ...essay,
+              studentId: student.id,
+              email: student.email,
                 studentName: student.name || student.email,
                 examTitle: attempt.examTitle || "Essay Exam"
               }))
@@ -174,27 +175,20 @@ export default function AdminReviewDashboard() {
     setConfirmAction({ item, type: "reject" });
   }
 
-  function runConfirmedAction() {
+  async function runConfirmedAction() {
     if (!confirmAction) return;
     const { item, type, score } = confirmAction;
 
-    if (type === "approve") {
-      updateLatestEssayReview(item.email, item.id, {
-        finalScore: score,
-        status: "approved",
-        reviewedBy: CURRENT_ADMIN_NAME,
-        reviewedAt: new Date().toISOString()
-      });
-      showToast(`Approved ${item.studentName}'s essay (${score}/${Math.max(1, Number(item.points || 1))}).`);
-    } else {
-      updateLatestEssayReview(item.email, item.id, {
-        aiScore: null,
-        finalScore: null,
-        status: "pending_review",
-        reviewedBy: CURRENT_ADMIN_NAME,
-        reviewedAt: new Date().toISOString()
-      });
-      showToast(`Sent ${item.studentName}'s essay back for re-review.`);
+    try {
+      if (type === "approve") {
+        await updateAdminStudentEssay(item.studentId, item.id, { finalScore: score, status: "approved", reviewedBy: CURRENT_ADMIN_NAME, reviewedAt: new Date().toISOString() });
+        showToast(`Approved ${item.studentName}'s essay (${score}/${Math.max(1, Number(item.points || 1))}).`);
+      } else {
+        await updateAdminStudentEssay(item.studentId, item.id, { aiScore: null, finalScore: null, status: "pending_review", reviewedBy: CURRENT_ADMIN_NAME, reviewedAt: new Date().toISOString() });
+        showToast(`Sent ${item.studentName}'s essay back for re-review.`);
+      }
+    } catch (error) {
+      showToast(error.response?.data?.error || "Could not update the essay score.");
     }
 
     setConfirmAction(null);
@@ -210,9 +204,14 @@ export default function AdminReviewDashboard() {
     setStudentMenuOpenId(null);
     setStudentModal({ type: "view", student });
   }
-  function handleViewExamSubmissions(student) {
+  async function handleViewExamSubmissions(student) {
     setStudentMenuOpenId(null);
-    setExamHistoryStudent(student);
+    try {
+      const { attempts } = await getAdminStudentExamSubmissions(student.id);
+      setExamHistoryStudent({ ...student, attempts });
+    } catch (error) {
+      showToast(error.response?.data?.error || "Could not load this student's exam submissions.");
+    }
   }
   function handleResetPassword(student) {
     setStudentMenuOpenId(null);
@@ -623,7 +622,7 @@ export default function AdminReviewDashboard() {
       {examHistoryStudent && (
         <ExamSubmissionsModal
           student={examHistoryStudent}
-          attempts={getDashboardStore()[examHistoryStudent.email]?.attempts || []}
+          attempts={examHistoryStudent.attempts || []}
           onClose={() => setExamHistoryStudent(null)}
         />
       )}
@@ -913,9 +912,12 @@ function AttemptDetailView({ attempt }) {
         <span className={`rounded-full px-3 py-1.5 text-xs font-black ${attempt.passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
           {attempt.finalPct}%
         </span>
-        <span className="text-[10px] font-semibold text-slate-500">
-          {attempt.takenAt ? new Date(attempt.takenAt).toLocaleString() : "—"}
-        </span>
+      <span className="text-[10px] font-semibold text-slate-500">
+  {attempt.takenAt ? new Date(attempt.takenAt).toLocaleString(undefined, {
+    year: "numeric", month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  }) : "—"}
+</span>
         {Number.isFinite(Number(attempt.passingScore)) && (
           <span className="text-[10px] font-semibold text-slate-500">
             Passing score: {attempt.passingScore}%

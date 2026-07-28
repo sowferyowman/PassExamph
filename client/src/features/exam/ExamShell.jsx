@@ -73,7 +73,7 @@ export default function ExamShell(props) {
 
   if (phase === "intermission") {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-100 p-6">
+      <div className="grid min-h-screen w-full place-items-center overflow-x-hidden bg-slate-100 p-6">
         <div className="glass-card max-w-xl p-8 text-center">
           <p className="text-xs font-black uppercase tracking-wider text-blue-600">{activeSection === 0 ? "Prepare to Begin" : "Subject Complete"}</p>
           <h1 className="mt-3 text-3xl font-black text-slate-950">{currentSection.subjectTitle}</h1>
@@ -87,7 +87,7 @@ export default function ExamShell(props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-100">
+    <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-slate-100">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
         <div className="flex flex-wrap items-center gap-2">
           {sections.map((section, index) => (
@@ -109,8 +109,9 @@ export default function ExamShell(props) {
         </button>
       </header>
 
-      <main className="grid flex-1 gap-5 p-5 lg:grid-cols-[1fr_18rem]">
+      <main className="grid w-full min-w-0 max-w-full flex-1 gap-5 overflow-x-hidden p-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <QuestionWorkspace
+          key={`${activeSection}-${activeQuestion}`}
           section={currentSection}
           question={currentQuestion}
           questionIndex={activeQuestion}
@@ -118,7 +119,7 @@ export default function ExamShell(props) {
           onSaveResponse={onSaveResponse}
         />
 
-        <aside className="glass-card h-max p-5">
+        <aside className="glass-card h-max min-w-0 p-5 lg:sticky lg:top-5">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Question Navigator</p>
           <p className="mt-1 text-sm font-bold text-slate-800">
             {progress.answered} of {progress.total} answered

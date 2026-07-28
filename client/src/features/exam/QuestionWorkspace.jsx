@@ -16,14 +16,17 @@ export default function QuestionWorkspace({ section, question, questionIndex, re
   }
 
   return (
-    <section className="glass-card p-6">
+    <section className="glass-card min-w-0 p-6 md:p-8">
       <p className="text-xs font-black uppercase tracking-wider text-blue-600">
         {section.subjectTitle} - Item {questionIndex + 1} of {section.questions.length}
       </p>
       <div className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
         {getTypeLabel(type)} - {question.points || 1} pt{Number(question.points || 1) === 1 ? "" : "s"}
       </div>
-      <div className="mt-6 text-2xl font-black leading-snug text-slate-950" dangerouslySetInnerHTML={{ __html: question.stem }} />
+      <div
+        className="exam-question-content mt-6 w-full min-w-0 max-w-full text-2xl font-black leading-snug text-slate-950"
+        dangerouslySetInnerHTML={{ __html: question.stem }}
+      />
 
       {isOptionsQuestion ? (
         <div className="mt-8 space-y-3">
@@ -55,7 +58,7 @@ export default function QuestionWorkspace({ section, question, questionIndex, re
         <div className="mt-8">
           <textarea
             {...register("essay", { onChange: (event) => onSaveResponse(event.target.value) })}
-            className="h-72 w-full resize-none rounded-xl border-2 border-slate-200 p-5 font-medium leading-relaxed text-slate-700 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+            className="h-[28rem] w-full max-w-full resize-y rounded-xl border-2 border-slate-200 p-5 font-medium leading-relaxed text-slate-700 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
             placeholder="Begin typing your essay response here..."
           />
           <div className="mt-2 flex justify-end gap-4 text-xs font-bold text-slate-400">
