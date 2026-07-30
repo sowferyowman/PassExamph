@@ -22,7 +22,7 @@ router.post("/register", async (req, res) => { try { const { email, username, pa
 router.post("/login", rateLimit, async (req, res) => { try { const result = await auth.login(String(req.body?.identifier || req.body?.email || "").trim(), String(req.body?.password || ""), req); loginAttempts.delete(req.loginRateLimitKey); setSessionCookies(res, result); res.json({ user: result.user }); } catch (e) { error(res, e); } });
 router.post("/refresh", async (req, res) => { try { const result = await auth.refresh(parseCookies(req).refreshToken, req); setSessionCookies(res, result); res.json({ user: result.user }); } catch (e) { error(res, e); } });
 router.post("/logout", authenticate, (req, res) => { auth.revoke(req.auth.sid); clearCookies(res); res.json({ ok: true }); });
-router.post("/logout-all", authenticate, (req, res) => { auth.revokeAll(req.user.id); clearCookies(res); res.json({ ok: true }); });
+router.post("/logout-all", authenticate, (req, res) => { auth.revokeAllExcept(req.user.id, req.auth.sid); res.json({ ok: true }); });
 router.get("/me", authenticate, (req, res) => res.json({ user: auth.publicUser(req.user) }));
 router.get("/sessions", authenticate, (req, res) => res.json({ sessions: auth.sessions(req.user.id) }));
 router.post("/forgot-password", async (req, res) => { const result = await auth.forgotPassword(String(req.body?.email || "").trim()); res.json({ ...result, resetToken: process.env.NODE_ENV === "production" ? undefined : result.resetToken }); });

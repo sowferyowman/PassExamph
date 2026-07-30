@@ -67,7 +67,15 @@ function publicUser(user) {
     smsNumber: user.sms_number || user.phone_number || "",
     recoveryEmail: user.recovery_email || "",
     isVerified: Boolean(user.is_verified),
-    profileCompleted: Boolean(user.name)
+    // A student is ready for assessments only after completing the Settings
+    // profile and recovery details. Admin accounts are always complete.
+    profileCompleted: user.role === "admin" || Boolean(
+      String(user.name || "").trim()
+      && String(user.nickname || "").trim()
+      && String(profile?.targetSchool || "").trim()
+      && String(user.phone_number || user.sms_number || "").trim()
+      && String(user.recovery_email || "").trim()
+    )
   };
 }
 
@@ -139,6 +147,7 @@ async function refresh(refreshToken, req) {
 
 function revoke(sessionId) { getDb().prepare("UPDATE sessions SET is_revoked=1 WHERE id=?").run(sessionId); }
 function revokeAll(userId) { getDb().prepare("UPDATE sessions SET is_revoked=1 WHERE user_id=?").run(userId); }
+function revokeAllExcept(userId, sessionId) { getDb().prepare("UPDATE sessions SET is_revoked=1 WHERE user_id=? AND id<>?").run(userId, sessionId); }
 function sessions(userId) { return getDb().prepare("SELECT id,created_at AS createdAt,expires_at AS expiresAt,ip_address AS ipAddress,user_agent AS userAgent,is_revoked AS revoked FROM sessions WHERE user_id=? ORDER BY created_at DESC").all(userId); }
 
 async function changePassword(userId, currentPassword, newPassword) {
@@ -251,4 +260,4 @@ async function resetStudentPasswordByAdmin(userId) {
 
 function verifyEmail(value) { const db = getDb(); const row = db.prepare("SELECT * FROM email_verification_tokens WHERE token=? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP").get(value); if (!row) throw Object.assign(new Error("Verification token is invalid or expired."), { status: 400 }); db.prepare("UPDATE users SET is_verified=1 WHERE id=?").run(row.user_id); db.prepare("UPDATE email_verification_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?").run(row.id); }
 
-module.exports = { ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };
+module.exports = { ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, revokeAllExcept, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };

@@ -415,7 +415,9 @@ export function initializeLocalStorage() {
   if (!Array.isArray(storedDrills) || storedDrills.length === 0) writeJson(DRILL_BANK_KEY, drillBankSeed);
   if (!localStorage.getItem(DASHBOARD_KEY)) writeJson(DASHBOARD_KEY, {});
   if (!localStorage.getItem(REVIEWER_PROGRESS_KEY)) writeJson(REVIEWER_PROGRESS_KEY, {});
-  if (!localStorage.getItem(FORUM_KEY) || !readJson(FORUM_KEY, []).length) writeJson(FORUM_KEY, defaultForumThreads);
+  // An empty forum is a valid, intentional state. Do not repopulate it with
+  // sample posts after an account's content has been cleared.
+  if (!localStorage.getItem(FORUM_KEY)) writeJson(FORUM_KEY, []);
   removeSeededForumUsers();
   if (!localStorage.getItem(NOTIFICATIONS_KEY)) writeJson(NOTIFICATIONS_KEY, []);
 
@@ -592,6 +594,7 @@ export function updateCurrentStudentProfile(updates) {
       ...(updates.academicMetrics || {})
     }
   };
+  nextAccount.profileCompleted = isStudentProfileComplete(nextAccount);
 
   const nextAccounts = accounts.map((account) => (account.id === current.id ? { ...account, ...nextAccount } : account));
   writeJson(USER_ACCOUNTS_KEY, nextAccounts);
@@ -989,6 +992,17 @@ export function getStudentDashboard(email) {
   return normalizedDashboard;
 }
 
+export function isStudentProfileComplete(user) {
+  if (user?.role === "admin") return true;
+  return Boolean(
+    String(user?.name || "").trim()
+    && String(user?.nickname || "").trim()
+    && String(user?.school || "").trim()
+    && String(user?.smsNumber || user?.phoneNumber || "").trim()
+    && String(user?.recoveryEmail || "").trim()
+  );
+}
+
 // Repairs old attempts created before the exam summary was updated alongside an
 // approved essay. It also keeps the student record and admin history aligned.
 function normalizeEssayReviewStatuses(dashboard) {
@@ -1083,8 +1097,6 @@ function normalizeDashboardAnalytics(dashboard, email) {
   const totalAvailableMocks = getExamBlueprints().length;
   const rewardSummary = buildCommunityRewardSummary(email, { ...dashboard, attempts });
   const studyPoints = rewardSummary.totalPoints;
-  const studyPointsGoal = 5000;
-  const studyPointsProgress = Math.min(100, Math.round((studyPoints / studyPointsGoal) * 100));
   const placement = getRawLeaderboardPlacement(email, { ...dashboard, attempts });
 
   return {
@@ -1113,10 +1125,8 @@ function normalizeDashboardAnalytics(dashboard, email) {
       {
         label: "Study Points",
         value: studyPoints.toLocaleString(),
-        detail: "From exams and reviewers",
-        accent: "teal",
-        progress: studyPointsProgress,
-        progressLabel: `${studyPoints.toLocaleString()} / ${studyPointsGoal.toLocaleString()} pts to Magis Elite`
+        detail: "From exams and completed modules",
+        accent: "teal"
       }
     ],
     progression,
@@ -1176,7 +1186,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   );
   const reviewStatus = essayResponses.length ? "Pending Review" : "Analyzed";
   const exams = [
-    { name: blueprint.title, takenAt, score: results.finalPct, finalPct: results.finalPct, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
+    { name: blueprint.title, takenAt, score: results.finalPct, finalPct: results.finalPct, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), durationSeconds, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
     ...currentDashboard.exams
   ];
 
@@ -1237,7 +1247,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       { label: "Latest Mock Score", value: latestCompletedAttempt ? `${Number(latestCompletedAttempt.finalPct ?? latestCompletedAttempt.score ?? 0)}%` : "0%", detail: latestCompletedAttempt ? `Scored from ${latestCompletedAttempt.examTitle || latestCompletedAttempt.name || "completed mock exam"}` : "No completed exam attempts yet", accent: "blue" },
       { label: "Total Tests Taken", value: String(exams.length), detail: `${exams.length} completed mock exam${exams.length === 1 ? "" : "s"} out of ${getExamBlueprints().length} available`, accent: "purple" },
       { label: "Leaderboard Placement", value: placement.rank ? `#${placement.rank}` : "-", detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet", accent: "indigo" },
-      { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exam and reviewers", accent: "teal", progress: Math.min(100, Math.round((rewardSummary.totalPoints / 5000) * 100)), progressLabel: `${rewardSummary.totalPoints.toLocaleString()} / 5,000 pts to Magis Elite` }
+      { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exams and completed modules", accent: "teal" }
     ],
     progression,
     subjects,
@@ -1516,13 +1526,26 @@ export function getLeaderboard(currentEmail) {
       latestScore,
       isCurrent: student.email === currentEmail
     };
-  }).sort((a, b) => b.totalPoints - a.totalPoints || b.latestScore - a.latestScore || a.email.localeCompare(b.email));
+  }).sort((a, b) => b.totalPoints - a.totalPoints || a.email.localeCompare(b.email));
   return rows.map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+// The local version above is retained for offline rendering. Use this when
+// displaying global standings so every account is ranked against the server's
+// current, per-student records.
+export async function getFreshLeaderboard(currentEmail) {
+  const response = await fetch("/api/data/leaderboard", {
+    credentials: "include",
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error("Could not load the current leaderboard.");
+  const rows = await response.json();
+  return Array.isArray(rows) ? rows.map((row) => ({ ...row, isCurrent: row.email === currentEmail })) : [];
 }
 
 export function getForumThreads() {
   initializeLocalStorage();
-  return readJson(FORUM_KEY, defaultForumThreads).map(normalizeForumThread).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return readJson(FORUM_KEY, []).map(normalizeForumThread).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 export function createForumThread(user, payload) {
@@ -1643,12 +1666,15 @@ function createPublishedContentNotifications({ type, message, metadata = {} }) {
 
 function removeSeededForumUsers() {
   const threads = readJson(FORUM_KEY, []);
+  const retiredStanlyPosts = new Set(["5d0afba5-f3a5-4f7a-8c4f-448f9dc4ae8b", "c96fc172-af1f-450b-b64b-e748938420ea"]);
   const filtered = threads
     .map((thread) => ({
       ...thread,
       replies: (thread.replies || []).filter((reply) => !["User#4410", "User#8821"].includes(reply.author))
     }))
-    .filter((thread) => !["User#4410", "User#8821"].includes(thread.author));
+    .filter((thread) => !["User#4410", "User#8821"].includes(thread.author))
+    // Remove the two retired Stanly Mejia posts from old browser copies too.
+    .filter((thread) => !retiredStanlyPosts.has(thread.id));
 
   if (filtered.length !== threads.length || JSON.stringify(filtered) !== JSON.stringify(threads)) {
     writeJson(FORUM_KEY, filtered);

@@ -8,6 +8,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => { me().then((result) => { setUser(result.user); setAuthenticatedUser(result.user); }).catch(() => { setUser(null); logoutUser(); }).finally(() => setLoading(false)); }, []);
+  const refreshUser = async () => {
+    const result = await me();
+    setUser(result.user);
+    setAuthenticatedUser(result.user);
+    return result.user;
+  };
   const value = useMemo(() => ({
     user,
     loading,
@@ -23,6 +29,7 @@ export function AuthProvider({ children }) {
       setAuthenticatedUser(result.user);
       return result.user;
     },
+    refreshUser,
     logout: async () => { await logoutRequest().catch(() => {}); logoutUser(); setUser(null); }
   }), [user, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

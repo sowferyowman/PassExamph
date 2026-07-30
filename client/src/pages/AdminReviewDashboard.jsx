@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FaChevronLeft,
   FaChevronRight,
@@ -38,6 +39,7 @@ export default function AdminReviewDashboard() {
   const [studentSort, setStudentSort] = useState({ key: "name", asc: true });
   const [studentPage, setStudentPage] = useState(1);
   const [studentMenuOpenId, setStudentMenuOpenId] = useState(null);
+  const [studentMenuAnchor, setStudentMenuAnchor] = useState(null);
   const [studentModal, setStudentModal] = useState(null);
   const [studentAction, setStudentAction] = useState(null);
   const [temporaryPassword, setTemporaryPassword] = useState(null);
@@ -47,7 +49,9 @@ export default function AdminReviewDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [examFilter, setExamFilter] = useState("all");
-  const [hideTestAccounts, setHideTestAccounts] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterAnchor, setFilterAnchor] = useState(null);
+  const filterButtonRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,14 +105,6 @@ export default function AdminReviewDashboard() {
         return false;
       }
 
-      // Optional local display filter; disabled by default so every database
-      // student returned by the API is visible.
-      if (hideTestAccounts) {
-        if (student.email?.endsWith("@acet.local")) {
-          return false;
-        }
-      }
-
       // Status filter
       if (statusFilter !== "all") {
         const status = student.status?.toLowerCase() || "";
@@ -140,15 +136,32 @@ export default function AdminReviewDashboard() {
       return 0;
     });
     return sorted;
-  }, [students, studentSearch, studentSort, statusFilter, scoreFilter, examFilter, hideTestAccounts]);
+  }, [students, studentSearch, studentSort, statusFilter, scoreFilter, examFilter]);
 
   const totalStudentPages = Math.max(1, Math.ceil(filteredSortedStudents.length / STUDENTS_PER_PAGE));
   const paginatedStudents = filteredSortedStudents.slice((studentPage - 1) * STUDENTS_PER_PAGE, studentPage * STUDENTS_PER_PAGE);
 
-  useEffect(() => setStudentPage(1), [studentSearch, studentSort, statusFilter, scoreFilter, examFilter, hideTestAccounts]);
+  useEffect(() => setStudentPage(1), [studentSearch, studentSort, statusFilter, scoreFilter, examFilter]);
   useEffect(() => {
     if (studentPage > totalStudentPages) setStudentPage(totalStudentPages);
   }, [studentPage, totalStudentPages]);
+
+  // Reposition (or close) the open row menu / filter dropdown on scroll or resize,
+  // since their position is computed from the trigger button's rect at open time.
+  useEffect(() => {
+    if (!studentMenuOpenId && !filterOpen) return;
+    function closeOnScrollOrResize() {
+      setStudentMenuOpenId(null);
+      setStudentMenuAnchor(null);
+      setFilterOpen(false);
+    }
+    window.addEventListener("scroll", closeOnScrollOrResize, true);
+    window.addEventListener("resize", closeOnScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", closeOnScrollOrResize, true);
+      window.removeEventListener("resize", closeOnScrollOrResize);
+    };
+  }, [studentMenuOpenId, filterOpen]);
 
   function showToast(message) {
     setToast(message);
@@ -197,15 +210,15 @@ export default function AdminReviewDashboard() {
   }
 
   function handleEditStudent(student) {
-    setStudentMenuOpenId(null);
+    closeStudentMenu();
     setStudentModal({ type: "edit", student });
   }
   function handleViewProfile(student) {
-    setStudentMenuOpenId(null);
+    closeStudentMenu();
     setStudentModal({ type: "view", student });
   }
   async function handleViewExamSubmissions(student) {
-    setStudentMenuOpenId(null);
+    closeStudentMenu();
     try {
       const { attempts } = await getAdminStudentExamSubmissions(student.id);
       setExamHistoryStudent({ ...student, attempts });
@@ -214,11 +227,11 @@ export default function AdminReviewDashboard() {
     }
   }
   function handleResetPassword(student) {
-    setStudentMenuOpenId(null);
+    closeStudentMenu();
     setStudentAction({ type: "reset-password", student });
   }
   function handleDeleteStudent(student) {
-    setStudentMenuOpenId(null);
+    closeStudentMenu();
     setStudentAction({ type: "delete", student });
   }
   function requestSaveStudent(student, changes) {
@@ -250,17 +263,56 @@ export default function AdminReviewDashboard() {
     setStatusFilter("all");
     setScoreFilter("all");
     setExamFilter("all");
-    setHideTestAccounts(false);
     setStudentSearch("");
+  }
+
+  // Row action menu: measure the trigger button's position at click time so the
+  // portal-rendered menu can be pinned next to it regardless of ancestor overflow.
+  function toggleStudentMenu(event, key) {
+    if (studentMenuOpenId === key) {
+      closeStudentMenu();
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 176; // matches w-44
+    setStudentMenuAnchor({
+      top: rect.bottom + 6,
+      left: Math.max(8, rect.right - menuWidth)
+    });
+    setStudentMenuOpenId(key);
+  }
+  function closeStudentMenu() {
+    setStudentMenuOpenId(null);
+    setStudentMenuAnchor(null);
+  }
+
+  // Filter dropdown: same portal approach as the row menu above.
+  function toggleFilterDropdown() {
+    if (filterOpen) {
+      setFilterOpen(false);
+      return;
+    }
+    const rect = filterButtonRef.current?.getBoundingClientRect();
+    if (rect) {
+      const menuWidth = 288; // matches w-72
+      setFilterAnchor({
+        top: rect.bottom + 8,
+        left: Math.max(8, rect.right - menuWidth)
+      });
+    }
+    setFilterOpen(true);
   }
 
   // Get filter counts
   const activeFilterCount = [
     statusFilter !== "all",
     scoreFilter !== "all",
-    examFilter !== "all",
-    hideTestAccounts
+    examFilter !== "all"
   ].filter(Boolean).length;
+
+  const activeMenuStudent = studentMenuOpenId
+    ? paginatedStudents.find((student) => (student.id || student.email) === studentMenuOpenId)
+    : null;
 
   return (
     <main className="flex h-screen overflow-hidden bg-slate-100">
@@ -298,16 +350,12 @@ export default function AdminReviewDashboard() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Filter Dropdown */}
+                    {/* Filter Dropdown trigger — the dropdown itself is rendered via portal below */}
                     <div className="relative">
-                      <button 
+                      <button
+                        ref={filterButtonRef}
                         className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-[11px] font-black text-slate-600 hover:bg-slate-50 hover:border-slate-300"
-                        onClick={() => {
-                          const dropdown = document.getElementById('filterDropdown');
-                          if (dropdown) {
-                            dropdown.classList.toggle('hidden');
-                          }
-                        }}
+                        onClick={toggleFilterDropdown}
                       >
                         <FaFilter className="text-[10px]" />
                         Filter
@@ -317,70 +365,6 @@ export default function AdminReviewDashboard() {
                           </span>
                         )}
                       </button>
-                      <div 
-                        id="filterDropdown"
-                        className="absolute right-0 top-full mt-2 hidden w-72 rounded-xl border border-slate-200 bg-white p-5 shadow-lg z-20"
-                      >
-                        <div className="space-y-4">
-                          <div>
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Status</label>
-                            <select 
-                              value={statusFilter} 
-                              onChange={(e) => setStatusFilter(e.target.value)}
-                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
-                            >
-                              <option value="all">All Status</option>
-                              <option value="active">Active</option>
-                              <option value="inactive">Inactive</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Score</label>
-                            <select 
-                              value={scoreFilter} 
-                              onChange={(e) => setScoreFilter(e.target.value)}
-                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
-                            >
-                              <option value="all">All Scores</option>
-                              <option value="passed">Passed</option>
-                              <option value="failed">Failed</option>
-                              <option value="no-score">No Score</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Exams</label>
-                            <select 
-                              value={examFilter} 
-                              onChange={(e) => setExamFilter(e.target.value)}
-                              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
-                            >
-                              <option value="all">All Students</option>
-                              <option value="has-exams">Has Exams</option>
-                              <option value="no-exams">No Exams</option>
-                            </select>
-                          </div>
-                          <div className="flex items-center gap-2.5 pt-3 border-t border-slate-100">
-                            <input
-                              type="checkbox"
-                              id="hideTestAccounts"
-                              checked={hideTestAccounts}
-                              onChange={(e) => setHideTestAccounts(e.target.checked)}
-                              className="rounded border-slate-300 text-[#003A6C] focus:ring-[#003A6C] h-3.5 w-3.5"
-                            />
-                            <label htmlFor="hideTestAccounts" className="text-[11px] font-semibold text-slate-600">
-                              Hide test accounts {hideTestAccounts ? "(on)" : "(off)"}
-                            </label>
-                          </div>
-                          {activeFilterCount > 0 && (
-                            <button 
-                              onClick={clearAllFilters}
-                              className="w-full rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-black text-slate-600 hover:bg-slate-200"
-                            >
-                              Clear All Filters
-                            </button>
-                          )}
-                        </div>
-                      </div>
                     </div>
 
                     <label className="relative block">
@@ -451,18 +435,9 @@ export default function AdminReviewDashboard() {
                                 </td>
                                 <td className="px-6 py-4 text-[10px] text-slate-500 truncate max-w-24">{student.dateJoined ? new Date(student.dateJoined).toLocaleDateString() : "—"}</td>
                                 <td className="px-6 py-4 text-right relative">
-                                  <button onClick={() => setStudentMenuOpenId(studentMenuOpenId === key ? null : key)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                                  <button onClick={(event) => toggleStudentMenu(event, key)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                                     <FaEllipsisV className="text-[10px]" />
                                   </button>
-                                  {studentMenuOpenId === key && (
-                                    <div className="absolute right-6 top-11 z-10 w-44 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg">
-                                      <button onClick={() => handleViewProfile(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">View profile</button>
-                                      <button onClick={() => handleEditStudent(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">Edit details</button>
-                                      <button onClick={() => handleViewExamSubmissions(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">View exam submissions</button>
-                                      <button onClick={() => handleResetPassword(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50">Reset password</button>
-                                      <button onClick={() => handleDeleteStudent(student)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-rose-600 hover:bg-rose-50">Delete account</button>
-                                    </div>
-                                  )}
                                 </td>
                               </tr>
                             );
@@ -561,6 +536,84 @@ export default function AdminReviewDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── Portal-rendered filter dropdown ─────────────────────────────── */}
+      {filterOpen && filterAnchor && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+          <div
+            style={{ position: "fixed", top: filterAnchor.top, left: filterAnchor.left }}
+            className="z-50 w-72 rounded-xl border border-slate-200 bg-white p-5 shadow-lg"
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Score</label>
+                <select
+                  value={scoreFilter}
+                  onChange={(e) => setScoreFilter(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
+                >
+                  <option value="all">All Scores</option>
+                  <option value="passed">Passed</option>
+                  <option value="failed">Failed</option>
+                  <option value="no-score">No Score</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Exams</label>
+                <select
+                  value={examFilter}
+                  onChange={(e) => setExamFilter(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#003A6C]"
+                >
+                  <option value="all">All Students</option>
+                  <option value="has-exams">Has Exams</option>
+                  <option value="no-exams">No Exams</option>
+                </select>
+              </div>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={() => { clearAllFilters(); setFilterOpen(false); }}
+                  className="w-full rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-black text-slate-600 hover:bg-slate-200"
+                >
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* ── Portal-rendered row action menu ─────────────────────────────── */}
+      {studentMenuOpenId && studentMenuAnchor && activeMenuStudent && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={closeStudentMenu} />
+          <div
+            style={{ position: "fixed", top: studentMenuAnchor.top, left: studentMenuAnchor.left }}
+            className="z-50 w-44 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg"
+          >
+            <button onClick={() => handleViewProfile(activeMenuStudent)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50 text-left">View profile</button>
+            <button onClick={() => handleEditStudent(activeMenuStudent)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50 text-left">Edit details</button>
+            <button onClick={() => handleViewExamSubmissions(activeMenuStudent)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50 text-left">View exam submissions</button>
+            <button onClick={() => handleResetPassword(activeMenuStudent)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50 text-left">Reset password</button>
+            <button onClick={() => handleDeleteStudent(activeMenuStudent)} className="block w-full px-3.5 py-2 text-[10px] font-bold text-rose-600 hover:bg-rose-50 text-left">Delete account</button>
+          </div>
+        </>,
+        document.body
+      )}
 
       {reviewItem && (
         <ReviewWorkbench

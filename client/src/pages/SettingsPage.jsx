@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { changePassword, updateProfile } from "../api/authApi";
 import { FaCheckCircle, FaMobileAlt, FaSave, FaUserCircle } from "react-icons/fa";
-import { getCurrentUser, updateCurrentStudentProfile } from "../services/storage";
+import { useAuthContext } from "../context/AuthContext";
+import { getCurrentUser, isStudentProfileComplete, updateCurrentStudentProfile } from "../services/storage";
 
 export default function SettingsPage() {
+  const location = useLocation();
+  const { refreshUser } = useAuthContext();
   const currentUser = getCurrentUser();
   const [form, setForm] = useState({
     name: currentUser?.name || "",
@@ -19,19 +23,18 @@ export default function SettingsPage() {
 
   async function saveSettings(event) {
     event.preventDefault();
+    const profile = { name: form.name.trim(), nickname: form.nickname.trim(), school: form.school.trim(), smsNumber: form.smsNumber.trim(), recoveryEmail: form.recoveryEmail.trim() };
+    if (!isStudentProfileComplete(profile)) {
+      setMessage("Complete your name, display name, school, mobile number, and recovery email before continuing.");
+      return;
+    }
     if (!smsIsValid) {
       setMessage("Enter a valid mobile number before saving.");
       return;
     }
-    updateCurrentStudentProfile({
-      name: form.name.trim(),
-      nickname: form.nickname.trim(),
-      school: form.school.trim(),
-      smsNumber: form.smsNumber.trim(),
-      recoveryEmail: form.recoveryEmail.trim()
-    });
-    try { await updateProfile({ name: form.name.trim(), nickname: form.nickname.trim(), school: form.school.trim(), phoneNumber: form.smsNumber.trim(), recoveryEmail: form.recoveryEmail.trim() }); } catch (error) { setMessage(error.response?.data?.error || "Profile saved locally, but changes could not be synced."); return; }
-    setMessage("Settings saved. Your profile has been updated.");
+    updateCurrentStudentProfile(profile);
+    try { await updateProfile({ ...profile, phoneNumber: profile.smsNumber }); await refreshUser(); } catch (error) { setMessage(error.response?.data?.error || "Profile saved locally, but changes could not be synced."); return; }
+    setMessage("Settings saved. Your profile is complete and assessments are unlocked.");
   }
 
   const displayName = form.nickname || form.name || currentUser?.email || "Student";
@@ -44,6 +47,8 @@ export default function SettingsPage() {
         <h1 className="page-title">Settings</h1>
         <p className="page-description">Manage the profile and recovery information.</p>
       </header>
+
+      {location.state?.profileSetupRequired && <p className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">Complete and save your profile below before starting an exam, reviewer module, or drill.</p>}
 
       <form onSubmit={saveSettings} className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <section className="space-y-6">

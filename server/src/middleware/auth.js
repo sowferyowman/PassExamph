@@ -8,7 +8,7 @@ function cookies(req) {
 function authenticate(req, res, next) {
   try {
     const payload = verifyToken(cookies(req).accessToken);
-    const user = getDb().prepare("SELECT id,email,username,role,name,nickname,is_verified AS isVerified FROM users WHERE id=? AND is_active=1").get(payload.sub);
+    const user = getDb().prepare("SELECT id,email,username,role,name,nickname,phone_number,sms_number,recovery_email,is_verified AS isVerified FROM users WHERE id=? AND is_active=1").get(payload.sub);
     if (!user) return res.status(401).json({ error: "Authentication required." });
     req.user = user; req.auth = payload; next();
   } catch (_error) { return res.status(401).json({ error: "Authentication required." }); }

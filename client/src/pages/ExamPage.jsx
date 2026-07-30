@@ -80,10 +80,11 @@
           // Process exams with additional data
           const processedExams = (dashboard.exams || []).map((exam, index, arr) => {
             const prevExam = arr[index + 1];
+            const durationSeconds = Number(exam.durationSeconds ?? dashboard.attempts?.[index]?.durationSeconds ?? 0);
             return {
               ...exam,
               status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed"),
-              duration: exam.duration || 0,
+              durationSeconds,
               pointsEarned: exam.earnedPoints,
               passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
               passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
@@ -310,9 +311,10 @@
         // Process exams with additional data
         const processedExams = (latestDashboard.exams || nextDashboard.exams || []).map((exam, index, arr) => {
           const prevExam = arr[index + 1];
+          const durationSeconds = Number(exam.durationSeconds ?? latestDashboard.attempts?.[index]?.durationSeconds ?? 0);
           return {
             ...exam,
-            duration: exam.duration || 0,
+            durationSeconds,
             pointsEarned: exam.earnedPoints,
               passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
               passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
@@ -478,7 +480,7 @@
                   onClick={() => navigate("/reviewers")} 
                   className="inline-flex items-center gap-2 rounded-xl border border-blue-900 bg-[#001224] px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-300 transition hover:bg-blue-950"
                 >
-                  <FaBookOpen className="text-[10px]" /> Study Plan
+                  <FaBookOpen className="text-[10px]" /> Learning Materials
                 </button>
               </div>
             </section>
@@ -814,7 +816,7 @@
                         </td>
                         
                         <td className={`px-6 py-4 font-semibold ${dark ? "text-white/70" : "text-slate-700"}`}>
-                          {exam.duration || "—"} min
+                          {formatAttemptDuration(exam.durationSeconds)}
                         </td>
                         
                         <td className={`px-6 py-4 font-semibold ${dark ? "text-white/70" : "text-slate-700"}`}>
@@ -906,9 +908,18 @@
   }
 
 function getDurationMinutes(exam) {
-  if (Number(exam.duration) > 0) return Number(exam.duration);ad   // <-- stray "ad" was a syntax error
+  if (Number(exam.duration) > 0) return Number(exam.duration);
   const durationSeconds = (exam.sections || []).reduce((total, section) => total + Number(section.allottedTimeSec || 0), 0);
   return durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : null;
+}
+
+function formatAttemptDuration(seconds) {
+  const totalSeconds = Math.max(0, Math.round(Number(seconds || 0)));
+  if (!totalSeconds) return "—";
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  if (!minutes) return `${remainingSeconds} sec`;
+  return remainingSeconds ? `${minutes} min ${remainingSeconds} sec` : `${minutes} min`;
 }
 
   function hydrateResponses(sections, saved = []) {

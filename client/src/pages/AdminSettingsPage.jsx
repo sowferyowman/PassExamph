@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaLock, FaSignOutAlt } from "react-icons/fa";
-import { changePassword, logoutAll } from "../api/authApi";
+import { changePassword, logoutAll, sessions as getSessions } from "../api/authApi";
 import AdminSidebar from "../components/AdminSidebar";
 
 export default function AdminSettingsPage() {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "" });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [activeSessions, setActiveSessions] = useState([]);
+
+  async function loadSessions() {
+    try { setActiveSessions((await getSessions()).sessions || []); }
+    catch { setActiveSessions([]); }
+  }
+
+  useEffect(() => { loadSessions(); }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -21,7 +29,7 @@ export default function AdminSettingsPage() {
   }
 
   async function revokeSessions() {
-    try { await logoutAll(); setMessage("All other sessions have been logged out."); }
+    try { await logoutAll(); await loadSessions(); setMessage("All other sessions have been logged out. This device remains signed in."); }
     catch (reason) { setError(reason.response?.data?.error || "Could not log out other sessions."); }
   }
 
@@ -52,6 +60,9 @@ export default function AdminSettingsPage() {
             <h2 className="text-xl font-black text-slate-950">Sessions</h2>
             <p className="mt-1 text-sm font-semibold text-slate-500">Sign out other browsers and devices.</p>
             <button type="button" onClick={revokeSessions} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700 hover:bg-rose-100"><FaSignOutAlt /> Log Out All Other Sessions</button>
+            <div className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {activeSessions.length ? activeSessions.filter((session) => !session.revoked).map((session, index) => <div key={session.id} className="flex items-center justify-between gap-4 px-4 py-3 text-xs"><div className="min-w-0"><p className="font-black text-slate-800">{index === 0 ? "Most recent session" : "Active session"}</p><p className="mt-1 truncate text-slate-500">{session.userAgent || "Unknown device"}</p></div><p className="shrink-0 font-semibold text-slate-400">{session.createdAt ? new Date(session.createdAt).toLocaleString() : "—"}</p></div>) : <p className="px-4 py-3 text-xs font-semibold text-slate-500">No active sessions found.</p>}
+            </div>
           </section>
         </div>
       </div>

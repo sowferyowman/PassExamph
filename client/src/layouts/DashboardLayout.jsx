@@ -6,7 +6,7 @@ import { getCurrentUser, logoutUser } from "../services/storage";
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: FaChartLine },
   { to: "/exam-log", label: "Exam Records", icon: FaClipboardCheck },
-  { to: "/reviewers", label: "Study Plan", icon: FaBookOpen },
+  { to: "/reviewers", label: "Learning Materials", icon: FaBookOpen },
   { to: "/weakness-drills", label: "Weakness Drills", icon: FaBrain },
   { to: "/community", label: "Community Forum", icon: FaComments },
   { to: "/settings", label: "Settings", icon: FaCog }

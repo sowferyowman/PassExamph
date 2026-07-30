@@ -18,12 +18,14 @@ import {
   addForumReply,
   createForumThread,
   getCurrentUser,
+  getFreshLeaderboard,
   getForumThreads,
   getLeaderboard,
   toggleForumReaction
 } from "../../services/storage";
 
 const POSTS_PER_PAGE = 10;
+const LEADERBOARD_PER_PAGE = 10;
 const forumCategories = ["Get Started", "Newsroom", "Share Knowledge", "Suggest an Idea", "Report an Issue"];
 
 // Extra display metadata for the category picker cards. Keys must match forumCategories exactly.
@@ -77,9 +79,17 @@ export default function CommunityForumPage() {
   const [browsingCategory, setBrowsingCategory] = useState(true);
 
   const [leaderboard, setLeaderboard] = useState(() => getLeaderboard(user?.email));
-  const currentRow = leaderboard.find((row) => row.isCurrent);
-  const topRows = leaderboard.slice(0, 5);
-  const percentile = currentRow && leaderboard.length ? Math.round(((leaderboard.length - currentRow.rank + 1) / leaderboard.length) * 100) : 0;
+  const [leaderboardPage, setLeaderboardPage] = useState(1);
+
+  const leaderboardTotalPages = Math.max(1, Math.ceil(leaderboard.length / LEADERBOARD_PER_PAGE));
+  const paginatedLeaderboard = leaderboard.slice(
+    (leaderboardPage - 1) * LEADERBOARD_PER_PAGE,
+    leaderboardPage * LEADERBOARD_PER_PAGE
+  );
+
+  useEffect(() => {
+    if (leaderboardPage > leaderboardTotalPages) setLeaderboardPage(leaderboardTotalPages);
+  }, [leaderboardPage, leaderboardTotalPages]);
 
   const subjectTags = useMemo(() => [...new Set([...forumCategories, ...threads.map((thread) => thread.tag).filter(Boolean)])], [threads]);
   const filteredThreads = useMemo(() => {
@@ -100,15 +110,23 @@ export default function CommunityForumPage() {
   }, [page, totalPages]);
 
   useEffect(() => {
-    function refreshCommunityData() {
+    let cancelled = false;
+    async function refreshCommunityData() {
       setThreads(getForumThreads());
-      setLeaderboard(getLeaderboard(user?.email));
+      try {
+        const freshLeaderboard = await getFreshLeaderboard(user?.email);
+        if (!cancelled) setLeaderboard(freshLeaderboard);
+      } catch (_error) {
+        // Preserve the local/offline fallback if the server is unavailable.
+        if (!cancelled) setLeaderboard(getLeaderboard(user?.email));
+      }
     }
 
     refreshCommunityData();
     window.addEventListener("forumPostsUpdated", refreshCommunityData);
     window.addEventListener("storage", refreshCommunityData);
     return () => {
+      cancelled = true;
       window.removeEventListener("forumPostsUpdated", refreshCommunityData);
       window.removeEventListener("storage", refreshCommunityData);
     };
@@ -296,23 +314,44 @@ export default function CommunityForumPage() {
             </main>
 
             <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-              {topRows.length > 1 ? <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-wider text-amber-700">Global Standings</p>
-                <h2 className="mt-1 text-xl font-black text-slate-950">Top 5 Scholar Scorers</h2>
-                <div className="mt-5 space-y-2.5">{topRows.map((row) => <LeaderboardRow key={row.email} row={row} />)}</div>
-              </section> : <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-amber-700">Community Progress</p><h2 className="mt-1 text-xl font-black text-slate-950">Standings unlock as classmates join.</h2><p className="mt-3 text-sm font-semibold leading-6 text-slate-500">Complete exams, contribute helpful posts, and invite your study group to build a meaningful leaderboard.</p></section>}
-              <section className="rounded-2xl border border-stone-200 bg-amber-50 p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-wider text-amber-700">Your Placement</p>
-                <p className="mt-3 text-5xl font-black text-slate-950">{percentile}%</p>
-                <p className="mt-1.5 text-xs font-semibold text-slate-500">Estimated standing relative to local student points.</p>
-                {currentRow && (
-                  <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
-                    <p className="text-xs font-black uppercase tracking-wider text-amber-700">Rank #{currentRow.rank}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-800">{currentRow.totalPoints.toLocaleString()} reward points</p>
-                    <p className="text-[10px] text-slate-400">Latest diagnostic: {currentRow.latestScore}%</p>
+              {leaderboard.length > 1 ? (
+                <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-wider text-amber-700">Global Standings</p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">All Students by Points</h2>
+                  <div className="mt-5 space-y-2.5">
+                    {paginatedLeaderboard.map((row) => <LeaderboardRow key={row.email} row={row} />)}
                   </div>
-                )}
-              </section>
+                  {leaderboardTotalPages > 1 && (
+                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-stone-100 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setLeaderboardPage((current) => Math.max(1, current - 1))}
+                        disabled={leaderboardPage === 1}
+                        className="rounded-lg border border-stone-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        Page {leaderboardPage} of {leaderboardTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLeaderboardPage((current) => Math.min(leaderboardTotalPages, current + 1))}
+                        disabled={leaderboardPage === leaderboardTotalPages}
+                        className="rounded-lg border border-stone-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </section>
+              ) : (
+                <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-wider text-amber-700">Community Progress</p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">Standings unlock as classmates join.</h2>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">Complete exams, contribute helpful posts, and invite your study group to build a meaningful leaderboard.</p>
+                </section>
+              )}
             </aside>
           </div>
         )}
@@ -366,7 +405,7 @@ function LeaderboardRow({ row }) {
     <div className={`grid grid-cols-[3rem_1fr_4rem] items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold ${row.isCurrent ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "bg-stone-50 text-slate-500"}`}>
       <span className={row.rank === 1 ? "flex items-center gap-1 text-amber-500" : "text-slate-400"}>{row.rank === 1 ? <FaTrophy /> : `#${row.rank}`}</span>
       <span className="truncate font-bold">{row.isCurrent ? `You (${row.name})` : row.name}</span>
-      <span className="text-right font-black">{row.latestScore}%</span>
+      <span className="text-right font-black">{row.totalPoints.toLocaleString()} pts</span>
     </div>
   );
 }

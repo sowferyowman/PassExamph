@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentUser, getStudentDashboard, hydrateDashboardStoreFromServer } from "../services/storage";
+import { getCurrentUser, getFreshLeaderboard, getStudentDashboard, hydrateDashboardStoreFromServer } from "../services/storage";
 
 export function useDashboardData() {
   const [data, setData] = useState(null);
@@ -21,6 +21,17 @@ export function useDashboardData() {
         // This makes admin essay approvals visible without a logout/login cycle.
         await hydrateDashboardStoreFromServer().catch(() => false);
         const dashboard = getStudentDashboard(user?.email);
+        // The dashboard's placement is global, so do not derive it from the
+        // incomplete local copies of other students' dashboards.
+        const leaderboard = await getFreshLeaderboard(user?.email).catch(() => null);
+        const currentRow = leaderboard?.find((row) => row.isCurrent);
+        if (currentRow) {
+          dashboard.stats = (dashboard.stats || []).map((stat) => stat.label === "Leaderboard Placement" ? {
+            ...stat,
+            value: `#${currentRow.rank}`,
+            detail: `Rank #${currentRow.rank} on the leaderboard`
+          } : stat);
+        }
         if (mounted) {
           setData(dashboard);
         }
