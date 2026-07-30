@@ -1,7 +1,7 @@
 import http from "./http";
 
 export const register = (payload) => http.post("/auth/register", payload).then((response) => response.data);
-export const login = (identifier, password) => http.post("/auth/login", { identifier, password }).then((response) => response.data);
+export const login = (identifier, password, rememberMe = false) => http.post("/auth/login", { identifier, password, rememberMe }).then((response) => response.data);
 export const logout = () => http.post("/auth/logout").then((response) => response.data);
 export const forgotPassword = (email) => http.post("/auth/forgot-password", { email }).then((response) => response.data);
 export const me = () => http.get("/auth/me").then((response) => response.data);

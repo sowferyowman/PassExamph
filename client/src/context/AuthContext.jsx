@@ -17,8 +17,8 @@ export function AuthProvider({ children }) {
   const value = useMemo(() => ({
     user,
     loading,
-    login: async (identifier, password) => {
-      const result = await loginRequest(identifier, password);
+    login: async (identifier, password, rememberMe = false) => {
+      const result = await loginRequest(identifier, password, rememberMe);
       setUser(result.user);
       setAuthenticatedUser(result.user);
       return result.user;

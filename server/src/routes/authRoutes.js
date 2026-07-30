@@ -13,14 +13,28 @@ function rateLimit(req, res, next) {
   next();
 }
 
-function cookieOptions(maxAge) { return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge, path: "/" }; }
-function setSessionCookies(res, session) { const options = cookieOptions(15 * 60 * 1000); if (typeof res.cookie === "function") { res.cookie("accessToken", session.accessToken, options); res.cookie("refreshToken", session.refreshToken, { ...options, maxAge: 7 * 24 * 60 * 60 * 1000 }); } else res.setHeader("Set-Cookie", [`accessToken=${encodeURIComponent(session.accessToken)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=900`, `refreshToken=${encodeURIComponent(session.refreshToken)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`]); }
-function clearCookies(res) { if (typeof res.clearCookie === "function") { res.clearCookie("accessToken", { httpOnly: true, sameSite: "lax", path: "/" }); res.clearCookie("refreshToken", { httpOnly: true, sameSite: "lax", path: "/" }); } else res.setHeader("Set-Cookie", ["accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0", "refreshToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"]); }
+function cookieOptions(maxAge) { return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", ...(maxAge ? { maxAge } : {}), path: "/" }; }
+function setSessionCookies(res, session, rememberMe = true) {
+  const accessOptions = cookieOptions(rememberMe ? 15 * 60 * 1000 : undefined);
+  const refreshOptions = cookieOptions(rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined);
+  if (typeof res.cookie === "function") {
+    res.cookie("accessToken", session.accessToken, accessOptions);
+    res.cookie("refreshToken", session.refreshToken, refreshOptions);
+    if (rememberMe) res.cookie("rememberMe", "1", cookieOptions(7 * 24 * 60 * 60 * 1000));
+    else res.clearCookie("rememberMe", cookieOptions());
+  } else {
+    const persistent = rememberMe ? "; Max-Age=900" : "";
+    const persistentRefresh = rememberMe ? "; Max-Age=604800" : "";
+    const preference = rememberMe ? "rememberMe=1; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800" : "rememberMe=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0";
+    res.setHeader("Set-Cookie", [`accessToken=${encodeURIComponent(session.accessToken)}; HttpOnly; SameSite=Lax; Path=/${persistent}`, `refreshToken=${encodeURIComponent(session.refreshToken)}; HttpOnly; SameSite=Lax; Path=/${persistentRefresh}`, preference]);
+  }
+}
+function clearCookies(res) { if (typeof res.clearCookie === "function") { res.clearCookie("accessToken", { httpOnly: true, sameSite: "lax", path: "/" }); res.clearCookie("refreshToken", { httpOnly: true, sameSite: "lax", path: "/" }); res.clearCookie("rememberMe", { httpOnly: true, sameSite: "lax", path: "/" }); } else res.setHeader("Set-Cookie", ["accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0", "refreshToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0", "rememberMe=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"]); }
 function error(res, value) { return res.status(value.status || 400).json({ error: value.message }); }
 
 router.post("/register", async (req, res) => { try { const { email, username, password, name } = req.body || {}; if (!email || !username || !password || password.length < 8) return res.status(400).json({ error: "Email, username, and a password of at least 8 characters are required." }); const result = await auth.register({ email: email.trim(), username: username.trim(), password, name: String(name || username).trim() }, req); setSessionCookies(res, result); res.status(201).json({ user: result.user, verificationToken: process.env.NODE_ENV === "production" ? undefined : result.verificationToken, message: "Account created. Verify your email to activate it." }); } catch (e) { error(res, e); } });
-router.post("/login", rateLimit, async (req, res) => { try { const result = await auth.login(String(req.body?.identifier || req.body?.email || "").trim(), String(req.body?.password || ""), req); loginAttempts.delete(req.loginRateLimitKey); setSessionCookies(res, result); res.json({ user: result.user }); } catch (e) { error(res, e); } });
-router.post("/refresh", async (req, res) => { try { const result = await auth.refresh(parseCookies(req).refreshToken, req); setSessionCookies(res, result); res.json({ user: result.user }); } catch (e) { error(res, e); } });
+router.post("/login", rateLimit, async (req, res) => { try { const result = await auth.login(String(req.body?.identifier || req.body?.email || "").trim(), String(req.body?.password || ""), req); loginAttempts.delete(req.loginRateLimitKey); setSessionCookies(res, result, Boolean(req.body?.rememberMe)); res.json({ user: result.user }); } catch (e) { error(res, e); } });
+router.post("/refresh", async (req, res) => { try { const result = await auth.refresh(parseCookies(req).refreshToken, req); setSessionCookies(res, result, parseCookies(req).rememberMe === "1"); res.json({ user: result.user }); } catch (e) { error(res, e); } });
 router.post("/logout", authenticate, (req, res) => { auth.revoke(req.auth.sid); clearCookies(res); res.json({ ok: true }); });
 router.post("/logout-all", authenticate, (req, res) => { auth.revokeAllExcept(req.user.id, req.auth.sid); res.json({ ok: true }); });
 router.get("/me", authenticate, (req, res) => res.json({ user: auth.publicUser(req.user) }));

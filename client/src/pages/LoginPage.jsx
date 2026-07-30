@@ -25,7 +25,7 @@ export default function LoginPage() {
     event.preventDefault();
     setMessage("");
     try {
-      const user = await login(signInForm.email.trim(), signInForm.password);
+      const user = await login(signInForm.email.trim(), signInForm.password, rememberMe);
       const restoredDashboard = await hydrateDashboardStoreFromServer().catch(() => false);
       if (!restoredDashboard) await migrateLocalStorageToServer().catch(() => {});
       routeAfterAuth(user);
