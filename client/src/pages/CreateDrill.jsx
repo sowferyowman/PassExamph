@@ -246,10 +246,431 @@ export default function CreateDrill() {
   }
 
   function renderAnswerWorkspace() {
-    if (usesOptions(form.questionType)) return <div className="mt-4"><div className="mb-3 flex items-center justify-between"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Options <span className="text-rose-500">*</span></span><button type="button" onClick={addOption} className="inline-flex items-center gap-1 rounded bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100"><FaPlus /> Add Option</button></div><div className="space-y-2">{form.choiceOpts.map((option, index) => { const selected = form.questionType === "multiple_choice" ? form.answerIdx === index : form.correctAnswers.includes(index); return <div key={index} className="flex items-center gap-2"><span className="w-8 text-center text-sm font-bold text-slate-500">{getOptionLabel(index)}</span><input value={option} onChange={(event) => updateOption(index, event.target.value)} className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder={`Option ${getOptionLabel(index)}`} /><button type="button" onClick={() => form.questionType === "multiple_choice" ? setForm((current) => ({ ...current, answerIdx: index })) : setForm((current) => ({ ...current, correctAnswers: current.correctAnswers.includes(index) ? current.correctAnswers.filter((answer) => answer !== index) : [...current.correctAnswers, index].sort((a, b) => a - b) }))} className={`rounded px-3 py-1.5 text-xs font-bold ${selected ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>{selected ? "Correct" : "Set Correct"}</button>{form.choiceOpts.length > 2 && <button type="button" onClick={() => removeOption(index)} className="p-1 text-rose-500 hover:text-rose-700"><FaTrash /></button>}</div>; })}</div></div>;
-    if (form.questionType === "short_answer") return <label className="mt-4 block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Answer Key <span className="text-rose-500">*</span></span><input value={form.correctText} onChange={(event) => setForm((current) => ({ ...current, correctText: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Enter the correct answer" /></label>;
-    return <label className="mt-4 block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Sample Answer / Rubric <span className="text-rose-500">*</span></span><textarea value={form.gradingPlaceholder} onChange={(event) => setForm((current) => ({ ...current, gradingPlaceholder: event.target.value }))} className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Describe the key points the AI should look for..." /></label>;
+    if (usesOptions(form.questionType)) {
+      return (
+        <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-600">
+              Answer Options <span className="text-rose-500">*</span>
+              <span className="ml-2 text-xs font-normal text-slate-400">
+                ({form.choiceOpts.length} options)
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={addOption}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition"
+            >
+              <FaPlus className="text-xs" /> Add Option
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            {form.choiceOpts.map((option, index) => {
+              const selected = form.questionType === "multiple_choice" 
+                ? form.answerIdx === index 
+                : form.correctAnswers.includes(index);
+              
+              return (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="w-8 text-center text-sm font-bold text-slate-500">
+                    {getOptionLabel(index)}
+                  </span>
+                  <input
+                    value={option}
+                    onChange={(event) => updateOption(index, event.target.value)}
+                    className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    placeholder={`Option ${getOptionLabel(index)}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => form.questionType === "multiple_choice" 
+                      ? setForm((current) => ({ ...current, answerIdx: index }))
+                      : setForm((current) => ({ 
+                          ...current, 
+                          correctAnswers: current.correctAnswers.includes(index) 
+                            ? current.correctAnswers.filter((answer) => answer !== index) 
+                            : [...current.correctAnswers, index].sort((a, b) => a - b) 
+                        }))
+                    }
+                    className={`rounded px-3 py-1.5 text-xs font-bold ${
+                      selected ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    }`}
+                  >
+                    {selected ? "Correct" : "Set Correct"}
+                  </button>
+                  {form.choiceOpts.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => removeOption(index)}
+                      className="p-1 text-rose-500 hover:text-rose-700"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {form.questionType === "checkboxes" && (
+            <div className="mt-3 text-xs font-semibold text-slate-500">
+              Selected correct options: {form.correctAnswers.length > 0 
+                ? form.correctAnswers.map(idx => getOptionLabel(idx)).join(', ') 
+                : 'None selected'}
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    if (form.questionType === "short_answer") {
+      return (
+        <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <label className="block">
+            <span className="text-xs font-bold text-slate-600">Answer Key <span className="text-rose-500">*</span></span>
+            <input
+              value={form.correctText}
+              onChange={(event) => setForm((current) => ({ ...current, correctText: event.target.value }))}
+              className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              placeholder="Enter the correct answer"
+            />
+          </label>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+        <label className="block">
+          <span className="text-xs font-bold text-slate-600">Sample Answer / Rubric <span className="text-rose-500">*</span></span>
+          <textarea
+            value={form.gradingPlaceholder}
+            onChange={(event) => setForm((current) => ({ ...current, gradingPlaceholder: event.target.value }))}
+            className="mt-1.5 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            placeholder="Describe the key points the AI should look for..."
+          />
+        </label>
+      </div>
+    );
   }
 
-  return <main className="flex h-screen overflow-hidden bg-slate-100"><AdminSidebar active="drill" /><div className="flex-1 overflow-y-auto"><header className="border-b border-slate-200 bg-white px-6 py-4"><div className="mx-auto max-w-[1800px]"><p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Workspace</p><h1 className="text-2xl font-black text-slate-950">{editingId ? "Edit Drill" : "Create Drill"}</h1><p className="mt-1 text-sm font-semibold text-slate-500">Create, import, publish, and manage targeted remediation drills.</p></div></header><div className="mx-auto grid max-w-[1800px] gap-6 p-6 lg:grid-cols-[1fr_24rem]"><section className="min-w-0 space-y-5">{editingId && <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-700">Editing this published drill. Save to update it.<button onClick={() => { setEditingId(null); setForm(emptyForm); }} className="inline-flex items-center gap-2 font-black"><FaTimes /> Cancel</button></div>}<div className="glass-card p-6"><label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Drill Title <span className="text-rose-500">*</span></span><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-black text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Drill Title" /></label><label className="mt-5 block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text <span className="text-rose-500">*</span></span><TinyMCEEditor value={form.stem} onChange={(value) => setForm((current) => ({ ...current, stem: value }))} placeholder="Write the drill question here..." /></label></div><div className="glass-card p-6"><label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Type</span><select value={form.questionType} onChange={(event) => updateQuestionType(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"><option value="multiple_choice">Multiple Choice</option><option value="checkboxes">Checkbox</option><option value="short_answer">Short Answer</option><option value="paragraph">Long Paragraph</option></select></label>{renderAnswerWorkspace()}<label className="mt-4 block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Points</span><input type="number" min="1" value={form.points} onChange={(event) => setForm((current) => ({ ...current, points: event.target.value }))} className="mt-2 w-32 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label></div><div className="glass-card p-6"><p className="text-xs font-black uppercase tracking-wider text-slate-500">AI Classification Metadata</p><div className="mt-4 grid gap-4 md:grid-cols-3">{[["Subject Category", "subjectTitle"], ["Sub-Category", "diagnosticSubcategory"], ["Skill Tag", "diagnosticSkillTag"]].map(([label, key]) => <label key={key} className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">{label} <span className="text-rose-500">*</span></span><input value={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>)}</div><label className="mt-4 block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Explanation <span className="text-slate-400">(optional)</span></span><textarea value={form.explanation} onChange={(event) => setForm((current) => ({ ...current, explanation: event.target.value }))} className="mt-2 min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Explain why the answer is correct." /></label></div><div className="glass-card p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Bulk Import Questions (CSV)</p><p className="mt-1 text-xs font-semibold text-slate-400">Upload and publish many drill questions at once. Each row needs a title, question, category, sub-category, and skill tag.</p></div><div className="flex gap-2"><button type="button" onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50"><FaDownload /> Template</button><label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-blue-800"><FaFileImport /> Upload CSV<input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="hidden" /></label></div></div><details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-500"><summary className="cursor-pointer font-black uppercase tracking-wider text-slate-600">CSV column format</summary><p className="mt-3">Required: <b>drill_title, subject_category, question_type, question_text, diagnostic_subcategory, diagnostic_skill_tag</b>. Use <b>option_a</b>–<b>option_f</b> and <b>correct_answer</b> for choice questions; use <b>correct_text</b> for short answer or <b>rubric</b> for long paragraph. <b>points</b>, explanation, and image URL are optional.</p></details>{csvImportResult && <div className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${csvImportResult.importedCount ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}><div className="flex items-center gap-2">{csvImportResult.importedCount ? <FaCheckCircle /> : <FaExclamationTriangle />}{csvImportResult.importedCount ? `Imported ${csvImportResult.importedCount} drill question(s).` : "No questions were imported."}</div>{csvImportResult.errors.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-rose-600">{csvImportResult.errors.slice(0, 8).map((error, index) => <li key={index}>{error}</li>)}</ul>}</div>}</div><div className="flex flex-wrap gap-3"><button onClick={publishDrill} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-black text-white hover:bg-blue-800"><FaSave /> {editingId ? "Update Drill" : "Publish Drill"}</button></div>{message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">{message}</p>}</section><aside className="min-w-0 space-y-5"><div className="glass-card p-5"><div className="mb-4 inline-flex rounded-lg bg-blue-50 p-3 text-blue-700"><FaBolt /></div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Drills</p><p className="mt-3 text-3xl font-black text-slate-950">{drillBank.length}</p><p className="text-sm font-semibold text-slate-500">Available for weakness practice</p></div><div className="glass-card p-5"><div className="mb-4 flex items-center justify-between"><p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Drill Items</p><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{drillBank.length}</span></div><div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">{drillBank.length ? drillBank.map((question) => <div key={question.id} className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-md"><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="break-words text-base font-black leading-tight text-slate-900">{question.title || "Untitled Drill"}</p><p className="mt-1 break-words text-xs font-semibold text-slate-500">{stripHtml(question.stem || question.questionHtml) || "No question text"}</p><div className="mt-2 flex flex-wrap gap-1"><span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{question.questionType || question.type}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{question.points || 1} pt{Number(question.points || 1) === 1 ? "" : "s"}</span></div><p className="mt-2 break-words text-xs font-semibold text-slate-500">{question.subjectTitle || question.category} · {question.diagnosticSubcategory || question.subCategory} · {question.diagnosticSkillTag || question.weaknessTag}</p></div><div className="relative shrink-0"><button type="button" onClick={() => setOpenMenuId((current) => current === question.id ? null : question.id)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label={`Actions for ${question.title || "drill"}`}><FaEllipsisV /></button>{openMenuId === question.id && <div className="absolute right-0 top-10 z-20 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"><button onClick={() => editDrill(question)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"><FaEdit /> Edit</button><button onClick={() => { setDeleteTarget(question); setOpenMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50"><FaTrash /> Delete</button></div>}</div></div></div>) : <p className="py-6 text-center text-sm text-slate-500">No published drills yet.</p>}</div></div></aside></div></div>{deleteTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"><div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="border-b border-rose-100 bg-rose-50 px-6 py-4"><h3 className="text-lg font-bold text-slate-900">Delete Drill</h3></div><div className="px-6 py-5"><p className="text-sm text-slate-600">Delete <span className="font-bold text-slate-900">{deleteTarget.title || "this drill"}</span>? This cannot be undone.</p></div><div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4"><button onClick={() => setDeleteTarget(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={confirmDeleteDrill} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Delete</button></div></div></div>}</main>;
+  return (
+    <main className="flex h-screen overflow-hidden bg-slate-100">
+      <AdminSidebar active="drill" />
+      
+      <div className="flex-1 overflow-y-auto">
+        <header className="border-b border-slate-200 bg-white px-6 py-4">
+          <div className="mx-auto max-w-[1800px]">
+            <p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Workspace</p>
+            <h1 className="text-2xl font-black text-slate-950">
+              {editingId ? "Edit Drill" : "Create Drill"}
+            </h1>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              Create, import, publish, and manage targeted remediation drills.
+            </p>
+          </div>
+        </header>
+        
+        <div className="mx-auto grid max-w-[1800px] gap-6 p-6 lg:grid-cols-[1fr_24rem]">
+          <section className="min-w-0 space-y-5">
+            {editingId && (
+              <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-700">
+                Editing this published drill. Save to update it.
+                <button 
+                  onClick={() => { setEditingId(null); setForm(emptyForm); }} 
+                  className="inline-flex items-center gap-2 font-black"
+                >
+                  <FaTimes /> Cancel
+                </button>
+              </div>
+            )}
+            
+            {/* ============================================
+                DRILL INFORMATION - GROUPED TOGETHER
+                ============================================ */}
+            <div className="glass-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Drill Information</h2>
+              </div>
+              
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Drill Title <span className="text-rose-500">*</span></span>
+                  <input
+                    value={form.title}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    placeholder="Enter drill title"
+                  />
+                </label>
+                
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Question Text <span className="text-rose-500">*</span></span>
+                  <div className="mt-1.5">
+                    <TinyMCEEditor
+                      value={form.stem}
+                      onChange={(value) => setForm((current) => ({ ...current, stem: value }))}
+                      placeholder="Write the drill question here..."
+                    />
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* ============================================
+                QUESTION CONFIGURATION
+                ============================================ */}
+            <div className="glass-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Question Configuration</h2>
+              </div>
+              
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Question Type</span>
+                  <select
+                    value={form.questionType}
+                    onChange={(event) => updateQuestionType(event.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  >
+                    <option value="multiple_choice">Multiple Choice</option>
+                    <option value="checkboxes">Checkbox</option>
+                    <option value="short_answer">Short Answer</option>
+                    <option value="paragraph">Long Paragraph</option>
+                  </select>
+                </label>
+
+                {renderAnswerWorkspace()}
+
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Points</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.points}
+                    onChange={(event) => setForm((current) => ({ ...current, points: event.target.value }))}
+                    className="mt-1.5 w-32 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* ============================================
+                DIAGNOSTIC METADATA - PROPERLY GROUPED
+                ============================================ */}
+            <div className="glass-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 bg-indigo-500 rounded-full"></div>
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">AI Classification Metadata</h2>
+                <span className="text-xs text-indigo-400 font-medium">(required for AI grading)</span>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  {[
+                    ["Subject Category", "subjectTitle"],
+                    ["Sub-Category", "diagnosticSubcategory"],
+                    ["Skill Tag", "diagnosticSkillTag"]
+                  ].map(([label, key]) => (
+                    <label key={key} className="block">
+                      <span className="text-xs font-bold text-slate-600">{label} <span className="text-rose-500">*</span></span>
+                      <input
+                        value={form[key]}
+                        onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                        className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        placeholder={`Enter ${label.toLowerCase()}`}
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Explanation <span className="text-slate-400">(optional)</span></span>
+                  <textarea
+                    value={form.explanation}
+                    onChange={(event) => setForm((current) => ({ ...current, explanation: event.target.value }))}
+                    className="mt-1.5 min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    placeholder="Explain why the answer is correct (shown to students after answering)."
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* ============================================
+                CSV BULK IMPORT
+                ============================================ */}
+            <div className="glass-card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Bulk Import Questions</h2>
+              </div>
+              
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Upload and publish many drill questions at once. Each row needs a title, question, category, sub-category, and skill tag.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={downloadTemplate}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 transition"
+                  >
+                    <FaDownload /> Template
+                  </button>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-800 transition">
+                    <FaFileImport /> Upload CSV
+                    <input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-medium text-slate-500">
+                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-slate-600">CSV column format</summary>
+                <div className="mt-3 space-y-1.5">
+                  <p><span className="font-bold text-slate-700">Required columns:</span> drill_title, subject_category, question_type, question_text, diagnostic_subcategory, diagnostic_skill_tag</p>
+                  <p><span className="font-bold text-slate-700">For choice questions:</span> option_a through option_f, correct_answer (letter or letters separated by ;)</p>
+                  <p><span className="font-bold text-slate-700">For short answer:</span> correct_text</p>
+                  <p><span className="font-bold text-slate-700">For paragraph:</span> rubric</p>
+                  <p><span className="font-bold text-slate-700">Optional:</span> points, explanation, question_image_url</p>
+                </div>
+              </details>
+
+              {csvImportResult && (
+                <div className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${
+                  csvImportResult.importedCount ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {csvImportResult.importedCount ? <FaCheckCircle /> : <FaExclamationTriangle />}
+                    {csvImportResult.importedCount 
+                      ? `Imported ${csvImportResult.importedCount} drill question(s).` 
+                      : "No questions were imported."}
+                  </div>
+                  {csvImportResult.errors.length > 0 && (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-rose-600">
+                      {csvImportResult.errors.slice(0, 8).map((error, index) => <li key={index}>{error}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3">
+              <button onClick={publishDrill} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
+                <FaSave /> {editingId ? "Update Drill" : "Publish Drill"}
+              </button>
+            </div>
+            
+            {message && (
+              <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">{message}</p>
+            )}
+          </section>
+
+          {/* Sidebar - Published Drills */}
+          <aside className="min-w-0 space-y-5">
+            <div className="glass-card p-5">
+              <div className="mb-4 inline-flex rounded-lg bg-blue-50 p-3 text-blue-700">
+                <FaBolt />
+              </div>
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Drills</p>
+              <p className="mt-3 text-3xl font-black text-slate-950">{drillBank.length}</p>
+              <p className="text-sm font-semibold text-slate-500">Available for weakness practice</p>
+            </div>
+
+            <div className="glass-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Drill Items</p>
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{drillBank.length}</span>
+              </div>
+              
+              <div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">
+                {drillBank.length ? drillBank.map((question) => (
+                  <div key={question.id} className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-md">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-base font-black leading-tight text-slate-900">
+                          {question.title || "Untitled Drill"}
+                        </p>
+                        <p className="mt-1 break-words text-xs font-semibold text-slate-500">
+                          {stripHtml(question.stem || question.questionHtml) || "No question text"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                            {question.questionType || question.type}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            {question.points || 1} pt{Number(question.points || 1) === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <p className="mt-2 break-words text-xs font-semibold text-slate-500">
+                          {question.subjectTitle || question.category} · {question.diagnosticSubcategory || question.subCategory} · {question.diagnosticSkillTag || question.weaknessTag}
+                        </p>
+                      </div>
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setOpenMenuId((current) => current === question.id ? null : question.id)}
+                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                          aria-label={`Actions for ${question.title || "drill"}`}
+                        >
+                          <FaEllipsisV />
+                        </button>
+                        {openMenuId === question.id && (
+                          <div className="absolute right-0 top-10 z-20 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                            <button
+                              onClick={() => editDrill(question)}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              <FaEdit /> Edit
+                            </button>
+                            <button
+                              onClick={() => { setDeleteTarget(question); setOpenMenuId(null); }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50"
+                            >
+                              <FaTrash /> Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <p className="py-6 text-center text-sm text-slate-500">No published drills yet.</p>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
+              <h3 className="text-lg font-bold text-slate-900">Delete Drill</h3>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-slate-600">
+                Delete <span className="font-bold text-slate-900">{deleteTarget.title || "this drill"}</span>? This cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+              <button onClick={() => setDeleteTarget(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button onClick={confirmDeleteDrill} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
 }

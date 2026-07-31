@@ -1082,48 +1082,70 @@ export default function CreateExamPage() {
   );
 
   // ============================================
-  // RENDER FUNCTIONS
+  // RENDER FUNCTIONS - REORGANIZED
   // ============================================
 
   function renderExamBuilder() {
     return (
       <>
+        {/* ============================================
+            EXAM INFORMATION - GROUPED TOGETHER
+            ============================================ */}
         <div className="glass-card p-6">
-          <label className="block">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Exam Title <span className="text-rose-500">*</span></span>
-            <input
-              value={examForm.title}
-              onChange={(event) => setExamForm((current) => ({ ...current, title: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-black text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="Exam title"
-            />
-          </label>
-          <label className="block mt-4">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Description <span className="text-slate-400">(optional)</span></span>
-            <input
-              value={examForm.description || ""}
-              onChange={(event) => setExamForm((current) => ({ ...current, description: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="Description (optional)"
-            />
-          </label>
-          <label className="block mt-4">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Passing Score (%) <span className="text-rose-500">*</span></span>
-            <p className="mt-1 text-xs font-semibold text-slate-400">Students at or above this score will receive a Pass result.</p>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={examForm.passingScore ?? 75}
-              onChange={(event) => setExamForm((current) => ({ ...current, passingScore: Number(event.target.value) }))}
-              className="mt-2 w-40 rounded-lg border border-slate-200 px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-            />
-          </label>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Exam Information</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <label className="block">
+              <span className="text-xs font-bold text-slate-600">Exam Title <span className="text-rose-500">*</span></span>
+              <input
+                value={examForm.title}
+                onChange={(event) => setExamForm((current) => ({ ...current, title: event.target.value }))}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="Enter exam title"
+              />
+            </label>
+            
+            <label className="block">
+              <span className="text-xs font-bold text-slate-600">Description <span className="text-slate-400">(optional)</span></span>
+              <input
+                value={examForm.description || ""}
+                onChange={(event) => setExamForm((current) => ({ ...current, description: event.target.value }))}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="Add a brief description"
+              />
+            </label>
+            
+            <label className="block">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">Passing Score <span className="text-rose-500">*</span></span>
+                <span className="text-xs text-slate-400 font-medium">(0-100%)</span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-400">Students at or above this score will receive a Pass result.</p>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={examForm.passingScore ?? 75}
+                onChange={(event) => setExamForm((current) => ({ ...current, passingScore: Number(event.target.value) }))}
+                className="mt-1.5 w-36 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              />
+            </label>
+          </div>
         </div>
 
+        {/* ============================================
+            ACCESS CONTROL - CLEANER LAYOUT
+            ============================================ */}
         <div className="glass-card p-6">
-          <p className="text-xs font-black uppercase tracking-wider text-slate-500">Student Access Control</p>
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Student Access Control</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => setExamForm((current) => ({ ...current, accessType: "once", maxAttempts: 1 }))}
@@ -1133,12 +1155,13 @@ export default function CreateExamPage() {
                   : "border-slate-200 hover:border-slate-300 text-slate-600"
               }`}
             >
-              <FaLock className="text-lg" />
+              <FaLock className="text-lg flex-shrink-0" />
               <div className="text-left">
                 <p className="font-bold text-sm">One Attempt</p>
-                <p className="text-xs text-slate-500">Student can take once</p>
+                <p className="text-xs text-slate-500">Take once</p>
               </div>
             </button>
+            
             <button
               type="button"
               onClick={() => setExamForm((current) => ({ ...current, accessType: "limited", maxAttempts: current.maxAttempts || 3 }))}
@@ -1148,12 +1171,13 @@ export default function CreateExamPage() {
                   : "border-slate-200 hover:border-slate-300 text-slate-600"
               }`}
             >
-              <FaUsers className="text-lg" />
+              <FaUsers className="text-lg flex-shrink-0" />
               <div className="text-left">
                 <p className="font-bold text-sm">Limited Attempts</p>
                 <p className="text-xs text-slate-500">Set max attempts</p>
               </div>
             </button>
+            
             <button
               type="button"
               onClick={() => setExamForm((current) => ({ ...current, accessType: "unlimited", maxAttempts: 999 }))}
@@ -1163,37 +1187,46 @@ export default function CreateExamPage() {
                   : "border-slate-200 hover:border-slate-300 text-slate-600"
               }`}
             >
-              <FaUnlock className="text-lg" />
+              <FaUnlock className="text-lg flex-shrink-0" />
               <div className="text-left">
                 <p className="font-bold text-sm">Unlimited</p>
                 <p className="text-xs text-slate-500">No restrictions</p>
               </div>
             </button>
           </div>
+          
           {examForm.accessType === "limited" && (
-            <div className="mt-3">
-              <label className="block">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Max Attempts</span>
+            <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <label className="flex items-center gap-4">
+                <span className="text-xs font-bold text-slate-600">Maximum Attempts</span>
                 <input
                   type="number"
                   min="1"
                   max="10"
                   value={examForm.maxAttempts || 3}
                   onChange={(event) => setExamForm((current) => ({ ...current, maxAttempts: Number(event.target.value) }))}
-                  className="mt-2 w-32 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className="w-24 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                 />
+                <span className="text-xs text-slate-400">(1-10 attempts)</span>
               </label>
             </div>
           )}
         </div>
 
+        {/* ============================================
+            CSV BULK IMPORT
+            ============================================ */}
         <div className="glass-card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Bulk Import Questions</h2>
+          </div>
+          
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Bulk Import Questions (CSV)</p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">
+              <p className="text-xs font-medium text-slate-500">
                 Upload a CSV with many questions at once instead of adding them one by one. Rows are grouped into subjects by the
-                <span className="font-black text-slate-500"> subject_category</span> column — matching an existing subject name adds
+                <span className="font-bold text-slate-700"> subject_category</span> column — matching an existing subject name adds
                 to it, a new name creates a new subject.
               </p>
             </div>
@@ -1201,31 +1234,31 @@ export default function CreateExamPage() {
               <button
                 type="button"
                 onClick={downloadCsvTemplate}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50 transition whitespace-nowrap"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 transition whitespace-nowrap"
               >
                 <FaDownload /> Download Template
               </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-blue-800 transition whitespace-nowrap">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-800 transition whitespace-nowrap">
                 <FaFileImport /> Upload CSV
                 <input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="hidden" />
               </label>
             </div>
           </div>
 
-          <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-500">
-            <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-slate-600">CSV column format</summary>
-            <div className="mt-3 space-y-1.5">
-              <p><span className="font-black text-slate-700">subject_category</span> — subject/section name for this question</p>
-              <p><span className="font-black text-slate-700">time_minutes</span> — allotted time for the subject (only needs to be set once per subject)</p>
-              <p><span className="font-black text-slate-700">question_type</span> — one of: multiple_choice, checkboxes, short_answer, paragraph</p>
-              <p><span className="font-black text-slate-700">question_text</span> — the question itself</p>
-              <p><span className="font-black text-slate-700">question_image_url</span> — optional link to an image hosted online (Drive, Imgur, your own server, etc.) shown under the question. CSV can't embed actual picture files, only links.</p>
-              <p><span className="font-black text-slate-700">option_a</span> to <span className="font-black text-slate-700">option_f</span> — choices for multiple_choice / checkboxes</p>
-              <p><span className="font-black text-slate-700">correct_answer</span> — letter (C) for multiple_choice, or letters separated by ; for checkboxes (A;C)</p>
-              <p><span className="font-black text-slate-700">correct_text</span> — answer key for short_answer questions</p>
-              <p><span className="font-black text-slate-700">rubric</span> — grading notes for paragraph questions (optional)</p>
-              <p><span className="font-black text-slate-700">points</span> — point value (defaults to 1 if blank)</p>
-              <p><span className="font-black text-slate-700">diagnostic_subcategory</span> / <span className="font-black text-slate-700">diagnostic_skill_tag</span> — optional tags</p>
+          <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-medium text-slate-500">
+            <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-slate-600">CSV column format</summary>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              <p><span className="font-bold text-slate-700">subject_category</span> — subject/section name</p>
+              <p><span className="font-bold text-slate-700">time_minutes</span> — time per subject</p>
+              <p><span className="font-bold text-slate-700">question_type</span> — multiple_choice, checkboxes, short_answer, paragraph</p>
+              <p><span className="font-bold text-slate-700">question_text</span> — the question</p>
+              <p><span className="font-bold text-slate-700">question_image_url</span> — optional image link</p>
+              <p><span className="font-bold text-slate-700">option_a</span> to <span className="font-bold text-slate-700">option_f</span> — choices</p>
+              <p><span className="font-bold text-slate-700">correct_answer</span> — letter (C) or letters (A;C)</p>
+              <p><span className="font-bold text-slate-700">correct_text</span> — answer key for short_answer</p>
+              <p><span className="font-bold text-slate-700">rubric</span> — grading notes for paragraph</p>
+              <p><span className="font-bold text-slate-700">points</span> — point value (defaults to 1)</p>
+              <p className="md:col-span-2"><span className="font-bold text-slate-700">diagnostic_subcategory</span> / <span className="font-bold text-slate-700">diagnostic_skill_tag</span> — optional tags</p>
             </div>
           </details>
 
@@ -1251,32 +1284,43 @@ export default function CreateExamPage() {
           )}
         </div>
 
+        {/* ============================================
+            SUBJECT SECTIONS
+            ============================================ */}
         {examForm.sections.map((section, sectionIndex) => (
           <article key={`${section.subjectTitle || sectionIndex}-${sectionIndex}`} className="glass-card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Subject #{sectionIndex + 1}</h2>
+            </div>
+            
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="grid flex-1 gap-3 md:grid-cols-[1fr_10rem]">
                 <label>
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Subject Category <span className="text-rose-500">*</span></span>
+                  <span className="text-xs font-bold text-slate-600">Subject Category <span className="text-rose-500">*</span></span>
                   <input
                     value={section.subjectTitle}
                     onChange={(event) => updateSection(sectionIndex, { subjectTitle: event.target.value })}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="Subject category"
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    placeholder="e.g., Mathematics, English, Science"
                   />
                 </label>
                 <label>
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">Time (minutes) <span className="text-rose-500">*</span></span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={Math.round(section.allottedTimeSec / 60)}
-                    onChange={(event) => updateSection(sectionIndex, { allottedTimeSec: Number(event.target.value) * 60 })}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="Minutes"
-                  />
+                  <span className="text-xs font-bold text-slate-600">Time Allotment <span className="text-rose-500">*</span></span>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={Math.round(section.allottedTimeSec / 60)}
+                      onChange={(event) => updateSection(sectionIndex, { allottedTimeSec: Number(event.target.value) * 60 })}
+                      className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      placeholder="Minutes"
+                    />
+                    <span className="text-xs font-medium text-slate-400 whitespace-nowrap">minutes</span>
+                  </div>
                 </label>
               </div>
-              <button onClick={() => removeSubject(sectionIndex)} className="icon-button text-rose-500 hover:text-rose-700 transition" aria-label="Remove subject">
+              <button onClick={() => removeSubject(sectionIndex)} className="icon-button text-rose-500 hover:text-rose-700 transition flex-shrink-0" aria-label="Remove subject">
                 <FaTrash />
               </button>
             </div>
@@ -1285,7 +1329,7 @@ export default function CreateExamPage() {
               {section.questions.map((question, questionIndex) => renderQuestionCard(sectionIndex, questionIndex, question))}
             </div>
 
-            <button onClick={() => addQuestion(sectionIndex)} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
+            <button onClick={() => addQuestion(sectionIndex)} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">
               <FaPlus /> Add Question
             </button>
           </article>
@@ -1295,25 +1339,25 @@ export default function CreateExamPage() {
   }
 
   // ============================================
-  // RENDER QUESTION CARD
+  // RENDER QUESTION CARD - REORGANIZED
   // ============================================
   function renderQuestionCard(sectionIndex, questionIndex, question) {
     return (
-      <div key={`${sectionIndex}-${questionIndex}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        {/* Header row: question number + type/points now live above the editor, freeing full width for it */}
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-black">
+      <div key={`${sectionIndex}-${questionIndex}`} className="rounded-lg border border-slate-200 bg-white p-5">
+        {/* Question Header */}
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-black">
               {questionIndex + 1}
             </span>
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Text <span className="text-rose-500">*</span></span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Question</span>
           </div>
           <button onClick={() => removeQuestion(sectionIndex, questionIndex)} className="icon-button text-rose-500 hover:text-rose-700 transition flex-shrink-0" aria-label="Remove question">
             <FaTrash />
           </button>
         </div>
 
-        {/* Editor now spans the full width of the card instead of squeezing next to the delete button */}
+        {/* Question Text - Full Width Editor */}
         <div className="w-full">
           <TinyMCEEditor
             value={question.stem}
@@ -1322,9 +1366,10 @@ export default function CreateExamPage() {
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Question Configuration - Grouped Row */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <label>
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Question Type</span>
+            <span className="text-xs font-bold text-slate-600">Question Type</span>
             <select
               value={question.type}
               onChange={(event) => {
@@ -1343,7 +1388,7 @@ export default function CreateExamPage() {
                 }
                 updateQuestion(sectionIndex, questionIndex, updates);
               }}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
             >
               <option value="multiple_choice">Multiple Choice</option>
               <option value="checkboxes">Checkboxes</option>
@@ -1353,38 +1398,37 @@ export default function CreateExamPage() {
           </label>
 
           <label>
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Points</span>
+            <span className="text-xs font-bold text-slate-600">Points</span>
             <input
               type="number"
               min="1"
               value={question.points || 1}
               onChange={(event) => updateQuestion(sectionIndex, questionIndex, { points: Number(event.target.value) })}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
             />
           </label>
         </div>
 
+        {/* Options Section - Only for MC and Checkboxes */}
         {(question.type === "multiple_choice" || question.type === "checkboxes") && (
-          <div className="mt-4">
+          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">
-                Options <span className="text-rose-500">*</span>
+              <span className="text-xs font-bold text-slate-600">
+                Answer Options <span className="text-rose-500">*</span>
                 <span className="ml-2 text-xs font-normal text-slate-400">
                   ({question.choiceOpts.length} options)
                 </span>
               </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => addOption(sectionIndex, questionIndex)}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition"
-                >
-                  <FaPlus className="text-xs" /> Add Option
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => addOption(sectionIndex, questionIndex)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition"
+              >
+                <FaPlus className="text-xs" /> Add Option
+              </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {question.choiceOpts.map((option, optionIndex) => (
                 <div key={optionIndex} className="flex items-center gap-2">
                   <span className="w-8 text-sm font-bold text-slate-500 text-center">
@@ -1451,51 +1495,66 @@ export default function CreateExamPage() {
           </div>
         )}
 
+        {/* Short Answer Section */}
         {question.type === "short_answer" && (
-          <div className="mt-4">
+          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <label className="block">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Answer Key <span className="text-rose-500">*</span></span>
+              <span className="text-xs font-bold text-slate-600">Answer Key <span className="text-rose-500">*</span></span>
               <input
                 value={question.correctText || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { correctText: event.target.value })}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Enter the correct answer"
               />
             </label>
           </div>
         )}
 
+        {/* Paragraph Section */}
         {question.type === "paragraph" && (
-          <div className="mt-4">
+          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <label className="block">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Sample Answer / Rubric <span className="text-slate-400">(optional)</span></span>
+              <span className="text-xs font-bold text-slate-600">Sample Answer / Rubric <span className="text-slate-400">(optional)</span></span>
               <textarea
                 value={question.rubric || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { rubric: event.target.value })}
-                className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1.5 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Describe the key points the AI should look for..."
               />
             </label>
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label>
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Diagnostic Subcategory <span className="text-slate-400">(optional)</span></span>
-            <input
-              value={question.diagnosticSubcategory || ""}
-              onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSubcategory: event.target.value })}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-            />
-          </label>
-          <label>
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Skill Tag <span className="text-slate-400">(optional)</span></span>
-            <input
-              value={question.diagnosticSkillTag || ""}
-              onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSkillTag: event.target.value })}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-            />
-          </label>
+        {/* ============================================
+            DIAGNOSTIC TAGS - PROPERLY GROUPED TOGETHER
+            ============================================ */}
+        <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
+            <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Diagnostic Tags</span>
+            <span className="text-xs text-indigo-400 font-medium">(optional)</span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label>
+              <span className="text-xs font-medium text-indigo-600">Subcategory</span>
+              <input
+                value={question.diagnosticSubcategory || ""}
+                onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSubcategory: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 placeholder:text-slate-400"
+                placeholder="e.g., Algebra, Grammar, Reading"
+              />
+            </label>
+            <label>
+              <span className="text-xs font-medium text-indigo-600">Skill Tag</span>
+              <input
+                value={question.diagnosticSkillTag || ""}
+                onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSkillTag: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 placeholder:text-slate-400"
+                placeholder="e.g., Addition, Theme Analysis, Vocabulary"
+              />
+            </label>
+          </div>
         </div>
       </div>
     );
@@ -1505,36 +1564,49 @@ export default function CreateExamPage() {
     return (
       <>
         <div className="glass-card p-6">
-          <label className="block">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Reviewer Title <span className="text-rose-500">*</span></span>
-            <input
-              value={reviewerForm.title}
-              onChange={(event) => setReviewerForm((current) => ({ ...current, title: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-black text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="Reviewer title"
-            />
-          </label>
-          <label className="block mt-4">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Subject Category <span className="text-rose-500">*</span></span>
-            <input
-              value={reviewerForm.subjectCategory}
-              onChange={(event) => setReviewerForm((current) => ({ ...current, subjectCategory: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-              placeholder="Subject Category"
-            />
-          </label>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Reviewer Information</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <label className="block">
+              <span className="text-xs font-bold text-slate-600">Reviewer Title <span className="text-rose-500">*</span></span>
+              <input
+                value={reviewerForm.title}
+                onChange={(event) => setReviewerForm((current) => ({ ...current, title: event.target.value }))}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="Enter reviewer title"
+              />
+            </label>
+            
+            <label className="block">
+              <span className="text-xs font-bold text-slate-600">Subject Category <span className="text-rose-500">*</span></span>
+              <input
+                value={reviewerForm.subjectCategory}
+                onChange={(event) => setReviewerForm((current) => ({ ...current, subjectCategory: event.target.value }))}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="e.g., Mathematics, English, Science"
+              />
+            </label>
+          </div>
         </div>
 
         {reviewerForm.modules.map((module) => (
           <article key={module.id} className="glass-card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Module</h2>
+            </div>
+            
             <div className="flex items-center justify-between gap-3 mb-3">
               <label className="flex-1 block">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Module Title <span className="text-rose-500">*</span></span>
+                <span className="text-xs font-bold text-slate-600">Module Title <span className="text-rose-500">*</span></span>
                 <input
                   value={module.title}
                   onChange={(event) => updateReviewerModule(module.id, { title: event.target.value })}
-                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                  placeholder="Module title"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                  placeholder="Enter module title"
                 />
               </label>
               <button onClick={() => removeReviewerModule(module.id)} className="icon-button text-rose-500 hover:text-rose-700 transition flex-shrink-0 mt-6" aria-label="Remove module">
@@ -1542,32 +1614,32 @@ export default function CreateExamPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="block">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Short Description <span className="text-slate-400">(optional)</span></span>
+                <span className="text-xs font-bold text-slate-600">Short Description <span className="text-slate-400">(optional)</span></span>
                 <input
                   value={module.description || ""}
                   onChange={(event) => updateReviewerModule(module.id, { description: event.target.value })}
-                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Short module description"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Brief module description"
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Estimated Completion Time (minutes)</span>
+                <span className="text-xs font-bold text-slate-600">Estimated Time <span className="text-slate-400">(minutes)</span></span>
                 <input
                   type="number"
                   min="1"
                   value={module.estimatedMinutes || 15}
                   onChange={(event) => updateReviewerModule(module.id, { estimatedMinutes: Math.max(1, Number(event.target.value)) })}
-                  className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   placeholder="Estimated minutes"
                 />
               </label>
             </div>
 
-            <label className="block mt-3">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Reading Material <span className="text-rose-500">*</span></span>
-              <div className="w-full mt-2">
+            <label className="block mt-4">
+              <span className="text-xs font-bold text-slate-600">Reading Material <span className="text-rose-500">*</span></span>
+              <div className="w-full mt-1.5">
                 <TinyMCEEditor
                   value={module.content}
                   onChange={(value) => updateReviewerModule(module.id, { content: value })}
@@ -1575,13 +1647,14 @@ export default function CreateExamPage() {
                 />
               </div>
             </label>
-            <label className="block mt-3">
-              <span className="text-xs font-black uppercase tracking-wider text-slate-500">Video URL <span className="text-slate-400">(optional)</span></span>
+            
+            <label className="block mt-4">
+              <span className="text-xs font-bold text-slate-600">Video URL <span className="text-slate-400">(optional)</span></span>
               <input
                 value={module.videoUrl || ""}
                 onChange={(event) => updateReviewerModule(module.id, { videoUrl: event.target.value })}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                placeholder="https://youtube.com/..."
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                placeholder="https://youtube.com/watch?v=..."
               />
             </label>
           </article>
