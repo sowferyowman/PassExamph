@@ -1,18 +1,52 @@
-@import url("https://fonts.googleapis.com/css2?family=ABeeZee&family=Abril+Fatface&family=Anton&family=Arvo&family=Bebas+Neue&family=Bitter&family=Cabin&family=Caveat&family=Comfortaa&family=Concert+One&family=Courier+Prime&family=Crimson+Text&family=DM+Mono&family=DM+Sans&family=DM+Serif+Display&family=Dancing+Script&family=EB+Garamond&family=Exo+2&family=Fira+Code&family=Fira+Sans&family=Fraunces&family=Great+Vibes&family=Inconsolata&family=Indie+Flower&family=Inter:wght@400;500;600;700;800;900&family=Josefin+Sans&family=Kalam&family=Karla&family=Lato&family=Lexend&family=Libre+Baskerville&family=Lobster&family=Manrope&family=Merriweather&family=Montserrat&family=Mulish&family=Nunito&family=Nunito+Sans&family=Open+Sans&family=Oswald&family=Outfit&family=Pacifico&family=Patrick+Hand&family=Playfair+Display&family=Plus+Jakarta+Sans&family=Poppins&family=Press+Start+2P&family=PT+Mono&family=PT+Sans&family=PT+Serif&family=Quicksand&family=Raleway&family=Roboto&family=Roboto+Condensed&family=Roboto+Mono&family=Roboto+Slab&family=Rokkitt&family=Rubik&family=Sacramento&family=Shadows+Into+Light&family=Source+Code+Pro&family=Source+Sans+3&family=Space+Grotesk&family=Space+Mono&family=Spectral&family=Ubuntu&family=Ubuntu+Mono&family=Vollkorn&family=Work+Sans&family=Yeseva+One&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Merriweather:wght@700;900&family=Montserrat:wght@600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    @apply font-sans;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
+    @apply bg-slate-50 text-[15px] leading-6 text-slate-700 antialiased;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-width: 0;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  a {
+    @apply transition-colors duration-150;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  :where(button, a, input, select, textarea):focus-visible {
+    @apply outline-none ring-4 ring-blue-100;
   }
 }
 
 @layer components {
   .glass-card {
     @apply rounded-2xl border border-slate-100 bg-white shadow-soft;
+  }
+
+  .interactive-card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-soft focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50;
   }
 
   /* Question HTML can come from the rich-text authoring editor. Keep it within
@@ -30,6 +64,41 @@
     @apply mx-auto max-w-7xl space-y-6;
   }
 
+  .app-shell,
+  .admin-shell {
+    @apply flex min-h-screen min-w-0 flex-col bg-slate-50 md:h-screen md:flex-row md:overflow-hidden;
+  }
+
+  .app-content,
+  .admin-content {
+    @apply min-w-0 flex-1 overflow-y-auto;
+  }
+
+  .app-page {
+    @apply mx-auto w-full max-w-7xl p-5 md:p-8;
+  }
+
+  .admin-page {
+    @apply mx-auto w-full max-w-[1800px] p-4 sm:p-6 md:p-8;
+  }
+
+  .app-topbar,
+  .workspace-header {
+    @apply border-b border-slate-200 bg-white px-5 py-4 md:px-8;
+  }
+
+  .workspace-eyebrow {
+    @apply text-xs font-black uppercase tracking-wider text-blue-700;
+  }
+
+  .workspace-title {
+    @apply mt-1 text-2xl font-black tracking-tight text-slate-950;
+  }
+
+  .workspace-description {
+    @apply mt-1 text-sm font-medium leading-6 text-slate-500;
+  }
+
   .page-header {
     @apply space-y-1;
   }
@@ -39,7 +108,7 @@
   }
 
   .page-title {
-    @apply text-3xl font-black tracking-tight text-slate-950;
+    @apply text-2xl font-black tracking-tight text-slate-950 md:text-3xl;
   }
 
   .page-description {
@@ -50,16 +119,36 @@
     @apply glass-card p-5 md:p-6;
   }
 
+  .section-title {
+    @apply text-lg font-black tracking-tight text-slate-900;
+  }
+
+  .section-description {
+    @apply mt-1 text-sm leading-6 text-slate-500;
+  }
+
   .button-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#002A4C] hover:shadow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100;
   }
 
   .button-subtle {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100;
+  }
+
+  .button-danger {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 hover:shadow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100;
+  }
+
+  .button-icon {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100;
+  }
+
+  .form-control {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500;
   }
 
   .state-panel {
@@ -67,7 +156,7 @@
   }
 
   .icon-button {
-    @apply inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100;
+    @apply button-icon;
   }
 
 }

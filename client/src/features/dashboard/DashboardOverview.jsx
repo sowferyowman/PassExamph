@@ -189,10 +189,10 @@ export default function DashboardOverview({
             <p className="mt-1 text-sm font-semibold text-slate-600">Build momentum with another mock, or turn your weakest area into a strength first.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link to="/weakness-drills" className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-800 transition hover:border-blue-300 hover:bg-blue-50">
+            <Link to="/weakness-drills" className="button-secondary">
               <FaBookOpen /> Review weak areas
             </Link>
-            <Link to="/exam" className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-800">
+            <Link to="/exam" className="button-primary">
               <FaChartLine /> Take a mock <FaArrowRight />
             </Link>
           </div>

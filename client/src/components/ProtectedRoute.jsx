@@ -19,9 +19,5 @@ export default function ProtectedRoute({ allowedRole }) {
     return <Navigate to="/settings" replace state={{ profileSetupRequired: true, from: location.pathname }} />;
   }
 
-  if (allowedRole === "student" && user.profileCompleted && location.pathname === "/student-profiling") {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   return <Outlet />;
 }

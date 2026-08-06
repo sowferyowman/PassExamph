@@ -1,5 +1,4 @@
 const GROQ_MODEL = "llama-3.3-70b-versatile";
-const GROQ_ESSAY_FALLBACK_MODEL = "llama-3.1-8b-instant";
 
 function getGroqClient() {
   if (!process.env.GROQ_API_KEY) {
@@ -17,11 +16,95 @@ function getGroqClient() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
+// This prompt is deliberately verbose and example-driven rather than a
+// single instruction line. Structured-output models like this one follow
+// concrete patterns far more reliably than abstract adjectives ("be
+// friendly"), so every rule below is paired with a labeled GOOD/BAD example
+// the model can pattern-match against. The **word** convention is a real
+// contract with the frontend: RichText (DiagnosticVisuals.jsx) parses
+// double-asterisks into <strong> tags, so bolding is not decorative here —
+// it drives what actually gets visually emphasized on screen.
+//
+// SCOPE: this prompt speaks about ONE just-finished exam attempt.
+const DIAGNOSTIC_SYSTEM_PROMPT = `You are an experienced, warm but direct academic coach reviewing one student's practice exam, one-on-one, right after they finished it. You are not a report generator — you are the coach they're sitting across from.
+
+Return ONLY a strict JSON object with exactly these keys: headline, performance_summary, subject_mastery, study_plan, encouragement.
+
+=== FIELD-BY-FIELD RULES ===
+
+1. headline (string, 8-14 words)
+The single most important takeaway from this attempt, in your own coaching voice — not a restatement of the percentage score. Wrap the ONE most important word or short phrase in **double asterisks** for emphasis.
+GOOD: "You're ready on fundamentals — **pacing** is what's costing you points right now."
+BAD: "Your score is 72%, which is passing but not excellent." (this is a restated number, not a takeaway)
+
+2. performance_summary (string, 2-3 sentences)
+Zoom out on this attempt in plain language. Reference the strongest and weakest subject by name. Bold at most 2 short phrases total across the whole field.
+GOOD: "You cleared **three out of four** subjects comfortably, and Reading Comprehension is clearly your anchor. Math is the outlier — the gap there is big enough that it's quietly pulling your average down."
+BAD: "The diagnostic summary indicates variable performance metrics across subject clusters." (jargon, no voice)
+
+3. subject_mastery (array, one entry per subject given in subjectBreakdown, same order)
+Each entry: { subject, mastery_percentage, observed_issue, action_tip }
+- mastery_percentage: copy the given score number exactly, unchanged.
+- observed_issue (one sentence, 8-16 words, second person "you"): what's actually happening for THIS student in THIS subject, grounded in their score and, if given, their recentMistakes for that subject. Bold at most one key phrase.
+  GOOD (low score): "You're **rushing** the inference questions instead of rereading the passage first."
+  GOOD (high score, 80+): "Your **error-checking** habit is exactly why this subject stays consistent."
+  BAD: "Lack of Understanding and Incorrect Answer Selection" (label, not a sentence — never do this)
+- action_tip (one sentence, imperative, 6-12 words): a single concrete next action, not generic advice.
+  GOOD: "Try timing yourself at 90 seconds per inference question this week."
+  BAD: "Study harder and review your notes." (too generic to be useful)
+Vary sentence structure and vocabulary across subjects in the array — do not reuse the same template twice.
+
+4. study_plan (array, 2-4 items, ordered by priority — most urgent first)
+Each entry: { title, description }
+- title: 2-5 words, action-oriented, no punctuation at the end. e.g. "Rebuild Math Fundamentals"
+- description: one sentence (10-20 words) explaining what to actually do and why it's next in priority.
+Base the plan on the real weak points in subjectBreakdown/recentMistakes — do not include a subject that scored 85+ unless every subject did.
+
+5. encouragement (string, one sentence, 8-16 words)
+A genuine, specific closing line — grounded in something real from this attempt, not generic cheerleading.
+GOOD: "That Reading Comprehension score shows you already know how to grind — bring that here."
+BAD: "You can do it! Believe in yourself and never give up!" (empty hype, avoid entirely)
+
+=== GLOBAL RULES ===
+- 100% English.
+- Never use software/data jargon: "timestamp," "data log," "clustering," "input stream," "diagnostic weighting," "fallback."
+- Never output a label, noun phrase, or Title Case fragment anywhere — every field is a real spoken sentence.
+- Do not repeat the same sentence opener ("You are...", "This subject...") across multiple subject_mastery entries.
+- Total **bold** usage across the entire response: roughly 4-8 instances. Do not bold entire sentences.`;
+
+// SCOPE: this prompt speaks about the student's PATTERN ACROSS MULTIPLE
+// attempts — it's the same coach, just looking at the history instead of
+// a single fresh exam. Keep the voice identical to DIAGNOSTIC_SYSTEM_PROMPT
+// above; only the lens (one attempt vs. a trend) is different. This prompt
+// used to describe an entirely separate "strategic learning router"
+// persona, which is why the adaptive-gate banner used to read cold next to
+// the post-exam diagnostic — that mismatch is exactly what this rewrite
+// fixes.
+const ADAPTIVE_GATE_SYSTEM_PROMPT = `You are the same warm, direct academic coach from the exam diagnostic — now looking at a student's history across several attempts to decide what they should drill next. You're talking directly to the student, not writing an internal report.
+
+Return ONLY a strict JSON object with exactly these keys: focus_subject, confidence, rationale, drill_subject_order, reviewer_focus_tags, exam_focus_tags.
+
+- focus_subject (string): the single subject name to prioritize next.
+- confidence (number, 0-1): how clear-cut this call is given the data. Low weak-subject signal or very few attempts should mean lower confidence.
+- rationale (string, 2-3 sentences, second person "you"): tell the student plainly why this subject is next, referencing their actual pattern ACROSS ATTEMPTS — not just one exam. Bold at most 2 short phrases with **double asterisks**.
+  GOOD: "Math keeps showing up as your softest spot across your last few attempts — that repetition is why it's next, not a random pick. Clearing it now will do more for your average than polishing a subject you've already got **locked in**."
+  BAD: "Your active review track has been programmatically updated based on cumulative tracking metrics." (jargon, not a sentence a coach would say)
+  BAD: "This exam shows a weakness in Math." (wrong lens — this is about the trend across attempts, not a single exam)
+- drill_subject_order (array of strings): subjects ordered by priority, most urgent first.
+- reviewer_focus_tags (array of strings): short topic labels, not full sentences.
+- exam_focus_tags (array of strings): short topic labels, not full sentences.
+
+=== GLOBAL RULES ===
+- 100% English, every sentence a real spoken sentence — never a label or Title Case fragment.
+- Never use: "programmatically," "cumulative tracking metrics," "systemic coverage," "data loops," "analytical precision," "velocity," "weak signals," "system exceptions," "time fallbacks," or similar system-speak.
+- Do not repeat the same opening phrase you've used in a prior response.
+- Do not be overly dramatic or inflate encouragement unnaturally — stay constructive and direct.`;
+
 async function diagnoseExam(payload) {
   const fallback = buildFallbackDiagnostic(payload);
 
   try {
-    // --- OPTIMIZATION FILTER START ---
+    // OPTIMIZATION FILTER START 
     // Extract only the necessary diagnostic summaries to cut down payload size and prevent 429 tokens limit errors.
     const cleanBreakdown = Array.isArray(payload?.subjectBreakdown) 
       ? payload.subjectBreakdown.map(s => ({
@@ -33,26 +116,28 @@ async function diagnoseExam(payload) {
     const cleanRecentMistakes = Array.isArray(payload?.fallbackLogs)
       ? payload.fallbackLogs
           .filter(log => log && log.isCorrect === false)
-          .slice(0, 5) // Limit to top 5 logs to heavily preserve daily token capacities
-          .map(log => ({ category: log.category || "General Context", issue: "Incorrect Answer Selection" }))
+          .slice(0, 8) // Limit to preserve daily token capacities, but give the model enough real signal to spot a pattern
+          .map(log => ({
+            subject: log.subject || log.title || log.category || "General Context",
+            missedTopic: log.topic || log.category || log.skill || null
+          }))
       : [];
-    // --- OPTIMIZATION FILTER END ---
+    // OPTIMIZATION FILTER END 
 
     const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
       model: GROQ_MODEL,
-      temperature: 0.35, // Balanced structure for sharp, analytical reasoning
+      temperature: 0.4, // Slightly higher than pure-analysis tasks — this output needs to read like a person, not a report
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content:
-            "You are a professional, objective, and insightful AI Academic Advisor for college entrance exam preparation. Return only strict JSON with keys: percentage_score, subject_mastery, weakness_paragraph. subject_mastery must be an array of { subject, mastery_percentage, observed_issue }. CRITICAL FORMATTING RULES: 1. Write 100% in English. 2. 'weakness_paragraph' must be a solid, detailed 3-4 sentence analytical review. Avoid over-the-top motivational language, dramatic cheerleading, or emotional hyperbole. Speak like a calm, sharp academic mentor—identify precisely where the structural concept gap lies based on the metrics, explain how that vulnerability impacts their testing pacing or score yields, and supply a clear, strategic study directive to address it. 3. STRICTLY AVOID technical software or data jargon such as 'timestamp fallbacks', 'data logs', 'clustering signals', 'input streams', or 'diagnostic weightings'."
+          content: DIAGNOSTIC_SYSTEM_PROMPT
         },
         {
           role: "user",
           content: JSON.stringify({
-            task: "Provide a grounded, professional, and strategic diagnostic paragraph using the student performance summary data.",
+            task: "Coach this specific student based on the data below. Every field must be grounded in the actual numbers and missed topics given — do not invent details that aren't implied by the data.",
             studentSummary: {
               percentageScore: payload?.percentageScore || 0,
               rawScore: payload?.rawScore || 0,
@@ -73,42 +158,11 @@ async function diagnoseExam(payload) {
   }
 }
 
-async function scoreEssay({ response = "", rubric = "", points = 1 } = {}) {
-  const groq = getGroqClient();
-  const messages = [
-    { role: "system", content: "Score the essay using the rubric. Return only JSON: {\"score\": number}. No feedback or explanation. Score must be between 0 and the supplied maximum points." },
-    { role: "user", content: JSON.stringify({ response, rubric: rubric || "Assess relevance, accuracy, organization, and clarity.", max_points: Number(points) || 1 }) }
-  ];
-  const request = (model) => groq.chat.completions.create({ model, temperature: 0.1, max_tokens: 200, response_format: { type: "json_object" }, messages });
-  const normalizeScore = (value) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? Math.max(0, Math.min(Number(points) || 1, numeric)) : null;
-  };
-  try {
-    const completion = await request(GROQ_MODEL);
-    const value = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
-    const score = normalizeScore(value.score);
-    return score === null ? { score: null, status: "pending_review" } : { score, status: "ai_graded" };
-  } catch (error) {
-    if (error?.status === 429 || error?.response?.status === 429 || /429|rate limit/i.test(error?.message || "")) {
-      return { score: null, status: "pending_review", reason: "rate_limited" };
-    }
-    try {
-      const completion = await request(GROQ_ESSAY_FALLBACK_MODEL);
-      const value = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
-      const score = normalizeScore(value.score);
-      return score === null ? { score: null, status: "pending_review" } : { score, status: "ai_graded" };
-    } catch (fallbackError) {
-      return { score: null, status: "pending_review", reason: fallbackError?.message || error?.message };
-    }
-  }
-}
-
 async function buildAdaptiveGate(payload) {
   const fallback = buildFallbackGate(payload);
 
   try {
-    // --- OPTIMIZATION FILTER START ---
+    // OPTIMIZATION FILTER START 
     // Extract past metadata attempts to dramatically condense historical analytics arrays sent to the API.
     const cleanHistory = Array.isArray(payload?.diagnosticHistory)
       ? payload.diagnosticHistory.slice(-3).map(attempt => {
@@ -121,7 +175,7 @@ async function buildAdaptiveGate(payload) {
           };
         })
       : [];
-    // --- OPTIMIZATION FILTER END ---
+    // OPTIMIZATION FILTER END
 
     const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
@@ -131,13 +185,12 @@ async function buildAdaptiveGate(payload) {
       messages: [
         {
           role: "system",
-          content:
-            "You are a strategic learning router helping high school students systematically organize their entrance exam preparation. Return only JSON with keys: focus_subject, confidence, rationale, drill_subject_order, reviewer_focus_tags, exam_focus_tags. CRITICAL FORMATTING RULES: 1. Write 100% in English. 2. 'rationale' must be a substantial, grounded 3-4 sentence strategic explanation. Do not be overly dramatic, patronizing, or inflate encouragement unnaturally. Keep your analysis constructive and direct: state clearly why this particular subject path is the most logical next step based on cumulative practice data, and how tackling its subset topics systematically will optimize their overall competitive scoring edge. 3. NEVER use developer or engineering keywords such as 'weak signals', 'system exceptions', 'time fallbacks', 'data loops', or 'vulnerabilities'."
+          content: ADAPTIVE_GATE_SYSTEM_PROMPT
         },
         {
           role: "user",
           content: JSON.stringify({
-            task: "Formulate an objective, well-rounded, and paragraph-long priority study roadmap text based on the provided tracking history metrics.",
+            task: "Tell this student, in your own coaching voice, which subject to drill next based on their pattern across the attempts below — not just one exam. Ground every field in the actual data given.",
             studentHistorySummary: cleanHistory
           })
         }
@@ -152,30 +205,136 @@ async function buildAdaptiveGate(payload) {
   }
 }
 
-function buildFallbackDiagnostic(payload = {}) {
-  const rawScore = Number(payload.rawScore || payload.correct || 0);
-  const totalItems = Number(payload.totalItems || payload.total || 0);
-  const percentage = Number(payload.percentageScore ?? (totalItems ? Math.round((rawScore / totalItems) * 100) : 0));
-  const breakdown = Array.isArray(payload.subjectBreakdown) ? payload.subjectBreakdown : [];
-  const weakSubject = [...breakdown].sort((a, b) => Number(a.pct ?? a.mastery_percentage ?? 0) - Number(b.pct ?? b.mastery_percentage ?? 0))[0];
-  const weakSubjectName = weakSubject ? (weakSubject.title || weakSubject.subject || weakSubject.name) : "";
+// Natural-language, varied phrasing for when Groq is unreachable and we have
+// no AI-generated text to fall back on. Picks a template deterministically
+// per subject (based on name + score band) so two subjects in the same
+// score range don't read as copy-pasted. Uses the same **bold** convention
+// as the AI path so RichText (DiagnosticVisuals.jsx) renders both sources
+// identically.
+function naturalFallbackIssue(subjectName, pct) {
+  const seed = String(subjectName || "").split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
 
-  const analyticalFallbackParagraph = weakSubjectName
-    ? `A review of your latest performance breakdown indicates a distinct conceptual drop within the ${weakSubjectName} segment. Misinterpreting core principles in this area frequently leads to compound pacing errors and lower score yields under strict testing conditions. Isolating these exact problematic units right now is the most effective way to protect your overall average before the official exam. The custom practice drills compiled below are structurally mapped to help you build a far more stable baseline in this track.`
-    : "Your practice attempt has been logged successfully. To isolate specific conceptual core gaps and deliver a highly targeted baseline strategy, please complete additional diagnostic tracking sets across your remaining core reviewer tracks.";
+  if (pct >= 85) {
+    const strong = [
+      `You're **consistently solid** in ${subjectName} — keep this pace up.`,
+      `${subjectName} is clearly a strength right now; this is where you're **scoring your points**.`,
+      `**Strong, dependable** performance in ${subjectName}. Nothing urgent to fix here.`
+    ];
+    return strong[seed % strong.length];
+  }
+  if (pct >= 75) {
+    const decent = [
+      `You're doing fine in ${subjectName}, with room to **tighten up the details**.`,
+      `${subjectName} is in good shape — a little more practice will make it **consistent**.`,
+      `Solid grasp of ${subjectName} overall, just watch out for **careless slips**.`
+    ];
+    return decent[seed % decent.length];
+  }
+  if (pct >= 60) {
+    const shaky = [
+      `${subjectName} needs more focused review — the **fundamentals** aren't fully locked in yet.`,
+      `You're getting some ${subjectName} items right, but the pattern suggests **gaps in the basics**.`,
+      `A closer look at your core ${subjectName} concepts will help this score **move up**.`
+    ];
+    return shaky[seed % shaky.length];
+  }
+  const weak = [
+    `${subjectName} is your **biggest opportunity** right now — start review here.`,
+    `This is the subject to prioritize: ${subjectName} needs rebuilding from the **fundamentals up**.`,
+    `Your ${subjectName} results point to a **core concept gap** worth addressing first.`
+  ];
+  return weak[seed % weak.length];
+}
+
+function naturalFallbackActionTip(subjectName, pct) {
+  const seed = String(subjectName || "").split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + 1;
+
+  if (pct >= 85) {
+    const strong = [
+      `Keep ${subjectName} in rotation so the streak holds.`,
+      `Do one light ${subjectName} review a week to maintain it.`,
+      `Use your ${subjectName} routine as a model for weaker subjects.`
+    ];
+    return strong[seed % strong.length];
+  }
+  if (pct >= 60) {
+    const shaky = [
+      `Redo your missed ${subjectName} items and note the pattern.`,
+      `Spend one focused session on ${subjectName} fundamentals this week.`,
+      `Time yourself on ${subjectName} drills to build consistency.`
+    ];
+    return shaky[seed % shaky.length];
+  }
+  const weak = [
+    `Start ${subjectName} review from the basics before attempting drills.`,
+    `Block dedicated time for ${subjectName} before your next attempt.`,
+    `Rebuild ${subjectName} fundamentals first, then retest this subject.`
+  ];
+  return weak[seed % weak.length];
+}
+
+function buildFallbackDiagnostic(payload = {}) {
+  const breakdown = Array.isArray(payload.subjectBreakdown) ? payload.subjectBreakdown : [];
+  const normalizedSubjects = breakdown.map((subject) => ({
+    subject: subject.title || subject.subject || subject.name || "Untitled Subject",
+    mastery_percentage: Number(subject.pct ?? subject.mastery_percentage ?? subject.mastery ?? 0)
+  }));
+
+  const sorted = [...normalizedSubjects].sort((a, b) => a.mastery_percentage - b.mastery_percentage);
+  const weakest = sorted[0];
+  const strongest = sorted[sorted.length - 1];
+
+  const headline = weakest && strongest && weakest.subject !== strongest.subject
+    ? `**${strongest.subject}** is carrying you — ${weakest.subject} is where the next gains are.`
+    : weakest
+      ? `Focus this cycle on **${weakest.subject}** to move your average up.`
+      : "Complete a few more attempts so we can pinpoint your next focus area.";
+
+  const performanceSummary = weakest && strongest && weakest.subject !== strongest.subject
+    ? `You're solid in **${strongest.subject}** at ${strongest.mastery_percentage}%, while ${weakest.subject} sits at ${weakest.mastery_percentage}%. That gap is the fastest lever you have to raise your overall score.`
+    : "Your practice attempt has been logged. A couple more attempts across your subjects will help sharpen this feedback.";
+
+  const subjectMastery = normalizedSubjects.map(({ subject, mastery_percentage }) => ({
+    subject,
+    mastery_percentage,
+    observed_issue: naturalFallbackIssue(subject, mastery_percentage),
+    action_tip: naturalFallbackActionTip(subject, mastery_percentage)
+  }));
+
+  const allStrong = normalizedSubjects.every((s) => s.mastery_percentage >= 85);
+  const priorityOrder = (allStrong ? normalizedSubjects : normalizedSubjects.filter((s) => s.mastery_percentage < 85))
+    .sort((a, b) => a.mastery_percentage - b.mastery_percentage)
+    .slice(0, 3);
+  const studyPlan = priorityOrder.length
+    ? priorityOrder.map((s, i) => ({
+        title: i === 0 ? `Rebuild ${s.subject}` : `Reinforce ${s.subject}`,
+        description: i === 0
+          ? `Start here — ${s.subject} is currently your lowest scoring subject at ${s.mastery_percentage}%.`
+          : `Next, tighten up ${s.subject} to lock in a more consistent ${s.mastery_percentage}%+ baseline.`
+      }))
+    : [{ title: "Attempt Another Set", description: "Complete another practice set so we can build a study plan around real data." }];
+
+  const encouragement = strongest
+    ? `Your ${strongest.subject} score shows you already know how to perform under pressure.`
+    : "Every attempt from here gives you sharper, more specific feedback.";
 
   return {
-    percentage_score: percentage,
-    subject_mastery: breakdown.map((subject) => ({
-      subject: subject.title || subject.subject || subject.name || "Untitled Subject",
-      mastery_percentage: Number(subject.pct ?? subject.mastery_percentage ?? subject.mastery ?? 0),
-      observed_issue: Number(subject.pct ?? subject.mastery_percentage ?? subject.mastery ?? 0) < 75 ? "Requires targeted core review" : "Demonstrating stable proficiency"
-    })),
-    weakness_paragraph: analyticalFallbackParagraph,
+    headline,
+    performance_summary: performanceSummary,
+    subject_mastery: subjectMastery,
+    study_plan: studyPlan,
+    encouragement,
     source: "local_fallback"
   };
 }
 
+// This is the offline stand-in for buildAdaptiveGate's rationale — it needs
+// to sound like the SAME coach as naturalFallbackIssue/buildFallbackDiagnostic
+// above, just talking about the trend across attempts instead of one exam.
+// This used to read like a system log ("programmatically updated...
+// cumulative tracking metrics"); that's what made the banner feel cold even
+// when Groq was reachable, since a slow/failed call falls straight through
+// to this text.
 function buildFallbackGate(payload = {}) {
   const diagnostics = Array.isArray(payload.diagnosticHistory) ? payload.diagnosticHistory : [];
   const weakCounts = new Map();
@@ -195,8 +354,8 @@ function buildFallbackGate(payload = {}) {
   const focusSubject = [...weakCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "General Comprehensive Review";
 
   const analyticalFallbackRationale = weakCounts.size
-    ? `Your active review track has been programmatically updated to establish ${focusSubject} as your primary focus area. Based on cumulative tracking metrics, allocating dedicated revision blocks to this subject offers the highest logical leverage to optimize your composite average. Addressing these foundational problem areas early ensures you build necessary velocity and analytical precision well ahead of your testing date.`
-    : "Your current subject competencies show an even, stable distribution across active branches. Your path will remain balanced and comprehensive for now, allowing you to maintain systemic coverage across all core competencies until a specific target area emerges.";
+    ? `**${focusSubject}** keeps showing up as your softest spot across your recent attempts, so that's where the next block of practice will help most. Clearing this now gives you the biggest lift to your overall score before your next mock exam.`
+    : "Your scores are holding **steady** across subjects right now — nothing is dragging you down, so keep practicing broadly until a clear gap shows up.";
 
   return {
     focus_subject: focusSubject,
@@ -210,10 +369,30 @@ function buildFallbackGate(payload = {}) {
 }
 
 function normalizeDiagnostic(value, fallback) {
+  const subjectMastery = Array.isArray(value.subject_mastery) && value.subject_mastery.length
+    ? value.subject_mastery.map((entry, i) => ({
+        subject: entry.subject || fallback.subject_mastery[i]?.subject || `Subject ${i + 1}`,
+        mastery_percentage: Number(entry.mastery_percentage ?? fallback.subject_mastery[i]?.mastery_percentage ?? 0),
+        observed_issue: entry.observed_issue || fallback.subject_mastery[i]?.observed_issue || "",
+        action_tip: entry.action_tip || fallback.subject_mastery[i]?.action_tip || ""
+      }))
+    : fallback.subject_mastery;
+
+  const studyPlan = Array.isArray(value.study_plan) && value.study_plan.length
+    ? value.study_plan
+        .filter((step) => step && (step.title || step.description))
+        .map((step, i) => ({
+          title: step.title || `Step ${i + 1}`,
+          description: step.description || ""
+        }))
+    : fallback.study_plan;
+
   return {
-    percentage_score: Number(value.percentage_score ?? fallback.percentage_score),
-    subject_mastery: Array.isArray(value.subject_mastery) ? value.subject_mastery : fallback.subject_mastery,
-    weakness_paragraph: value.weakness_paragraph || fallback.weakness_paragraph,
+    headline: value.headline || fallback.headline,
+    performance_summary: value.performance_summary || fallback.performance_summary,
+    subject_mastery: subjectMastery,
+    study_plan: studyPlan.length ? studyPlan : fallback.study_plan,
+    encouragement: value.encouragement || fallback.encouragement,
     source: "groq"
   };
 }
@@ -230,4 +409,4 @@ function normalizeGate(value, fallback) {
   };
 }
 
-module.exports = { diagnoseExam, buildAdaptiveGate, scoreEssay };
+module.exports = { diagnoseExam, buildAdaptiveGate };

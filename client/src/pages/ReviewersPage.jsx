@@ -11,30 +11,11 @@ const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica,
 function GlobalStyle() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-      .rp-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; }
-      .rp-progress-track { background: #e5e7eb; border-radius: 999px; overflow: hidden; }
-      .rp-progress-fill { background: #2563eb; border-radius: 999px; transition: width 0.4s ease; }
-
-      .rp-btn-primary { background: #2563eb; color: #fff; border-radius: 8px; transition: background 0.15s ease; }
-      .rp-btn-primary:hover:not(:disabled) { background: #1d4ed8; }
-      .rp-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-
-      .rp-btn-secondary { background: transparent; border: 1px solid #e5e7eb; color: #111827; border-radius: 8px; transition: border-color 0.15s ease, background 0.15s ease; }
-      .rp-btn-secondary:hover:not(:disabled) { border-color: #d1d5db; background: #fafafa; }
-      .rp-btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
-
-      .rp-focus-ring:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-
-      .rp-module-row { border-radius: 8px; transition: background 0.15s ease, border-color 0.15s ease; }
-      .rp-module-row.is-active { border-color: #93c5fd; background: #eff4ff; }
-      .rp-module-row:hover:not(.is-active) { background: #f3f4f6; }
-
       .reviewer-content table{width:100%;border:1px solid #e5e7eb;border-radius:.5rem;overflow:hidden}
       .reviewer-content th{position:sticky;top:0;background:#f9fafb;color:#374151}
       .reviewer-content th,.reviewer-content td{padding:.75rem;border-bottom:1px solid #f1f5f9}
       .reviewer-content tbody tr:nth-child(even){background:#f9fafb}
+      .reviewer-content tbody tr{transition: background-color 0.15s ease;}
       .reviewer-content tbody tr:hover{background:#eff4ff}
     `}</style>
   );
@@ -121,7 +102,7 @@ export default function ReviewersPage() {
 
   if (!reviewers.length) return <EmptyState />;
 
-  // ── Reviewer catalog ─────────────────────────────────────────────────
+  // Reviewer catalog 
   if (!reviewer || !activeModule) {
     return (
       <div className="min-h-screen bg-white p-6" style={{ fontFamily: FONT }}>
@@ -145,19 +126,19 @@ export default function ReviewersPage() {
                   key={item.id}
                   type="button"
                   onClick={() => openReviewer(item)}
-                  className="rp-card rp-focus-ring p-5 text-left transition hover:border-gray-300"
+                  className="group relative rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{item.subjectCategory || "General"}</p>
-                    {hasResume && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Resume</span>}
+                    {hasResume && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 transition-colors group-hover:bg-amber-200">Resume</span>}
                   </div>
-                  <h2 className="mt-1.5 text-base font-semibold leading-snug text-gray-900">{item.title || "Untitled Reviewer"}</h2>
+                  <h2 className="mt-1.5 text-base font-semibold leading-snug text-gray-900 transition-colors group-hover:text-blue-600">{item.title || "Untitled Reviewer"}</h2>
                   <div className="mt-4 flex items-center justify-between text-xs font-medium text-gray-500">
                     <span>{done.length}/{total} lessons</span>
                     <span className="inline-flex items-center gap-1"><FaClock className="text-[11px]" /> {minutes} min</span>
                   </div>
-                  <div className="rp-progress-track mt-2 h-1.5 w-full">
-                    <div className="rp-progress-fill h-full" style={{ width: `${percent}%` }} />
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${percent}%` }} />
                   </div>
                   <p className="mt-2 text-xs font-semibold text-gray-600">{percent}% complete</p>
                 </button>
@@ -169,7 +150,7 @@ export default function ReviewersPage() {
     );
   }
 
-  // ── Single reviewer / module reader ──────────────────────────────────
+  // Single reviewer / module reader 
   const activeResume = resume[`${reviewer.id}:${activeModule.id}`];
   const activeCompleted = completedIds.includes(activeModule.id);
   const videoId = getVideoId(activeModule.videoUrl);
@@ -179,7 +160,11 @@ export default function ReviewersPage() {
 
   const outline = (
     <aside className="w-full shrink-0 border-b border-gray-200 bg-gray-50 p-4 lg:w-72 lg:border-b-0 lg:border-r lg:overflow-y-auto">
-      <button type="button" onClick={() => { setSelectedReviewerId(null); setSelectedModuleId(null); }} className="rp-focus-ring mb-5 inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900">
+      <button 
+        type="button" 
+        onClick={() => { setSelectedReviewerId(null); setSelectedModuleId(null); }} 
+        className="mb-5 inline-flex items-center gap-2 rounded-md text-sm font-medium text-gray-500 transition-colors hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600"
+      >
         <FaArrowLeft className="text-xs" /> All reviewers
       </button>
       <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{reviewer.subjectCategory || "Learning Path"}</p>
@@ -188,8 +173,8 @@ export default function ReviewersPage() {
         <div className="flex justify-between text-xs font-medium text-gray-500">
           <span>Course progress</span><span>{courseProgress}%</span>
         </div>
-        <div className="rp-progress-track mt-1.5 h-1.5">
-          <div className="rp-progress-fill h-full" style={{ width: `${courseProgress}%` }} />
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+          <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${courseProgress}%` }} />
         </div>
       </div>
       <nav className="mt-5 space-y-1">
@@ -203,7 +188,11 @@ export default function ReviewersPage() {
               type="button"
               key={module.id}
               onClick={() => selectModule(module.id)}
-              className={`rp-module-row rp-focus-ring w-full p-3 text-left ${selected ? "is-active" : ""}`}
+              className={`w-full rounded-lg p-3 text-left transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                selected 
+                  ? "border border-blue-300 bg-blue-50/80 shadow-sm" 
+                  : "hover:translate-x-1 hover:bg-gray-100"
+              }`}
             >
               <div className="flex items-start gap-3">
                 <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${status.tone}`}>{status.icon}</span>
@@ -211,8 +200,8 @@ export default function ReviewersPage() {
                   <p className="text-xs font-medium text-gray-400">Lesson {index + 1} · {Number(module.estimatedMinutes) || 15} min</p>
                   <p className="mt-0.5 text-sm font-semibold text-gray-800">{module.title || `Module ${index + 1}`}</p>
                   {module.description && <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{module.description}</p>}
-                  <div className="rp-progress-track mt-1.5 h-1">
-                    <div className="rp-progress-fill h-full" style={{ width: `${completed ? 100 : itemResume?.readProgress || 0}%` }} />
+                  <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${completed ? 100 : itemResume?.readProgress || 0}%` }} />
                   </div>
                 </div>
               </div>
@@ -229,7 +218,11 @@ export default function ReviewersPage() {
       <div className="mx-auto max-w-7xl overflow-hidden rounded-none bg-white sm:rounded-xl sm:border sm:border-gray-200 lg:flex lg:min-h-[calc(100vh-3rem)]">
         <div className="hidden lg:block">{outline}</div>
         <div className="border-b border-gray-200 p-4 lg:hidden">
-          <button type="button" onClick={() => setMobileOutlineOpen((open) => !open)} className="rp-btn-secondary rp-focus-ring min-h-11 w-full px-4 text-left text-sm font-semibold">
+          <button 
+            type="button" 
+            onClick={() => setMobileOutlineOpen((open) => !open)} 
+            className="min-h-11 w-full rounded-lg border border-gray-200 bg-white px-4 text-left text-sm font-semibold text-gray-800 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-600"
+          >
             {mobileOutlineOpen ? "Hide course outline" : "Show course outline"}
           </button>
           {mobileOutlineOpen && <div className="mt-3">{outline}</div>}
@@ -253,7 +246,11 @@ export default function ReviewersPage() {
             {activeModule.description && <p className="mt-2 text-sm text-gray-600">{activeModule.description}</p>}
 
             {activeResume?.scrollTop > 0 && !activeCompleted && (
-              <button type="button" onClick={() => { contentRef.current.scrollTop = activeResume.scrollTop; }} className="mt-4 rounded-lg bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900">
+              <button 
+                type="button" 
+                onClick={() => { contentRef.current.scrollTop = activeResume.scrollTop; }} 
+                className="mt-4 rounded-lg bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 transition-all hover:bg-amber-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
                 Resume reading
               </button>
             )}
@@ -261,7 +258,7 @@ export default function ReviewersPage() {
             {videoId && (
               <section className="mt-6">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500"><FaPlayCircle className="text-blue-600" /> Watch first</p>
-                <div className="aspect-video w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-900">
+                <div className="aspect-video w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-900 shadow-sm transition-shadow hover:shadow-md">
                   <iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${videoId}`} title={activeModule.title} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                 </div>
               </section>
@@ -274,20 +271,34 @@ export default function ReviewersPage() {
 
             <footer className="mt-8 flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-2">
-                <button type="button" disabled={!activeIndex} onClick={() => navigateModule(-1)} className="rp-btn-secondary rp-focus-ring min-h-11 px-4 text-sm font-semibold">
+                <button 
+                  type="button" 
+                  disabled={!activeIndex} 
+                  onClick={() => navigateModule(-1)} 
+                  className="min-h-11 rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 transition-all hover:bg-gray-50 hover:border-gray-300 active:scale-95 disabled:opacity-40 disabled:hover:bg-white disabled:active:scale-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
                   <FaChevronLeft />
                 </button>
-                <button type="button" disabled={activeIndex === modules.length - 1} onClick={() => navigateModule(1)} className="rp-btn-secondary rp-focus-ring min-h-11 px-4 text-sm font-semibold">
+                <button 
+                  type="button" 
+                  disabled={activeIndex === modules.length - 1} 
+                  onClick={() => navigateModule(1)} 
+                  className="min-h-11 rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 transition-all hover:bg-gray-50 hover:border-gray-300 active:scale-95 disabled:opacity-40 disabled:hover:bg-white disabled:active:scale-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
                   Next lesson
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleComplete(activeModule.id)}
-                className={`rp-focus-ring min-h-11 rounded-lg px-5 text-sm font-semibold ${activeCompleted ? "bg-emerald-50 text-emerald-800" : "rp-btn-primary"}`}
-              >
-                {activeCompleted ? "✓ Completed" : "Mark complete"}
-              </button>
+            <button
+  type="button"
+  onClick={() => toggleComplete(activeModule.id)}
+  className={`min-h-11 rounded-lg px-5 text-sm font-semibold transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+    activeCompleted 
+      ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100" 
+      : "bg-[#003A6C] text-white hover:bg-[#002A4C] hover:shadow-md"
+  }`}
+>
+  {activeCompleted ? "✓ Completed" : "Mark complete"}
+</button>
             </footer>
           </div>
         </main>

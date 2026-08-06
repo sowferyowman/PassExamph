@@ -1078,6 +1078,7 @@ function normalizeDashboardAnalytics(dashboard, email) {
   const completedAttempts = attemptsForChart.filter((attempt) => !isPendingEssayReview(attempt));
   const chronologicalAttempts = [...completedAttempts].reverse();
   const latestCompletedAttempt = completedAttempts[0];
+  const previousCompletedAttempt = completedAttempts[1];
   const progression = chronologicalAttempts.map((attempt, index) => ({
     label: attempt.examTitle || attempt.name || `Mock ${index + 1}`,
     score: Number(attempt.finalPct ?? attempt.score ?? 0),
@@ -1098,6 +1099,33 @@ function normalizeDashboardAnalytics(dashboard, email) {
   const rewardSummary = buildCommunityRewardSummary(email, { ...dashboard, attempts });
   const studyPoints = rewardSummary.totalPoints;
   const placement = getRawLeaderboardPlacement(email, { ...dashboard, attempts });
+  const attemptsBeforeLatest = latestCompletedAttempt
+    ? attempts.filter((attempt) => attempt !== latestCompletedAttempt)
+    : attempts;
+  const previousRewardSummary = latestCompletedAttempt
+    ? buildCommunityRewardSummary(email, { ...dashboard, attempts: attemptsBeforeLatest })
+    : rewardSummary;
+  const previousPlacement = latestCompletedAttempt
+    ? getRawLeaderboardPlacement(email, { ...dashboard, attempts: attemptsBeforeLatest })
+    : null;
+  const latestScore = Number(latestCompletedAttempt?.finalPct ?? latestCompletedAttempt?.score ?? 0);
+  const previousScore = Number(previousCompletedAttempt?.finalPct ?? previousCompletedAttempt?.score ?? 0);
+  const scoreDifference = latestScore - previousScore;
+  const scoreTrend = previousCompletedAttempt
+    ? { direction: scoreDifference > 0 ? "up" : scoreDifference < 0 ? "down" : "same", text: `${scoreDifference > 0 ? "+" : ""}${scoreDifference} pts vs previous attempt` }
+    : latestCompletedAttempt
+      ? { direction: "same", text: "First completed attempt" }
+      : null;
+  const placementDifference = previousPlacement?.rank && placement.rank ? previousPlacement.rank - placement.rank : 0;
+  const placementTrend = latestCompletedAttempt
+    ? previousPlacement?.rank && placement.rank
+      ? { direction: placementDifference > 0 ? "up" : placementDifference < 0 ? "down" : "same", text: placementDifference === 0 ? "No change from previous attempt" : `${Math.abs(placementDifference)} place${Math.abs(placementDifference) === 1 ? "" : "s"} ${placementDifference > 0 ? "higher" : "lower"} than previous attempt` }
+      : { direction: "same", text: "First completed attempt" }
+    : null;
+  const pointsDifference = studyPoints - previousRewardSummary.totalPoints;
+  const pointsTrend = latestCompletedAttempt
+    ? { direction: pointsDifference > 0 ? "up" : pointsDifference < 0 ? "down" : "same", text: pointsDifference === 0 ? "No points change from this attempt" : `${pointsDifference > 0 ? "+" : ""}${pointsDifference.toLocaleString()} pts from latest attempt` }
+    : null;
 
   return {
     ...dashboard,
@@ -1108,25 +1136,29 @@ function normalizeDashboardAnalytics(dashboard, email) {
         label: "Latest Mock Score",
         value: latestCompletedAttempt ? `${Number(latestCompletedAttempt.finalPct ?? latestCompletedAttempt.score ?? 0)}%` : "0%",
         detail: latestCompletedAttempt ? `Scored from ${latestCompletedAttempt.examTitle || latestCompletedAttempt.name || "completed mock exam"}` : "No completed exam attempts yet",
-        accent: "blue"
+        accent: "blue",
+        trend: scoreTrend
       },
       {
         label: "Total Tests Taken",
         value: String(totalTests),
         detail: `${totalTests} completed mock exam${totalTests === 1 ? "" : "s"} out of ${totalAvailableMocks} available`,
-        accent: "purple"
+        accent: "purple",
+        trend: totalTests ? { direction: "up", text: "+1 completed from previous attempt" } : null
       },
       {
         label: "Leaderboard Placement",
         value: placement.rank ? `#${placement.rank}` : "-",
         detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet",
-        accent: "indigo"
+        accent: "indigo",
+        trend: placementTrend
       },
       {
         label: "Study Points",
         value: studyPoints.toLocaleString(),
         detail: "From exams and completed modules",
-        accent: "teal"
+        accent: "teal",
+        trend: pointsTrend
       }
     ],
     progression,
@@ -1186,7 +1218,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
   );
   const reviewStatus = essayResponses.length ? "Pending Review" : "Analyzed";
   const exams = [
-    { name: blueprint.title, takenAt, score: results.finalPct, finalPct: results.finalPct, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), durationSeconds, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
+    { examId: blueprint.id, name: blueprint.title, takenAt, score: results.finalPct, finalPct: results.finalPct, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), durationSeconds, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
     ...currentDashboard.exams
   ];
 
@@ -1260,6 +1292,28 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       : { title: "AI Deep Dive: Strong Performance", priority: "Maintenance Mode", detail: "You scored above the intervention threshold across all MCQ subjects." }
   };
 
+  const normalizedDashboard = normalizeDashboardAnalytics(nextDashboard, user.email);
+  saveStudentDashboard(user.email, normalizedDashboard);
+  return normalizedDashboard;
+}
+
+export function saveIncompleteExamAttemptForStudent(user, blueprint, sessionId) {
+  const dashboard = getStudentDashboard(user.email);
+  if (blueprint.accessType === "unlimited") return dashboard;
+  if ((dashboard.exams || []).some((exam) => exam.sessionId === sessionId)) return dashboard;
+  const nextDashboard = {
+    ...dashboard,
+    exams: [{
+      examId: blueprint.id,
+      sessionId,
+      name: blueprint.title,
+      takenAt: new Date().toISOString(),
+      score: null,
+      status: "Incomplete",
+      incomplete: true,
+      passed: false
+    }, ...(dashboard.exams || [])]
+  };
   saveStudentDashboard(user.email, nextDashboard);
   return nextDashboard;
 }
@@ -1376,7 +1430,7 @@ export function scoreBlueprintAttempt(blueprint, responses, meta = {}) {
   const weaknesses = subjectScores.filter((subject) => subject.total > 0 && subject.pct < 80).map((subject) => ({ ...subject, topicFocus: subject.title }));
   const essayQuestions = blueprint.sections.flatMap((section) => section.questions.filter((question) => question.type === "paragraph" || question.type === "essay"));
   const hasEssays = essayQuestions.length > 0;
-  return { finalPct, correct, total, earnedPoints, totalPoints, targetScore: Math.min(100, finalPct + 12), subjectScores, weaknesses, itemDiagnostics, hasEssays, essayCount: essayQuestions.length, status: hasEssays ? "Pending Review" : "Analyzed" };
+  return { finalPct, correct, total, earnedPoints, totalPoints, subjectScores, weaknesses, itemDiagnostics, hasEssays, essayCount: essayQuestions.length, status: hasEssays ? "Pending Review" : "Analyzed" };
 }
 
 export function getWeaknessAnalysis(email, threshold = 75) {

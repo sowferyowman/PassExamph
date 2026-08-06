@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const { getDb } = require("../config/database");
-const { resetStudentPasswordByAdmin } = require("../services/authService");
+const { resetStudentPasswordByAdmin, updateProfile } = require("../services/authService");
 
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Admin access required." });
@@ -145,13 +145,9 @@ router.patch("/students/:studentId", (req, res) => {
   const smsNumber = String(req.body?.smsNumber || "").trim();
   const recoveryEmail = String(req.body?.recoveryEmail || "").trim().toLowerCase();
   if (smsNumber && !/^\+?\d{10,15}$/.test(smsNumber.replace(/[\s()-]/g, ""))) return res.status(400).json({ error: "Enter a valid mobile number." });
-  if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) return res.status(400).json({ error: "Enter a valid recovery email." });
-  const db = getDb();
-  db.prepare("UPDATE users SET name=CASE WHEN ? <> '' THEN ? ELSE name END,nickname=?,phone_number=?,sms_number=?,recovery_email=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(name, name, nickname || null, smsNumber || null, smsNumber || null, recoveryEmail || null, studentId);
-  const profile = db.prepare("SELECT user_id FROM student_profiles WHERE user_id=?").get(studentId);
-  if (profile) db.prepare("UPDATE student_profiles SET display_name=CASE WHEN ? <> '' THEN ? ELSE display_name END,target_school=? WHERE user_id=?").run(name, name, school, studentId);
-  else db.prepare("INSERT INTO student_profiles (user_id,display_name,target_school) VALUES (?,?,?)").run(studentId, name || "Student", school);
-  res.json({ ok: true });
+  if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) return res.status(400).json({ error: "Enter a valid email address." });
+  const updatedUser = updateProfile(studentId, { name, nickname, school, phoneNumber: smsNumber, recoveryEmail });
+  res.json({ user: updatedUser });
 });
 
 router.post("/students/:studentId/reset-password", async (req, res) => {

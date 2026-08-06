@@ -99,6 +99,20 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
         }
       `}</style>
 
+      <nav className="sticky top-0 z-30 flex gap-1 overflow-x-auto border-b border-slate-200 bg-white p-2 shadow-sm md:hidden" aria-label="Admin navigation">
+        {[
+          ["dashboard", "Dashboard", FaTachometerAlt, () => navigate("/admin/dashboard")],
+          ["exam", "Exams", FaClipboardList, () => goToBuilder("exam")],
+          ["reviewer", "Materials", FaBookOpen, () => goToBuilder("reviewer")],
+          ["drill", "Drills", FaBullseye, () => navigate("/admin/drills")],
+          ["settings", "Settings", FaCog, () => navigate("/admin/settings")]
+        ].map(([key, label, Icon, onClick]) => (
+          <button key={key} type="button" onClick={onClick} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-black ${active === key ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>
+            <Icon /> {label}
+          </button>
+        ))}
+      </nav>
+
       <aside className={`sidebar-gradient hidden h-screen shrink-0 flex-col text-white shadow-xl border-r border-white/5 transition-[width] duration-200 md:flex ${sidebarCollapsed ? "w-20" : "w-64"}`}>
         
         {/* Logo / Header & Toggle Block */}

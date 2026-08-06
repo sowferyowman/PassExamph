@@ -1,80 +1,47 @@
-# ACET-DEMO-MVP
-An adaptive mock examination platform for high-stakes exam prep for Ateneo University (React/Vite frontend and Express/SQLite backend)
+# ACET Demo MVP
 
-## Structure
+PassExams.ph is an adaptive examination-preparation MVP for Philippine entrance exams. It has a React/Vite client, an Express API, and a local SQLite database.
 
-- `client/` - React app with Router, Tailwind, Chart.js, Axios, React Icons, Framer Motion, and React Hook Form.
-- `server/` - Express API with SQLite persistence and seeded ACET demo data.
-
-## Scripts
+## Quick start
 
 ```bash
+git clone <repository-url>
+cd ACET-DEMO-MVP
+copy server\.env.example server\.env
+copy client\.env.example client\.env
 npm run install:all
 npm run dev
 ```
-The client runs on `http://localhost:5173` and proxies API requests to `http://localhost:4000`.
 
-### Out-of-Scope 
-* Live Server Hosting Infrastructure Setup 
-* Production Cloud Database Provisioning & Management
-* Continuous Infrastructure & Server-Side Security Monitoring
-* DevOps/SysAdmin Live Operations and Maintenance
+Open `http://localhost:5173`. The API runs at `http://localhost:4000`.
 
----
+## Documentation
 
-## Pulling Changes
+- [Installation guide](docs/INSTALLATION.md)
+- [Features](docs/FEATURES.md)
+- [Folder structure](docs/FOLDER-STRUCTURE.md)
+- [Environment variables](docs/ENVIRONMENT.md)
+- [Deployment, domain, HTTPS, and database migration](docs/DEPLOYMENT.md)
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run install:all` | Install root/server and client dependencies. |
+| `npm run dev` | Start the API and Vite development server together. |
+| `npm run client:build` | Create a production client build. |
+| `npm run server:start` | Start the Express API. |
+| `npm run knip` | Audit unused files, exports, and dependencies. |
+
+## Contribution workflow
+
 ```bash
-git branch 
-# checks what branch you are in
-# you must be in [your-branch] before doing the next steps
-git fetch origin
-git merge origin/development-branch
-```
-**Note: Always pull from the repository before pushing your changes.**
-
-## Adding/Pushing your Changes Workflow
-```bash
-git checkout -b [your-branch]
-# make your changes
+git checkout -b your-branch
+git pull origin <base-branch>
+# make and test changes
 git add .
-git commit -m "[see format below]: describe what you did"
-# example git commit -m "[feat]: created login page"
-git push origin [your-branch]
-# example git push origin mejia-branch
-```
----
-
-## Commit Message Format
-```
-feat:     new feature added
-fix:      bug fix
-chore:    config, deps, tooling (no logic change)
-refactor: code restructure, no behavior change
-docs:     documentation only
-style:    formatting only
-test:     adding or fixing tests
+git commit -m "feat: describe the change"
+git push origin your-branch
 ```
 
----
-## Creating a Pull Request
-This is to be done **every time you push changes** to the repo.
-1. Go to the repo on GitHub — you'll see a **Compare & pull request banner**
-2. Click it, or go to **Pull requests → New pull request**
-3. base: **development-branch** ← compare: **your-branch**
-4. Write a *short description of what you did*, which pages/files you changed and what changed in them
-5. Click **Create pull request**
-
-Install Root/Backend dependencies:
-
-Bash
-npm install
-Navigate into the client folder and install Frontend dependencies:
-
-Bash
-cd client
-npm install
-Step 3: Start the Application
-While still inside the client folder terminal, run the Vite development server:
-
-Bash
-npm run dev
+Use conventional prefixes such as `feat`, `fix`, `docs`, `refactor`, `test`, and `chore`.

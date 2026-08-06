@@ -874,7 +874,7 @@ export default function CreateExamPage() {
   }
 
   return (
-    <main className="flex h-screen overflow-hidden bg-slate-100">
+    <main className="admin-shell">
       {/* Enlarge the rich-text editor so it uses the available width/height instead of a cramped box */}
       <style>{`
         .tox-tinymce {
@@ -892,15 +892,15 @@ export default function CreateExamPage() {
 
       <AdminSidebar active={mode} onModeChange={setMode} />
 
-      <div className="flex-1 overflow-y-auto">
-        <header className="border-b border-slate-200 bg-white px-6 py-4">
+      <div className="admin-content">
+        <header className="workspace-header">
           <div className="mx-auto max-w-[1800px] flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Workspace</p>
-              <h1 className="text-2xl font-black text-slate-950">
+              <p className="workspace-eyebrow">Admin Workspace</p>
+              <h1 className="workspace-title">
                 {editingExamId ? "Edit Exam" : `Create ${mode === "exam" ? "Exam" : "Reviewer"}`}
               </h1>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
+              <p className="workspace-description">
                 {mode === "exam"
                   ? "Build scored questionnaire blocks for students."
                   : "Build course-style study modules with readings and video resources."}
@@ -918,11 +918,11 @@ export default function CreateExamPage() {
         </header>
 
         <div
-          className={`mx-auto grid max-w-[1800px] gap-6 p-6 transition-all duration-200 ${
+          className={`mx-auto grid max-w-[1800px] gap-4 p-4 transition-all duration-200 ${
             isPanelCollapsed ? "grid-cols-1" : "lg:grid-cols-[1fr_24rem]"
           }`}
         >
-          <section className="space-y-5 min-w-0">
+          <section className="space-y-3 min-w-0">
             {(editingExamId || editingReviewerId) && (
               <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <p className="text-sm font-semibold text-blue-700">Editing {editingExamId ? "Exam" : "Reviewer"} - Make your changes and click update</p>
@@ -952,8 +952,8 @@ export default function CreateExamPage() {
           </section>
 
           {!isPanelCollapsed && (
-            <aside className="space-y-5 min-w-0">
-              {mode === "exam" ? <div className="glass-card p-5">
+            <aside className="space-y-3 min-w-0">
+              {mode === "exam" ? <div className="glass-card p-4">
                 <p className="text-xs font-black uppercase tracking-wider text-slate-500">Current Draft</p>
                 <p className="mt-3 text-3xl font-black text-slate-950">{mode === "exam" ? totalQuestions : reviewerForm.modules.length}</p>
                 <p className="text-sm font-semibold text-slate-500">
@@ -971,7 +971,7 @@ export default function CreateExamPage() {
                     {examForm.accessType === "unlimited" && "Unlimited attempts"}
                   </p>
                 )}
-              </div> : <div className="glass-card p-5">
+              </div> : <div className="glass-card p-4">
                 <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Reviewers</p>
                 <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
                   {reviewers.length ? reviewers.map((reviewer) => (
@@ -996,7 +996,7 @@ export default function CreateExamPage() {
               </div>}
 
               {mode === "exam" && (
-                <div className="glass-card p-5">
+                <div className="glass-card p-4">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs font-black uppercase tracking-wider text-slate-500">Published Exams</p>
                     <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
@@ -1091,134 +1091,121 @@ export default function CreateExamPage() {
         {/* ============================================
             EXAM INFORMATION - GROUPED TOGETHER
             ============================================ */}
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Exam Information</h2>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-3">
             <label className="block">
               <span className="text-xs font-bold text-slate-600">Exam Title <span className="text-rose-500">*</span></span>
               <input
                 value={examForm.title}
                 onChange={(event) => setExamForm((current) => ({ ...current, title: event.target.value }))}
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Enter exam title"
               />
             </label>
-            
-            <label className="block">
-              <span className="text-xs font-bold text-slate-600">Description <span className="text-slate-400">(optional)</span></span>
-              <input
-                value={examForm.description || ""}
-                onChange={(event) => setExamForm((current) => ({ ...current, description: event.target.value }))}
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                placeholder="Add a brief description"
-              />
-            </label>
-            
-            <label className="block">
-              <div className="flex items-center gap-2">
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_10rem] gap-3">
+              <label className="block">
+                <span className="text-xs font-bold text-slate-600">Description <span className="text-slate-400">(optional)</span></span>
+                <input
+                  value={examForm.description || ""}
+                  onChange={(event) => setExamForm((current) => ({ ...current, description: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
+                  placeholder="Add a brief description"
+                />
+              </label>
+
+              <label className="block">
                 <span className="text-xs font-bold text-slate-600">Passing Score <span className="text-rose-500">*</span></span>
-                <span className="text-xs text-slate-400 font-medium">(0-100%)</span>
-              </div>
-              <p className="mt-0.5 text-xs text-slate-400">Students at or above this score will receive a Pass result.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={examForm.passingScore ?? 75}
-                onChange={(event) => setExamForm((current) => ({ ...current, passingScore: Number(event.target.value) }))}
-                className="mt-1.5 w-36 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              />
-            </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={examForm.passingScore ?? 75}
+                  onChange={(event) => setExamForm((current) => ({ ...current, passingScore: Number(event.target.value) }))}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  placeholder="0-100%"
+                />
+              </label>
+            </div>
           </div>
         </div>
 
         {/* ============================================
             ACCESS CONTROL - CLEANER LAYOUT
             ============================================ */}
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-5 bg-purple-500 rounded-full"></div>
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Student Access Control</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className={`grid grid-cols-1 ${examForm.accessType === "limited" ? "md:grid-cols-4" : "md:grid-cols-3"} gap-2`}>
             <button
               type="button"
               onClick={() => setExamForm((current) => ({ ...current, accessType: "once", maxAttempts: 1 }))}
-              className={`flex items-center gap-3 rounded-lg border p-4 transition ${
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 transition ${
                 examForm.accessType === "once" 
-                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200" 
-                  : "border-slate-200 hover:border-slate-300 text-slate-600"
+                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-200" 
+                  : "border-slate-300 hover:border-slate-400 text-slate-600"
               }`}
             >
-              <FaLock className="text-lg flex-shrink-0" />
-              <div className="text-left">
-                <p className="font-bold text-sm">One Attempt</p>
-                <p className="text-xs text-slate-500">Take once</p>
-              </div>
+              <FaLock className="text-sm flex-shrink-0" />
+              <span className="font-bold text-xs">One Attempt</span>
             </button>
             
             <button
               type="button"
               onClick={() => setExamForm((current) => ({ ...current, accessType: "limited", maxAttempts: current.maxAttempts || 3 }))}
-              className={`flex items-center gap-3 rounded-lg border p-4 transition ${
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 transition ${
                 examForm.accessType === "limited" 
-                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200" 
-                  : "border-slate-200 hover:border-slate-300 text-slate-600"
+                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-200" 
+                  : "border-slate-300 hover:border-slate-400 text-slate-600"
               }`}
             >
-              <FaUsers className="text-lg flex-shrink-0" />
-              <div className="text-left">
-                <p className="font-bold text-sm">Limited Attempts</p>
-                <p className="text-xs text-slate-500">Set max attempts</p>
-              </div>
+              <FaUsers className="text-sm flex-shrink-0" />
+              <span className="font-bold text-xs">Limited Attempts</span>
             </button>
             
             <button
               type="button"
               onClick={() => setExamForm((current) => ({ ...current, accessType: "unlimited", maxAttempts: 999 }))}
-              className={`flex items-center gap-3 rounded-lg border p-4 transition ${
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 transition ${
                 examForm.accessType === "unlimited" || !examForm.accessType
-                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200" 
-                  : "border-slate-200 hover:border-slate-300 text-slate-600"
+                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-200" 
+                  : "border-slate-300 hover:border-slate-400 text-slate-600"
               }`}
             >
-              <FaUnlock className="text-lg flex-shrink-0" />
-              <div className="text-left">
-                <p className="font-bold text-sm">Unlimited</p>
-                <p className="text-xs text-slate-500">No restrictions</p>
-              </div>
+              <FaUnlock className="text-sm flex-shrink-0" />
+              <span className="font-bold text-xs">Unlimited</span>
             </button>
-          </div>
-          
-          {examForm.accessType === "limited" && (
-            <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="flex items-center gap-4">
-                <span className="text-xs font-bold text-slate-600">Maximum Attempts</span>
+
+            {examForm.accessType === "limited" && (
+              <label className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2">
+                <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Max Attempts</span>
                 <input
                   type="number"
                   min="1"
                   max="10"
                   value={examForm.maxAttempts || 3}
                   onChange={(event) => setExamForm((current) => ({ ...current, maxAttempts: Number(event.target.value) }))}
-                  className="w-24 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className="w-14 rounded border border-slate-300 px-2 py-1 text-xs font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
-                <span className="text-xs text-slate-400">(1-10 attempts)</span>
               </label>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* ============================================
             CSV BULK IMPORT
             ============================================ */}
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-5 bg-green-500 rounded-full"></div>
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Bulk Import Questions</h2>
           </div>
           
@@ -1245,7 +1232,7 @@ export default function CreateExamPage() {
             </div>
           </div>
 
-          <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-medium text-slate-500">
+          <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-500">
             <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-slate-600">CSV column format</summary>
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-1.5">
               <p><span className="font-bold text-slate-700">subject_category</span> — subject/section name</p>
@@ -1263,7 +1250,7 @@ export default function CreateExamPage() {
           </details>
 
           {csvImportResult && (
-            <div className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${
+            <div className={`mt-3 rounded-lg border p-3 text-sm font-semibold ${
               csvImportResult.importedCount > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
             }`}>
               <div className="flex items-center gap-2">
@@ -1288,9 +1275,9 @@ export default function CreateExamPage() {
             SUBJECT SECTIONS
             ============================================ */}
         {examForm.sections.map((section, sectionIndex) => (
-          <article key={`${section.subjectTitle || sectionIndex}-${sectionIndex}`} className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+          <article key={`${section.subjectTitle || sectionIndex}-${sectionIndex}`} className="glass-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-5 bg-orange-500 rounded-full"></div>
               <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Subject #{sectionIndex + 1}</h2>
             </div>
             
@@ -1301,19 +1288,19 @@ export default function CreateExamPage() {
                   <input
                     value={section.subjectTitle}
                     onChange={(event) => updateSection(sectionIndex, { subjectTitle: event.target.value })}
-                    className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                     placeholder="e.g., Mathematics, English, Science"
                   />
                 </label>
                 <label>
                   <span className="text-xs font-bold text-slate-600">Time Allotment <span className="text-rose-500">*</span></span>
-                  <div className="mt-1.5 flex items-center gap-2">
+                  <div className="mt-1 flex items-center gap-2">
                     <input
                       type="number"
                       min="1"
                       value={Math.round(section.allottedTimeSec / 60)}
                       onChange={(event) => updateSection(sectionIndex, { allottedTimeSec: Number(event.target.value) * 60 })}
-                      className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       placeholder="Minutes"
                     />
                     <span className="text-xs font-medium text-slate-400 whitespace-nowrap">minutes</span>
@@ -1325,11 +1312,11 @@ export default function CreateExamPage() {
               </button>
             </div>
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-4 space-y-3">
               {section.questions.map((question, questionIndex) => renderQuestionCard(sectionIndex, questionIndex, question))}
             </div>
 
-            <button onClick={() => addQuestion(sectionIndex)} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">
+            <button onClick={() => addQuestion(sectionIndex)} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition">
               <FaPlus /> Add Question
             </button>
           </article>
@@ -1343,9 +1330,9 @@ export default function CreateExamPage() {
   // ============================================
   function renderQuestionCard(sectionIndex, questionIndex, question) {
     return (
-      <div key={`${sectionIndex}-${questionIndex}`} className="rounded-lg border border-slate-200 bg-white p-5">
+      <div key={`${sectionIndex}-${questionIndex}`} className="rounded-lg border border-slate-200 bg-white p-4">
         {/* Question Header */}
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-black">
               {questionIndex + 1}
@@ -1367,7 +1354,7 @@ export default function CreateExamPage() {
         </div>
 
         {/* Question Configuration - Grouped Row */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
           <label>
             <span className="text-xs font-bold text-slate-600">Question Type</span>
             <select
@@ -1388,7 +1375,7 @@ export default function CreateExamPage() {
                 }
                 updateQuestion(sectionIndex, questionIndex, updates);
               }}
-              className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
               <option value="multiple_choice">Multiple Choice</option>
               <option value="checkboxes">Checkboxes</option>
@@ -1404,15 +1391,15 @@ export default function CreateExamPage() {
               min="1"
               value={question.points || 1}
               onChange={(event) => updateQuestion(sectionIndex, questionIndex, { points: Number(event.target.value) })}
-              className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </label>
         </div>
 
         {/* Options Section - Only for MC and Checkboxes */}
         {(question.type === "multiple_choice" || question.type === "checkboxes") && (
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-600">
                 Answer Options <span className="text-rose-500">*</span>
                 <span className="ml-2 text-xs font-normal text-slate-400">
@@ -1428,7 +1415,7 @@ export default function CreateExamPage() {
               </button>
             </div>
             
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 gap-1.5">
               {question.choiceOpts.map((option, optionIndex) => (
                 <div key={optionIndex} className="flex items-center gap-2">
                   <span className="w-8 text-sm font-bold text-slate-500 text-center">
@@ -1437,7 +1424,7 @@ export default function CreateExamPage() {
                   <input
                     value={option}
                     onChange={(event) => updateOption(sectionIndex, questionIndex, optionIndex, event.target.value)}
-                    className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                    className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                     placeholder={`Option ${getOptionLabel(optionIndex)}`}
                   />
                   {question.type === "multiple_choice" && (
@@ -1486,7 +1473,7 @@ export default function CreateExamPage() {
             </div>
             
             {question.type === "checkboxes" && (
-              <div className="mt-3 text-xs font-semibold text-slate-500">
+              <div className="mt-2 text-xs font-semibold text-slate-500">
                 Selected correct options: {(question.correctAnswers || []).length > 0 
                   ? (question.correctAnswers || []).map(idx => getOptionLabel(idx)).join(', ') 
                   : 'None selected'}
@@ -1497,13 +1484,13 @@ export default function CreateExamPage() {
 
         {/* Short Answer Section */}
         {question.type === "short_answer" && (
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
             <label className="block">
               <span className="text-xs font-bold text-slate-600">Answer Key <span className="text-rose-500">*</span></span>
               <input
                 value={question.correctText || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { correctText: event.target.value })}
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Enter the correct answer"
               />
             </label>
@@ -1512,13 +1499,13 @@ export default function CreateExamPage() {
 
         {/* Paragraph Section */}
         {question.type === "paragraph" && (
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
             <label className="block">
               <span className="text-xs font-bold text-slate-600">Sample Answer / Rubric <span className="text-slate-400">(optional)</span></span>
               <textarea
                 value={question.rubric || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { rubric: event.target.value })}
-                className="mt-1.5 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1 min-h-28 w-full resize-y rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Describe the key points the AI should look for..."
               />
             </label>
@@ -1528,20 +1515,20 @@ export default function CreateExamPage() {
         {/* ============================================
             DIAGNOSTIC TAGS - PROPERLY GROUPED TOGETHER
             ============================================ */}
-        <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+          <div className="flex items-center gap-2 mb-2">
             <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
             <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Diagnostic Tags</span>
             <span className="text-xs text-indigo-400 font-medium">(optional)</span>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <label>
               <span className="text-xs font-medium text-indigo-600">Subcategory</span>
               <input
                 value={question.diagnosticSubcategory || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSubcategory: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
                 placeholder="e.g., Algebra, Grammar, Reading"
               />
             </label>
@@ -1550,7 +1537,7 @@ export default function CreateExamPage() {
               <input
                 value={question.diagnosticSkillTag || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSkillTag: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
                 placeholder="e.g., Addition, Theme Analysis, Vocabulary"
               />
             </label>
@@ -1563,19 +1550,19 @@ export default function CreateExamPage() {
   function renderReviewerBuilder() {
     return (
       <>
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Reviewer Information</h2>
           </div>
           
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs font-bold text-slate-600">Reviewer Title <span className="text-rose-500">*</span></span>
               <input
                 value={reviewerForm.title}
                 onChange={(event) => setReviewerForm((current) => ({ ...current, title: event.target.value }))}
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-lg font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="Enter reviewer title"
               />
             </label>
@@ -1585,7 +1572,7 @@ export default function CreateExamPage() {
               <input
                 value={reviewerForm.subjectCategory}
                 onChange={(event) => setReviewerForm((current) => ({ ...current, subjectCategory: event.target.value }))}
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="e.g., Mathematics, English, Science"
               />
             </label>
@@ -1593,53 +1580,52 @@ export default function CreateExamPage() {
         </div>
 
         {reviewerForm.modules.map((module) => (
-          <article key={module.id} className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+          <article key={module.id} className="glass-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-5 bg-orange-500 rounded-full"></div>
               <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Module</h2>
             </div>
             
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <label className="flex-1 block">
-                <span className="text-xs font-bold text-slate-600">Module Title <span className="text-rose-500">*</span></span>
-                <input
-                  value={module.title}
-                  onChange={(event) => updateReviewerModule(module.id, { title: event.target.value })}
-                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
-                  placeholder="Enter module title"
-                />
-              </label>
+            <div className="flex items-start gap-3 mb-3">
+              <div className="grid flex-1 grid-cols-1 md:grid-cols-[1fr_1fr_8rem] gap-3">
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Module Title <span className="text-rose-500">*</span></span>
+                  <input
+                    value={module.title}
+                    onChange={(event) => updateReviewerModule(module.id, { title: event.target.value })}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
+                    placeholder="Enter module title"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Short Description <span className="text-slate-400">(optional)</span></span>
+                  <input
+                    value={module.description || ""}
+                    onChange={(event) => updateReviewerModule(module.id, { description: event.target.value })}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Brief module description"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-bold text-slate-600">Time <span className="text-slate-400">(min)</span></span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={module.estimatedMinutes || 15}
+                    onChange={(event) => updateReviewerModule(module.id, { estimatedMinutes: Math.max(1, Number(event.target.value)) })}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="15"
+                  />
+                </label>
+              </div>
               <button onClick={() => removeReviewerModule(module.id)} className="icon-button text-rose-500 hover:text-rose-700 transition flex-shrink-0 mt-6" aria-label="Remove module">
                 <FaTrash />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="block">
-                <span className="text-xs font-bold text-slate-600">Short Description <span className="text-slate-400">(optional)</span></span>
-                <input
-                  value={module.description || ""}
-                  onChange={(event) => updateReviewerModule(module.id, { description: event.target.value })}
-                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Brief module description"
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold text-slate-600">Estimated Time <span className="text-slate-400">(minutes)</span></span>
-                <input
-                  type="number"
-                  min="1"
-                  value={module.estimatedMinutes || 15}
-                  onChange={(event) => updateReviewerModule(module.id, { estimatedMinutes: Math.max(1, Number(event.target.value)) })}
-                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Estimated minutes"
-                />
-              </label>
-            </div>
-
-            <label className="block mt-4">
+            <label className="block mt-3">
               <span className="text-xs font-bold text-slate-600">Reading Material <span className="text-rose-500">*</span></span>
-              <div className="w-full mt-1.5">
+              <div className="w-full mt-1">
                 <TinyMCEEditor
                   value={module.content}
                   onChange={(value) => updateReviewerModule(module.id, { content: value })}
@@ -1648,12 +1634,12 @@ export default function CreateExamPage() {
               </div>
             </label>
             
-            <label className="block mt-4">
+            <label className="block mt-3">
               <span className="text-xs font-bold text-slate-600">Video URL <span className="text-slate-400">(optional)</span></span>
               <input
                 value={module.videoUrl || ""}
                 onChange={(event) => updateReviewerModule(module.id, { videoUrl: event.target.value })}
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder:text-slate-400"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
                 placeholder="https://youtube.com/watch?v=..."
               />
             </label>

@@ -34,34 +34,34 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <main className="flex h-screen overflow-hidden bg-slate-100">
+    <main className="admin-shell">
       <AdminSidebar active="settings" />
-      <div className="flex-1 overflow-y-auto p-6 md:p-10">
-        <div className="mx-auto max-w-3xl">
-          <p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Account</p>
-          <h1 className="mt-1 text-3xl font-black text-slate-950">Settings</h1>
-          <p className="mt-2 text-sm font-semibold text-slate-500">Manage your administrator password and active sessions.</p>
+      <div className="admin-content">
+        <div className="admin-page max-w-3xl">
+          <p className="workspace-eyebrow">Admin Account</p>
+          <h1 className="workspace-title">Settings</h1>
+          <p className="workspace-description">Manage your administrator password and active sessions.</p>
 
-          <form onSubmit={submit} className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+          <form onSubmit={submit} className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700"><FaLock /></span>
-              <div><h2 className="text-xl font-black text-slate-950">Change Password</h2><p className="text-sm font-semibold text-slate-500">Use at least 8 characters.</p></div>
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-blue-700"><FaLock /></span>
+              <div><h2 className="text-lg font-black text-slate-950">Change Password</h2><p className="text-xs font-semibold text-slate-500">Use at least 8 characters.</p></div>
             </div>
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
               <Field label="Current password" value={form.currentPassword} onChange={(value) => setForm({ ...form, currentPassword: value })} />
               <Field label="New password" value={form.newPassword} onChange={(value) => setForm({ ...form, newPassword: value })} />
             </div>
-            <button className="mt-6 rounded-lg bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">Update Password</button>
-            {message && <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{message}</p>}
-            {error && <p className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p>}
+            <button className="button-primary mt-3">Update Password</button>
+            {message && <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">{message}</p>}
+            {error && <p className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</p>}
           </form>
 
-          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-            <h2 className="text-xl font-black text-slate-950">Sessions</h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Sign out other browsers and devices.</p>
-            <button type="button" onClick={revokeSessions} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700 hover:bg-rose-100"><FaSignOutAlt /> Log Out All Other Sessions</button>
-            <div className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200">
-              {activeSessions.length ? activeSessions.filter((session) => !session.revoked).map((session, index) => <div key={session.id} className="flex items-center justify-between gap-4 px-4 py-3 text-xs"><div className="min-w-0"><p className="font-black text-slate-800">{index === 0 ? "Most recent session" : "Active session"}</p><p className="mt-1 truncate text-slate-500">{session.userAgent || "Unknown device"}</p></div><p className="shrink-0 font-semibold text-slate-400">{session.createdAt ? new Date(session.createdAt).toLocaleString() : "—"}</p></div>) : <p className="px-4 py-3 text-xs font-semibold text-slate-500">No active sessions found.</p>}
+          <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <h2 className="text-lg font-black text-slate-950">Sessions</h2>
+            <p className="mt-0.5 text-xs font-semibold text-slate-500">Sign out other browsers and devices.</p>
+            <button type="button" onClick={revokeSessions} className="button-danger mt-3"><FaSignOutAlt /> Log Out All Other Sessions</button>
+            <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {activeSessions.length ? activeSessions.filter((session) => !session.revoked).map((session, index) => <div key={session.id} className="flex items-center justify-between gap-4 px-3 py-2 text-xs"><div className="min-w-0"><p className="font-black text-slate-800">{index === 0 ? "Most recent session" : "Active session"}</p><p className="mt-0.5 truncate text-slate-500">{session.userAgent || "Unknown device"}</p></div><p className="shrink-0 font-semibold text-slate-400">{session.createdAt ? new Date(session.createdAt).toLocaleString() : "—"}</p></div>) : <p className="px-3 py-2 text-xs font-semibold text-slate-500">No active sessions found.</p>}
             </div>
           </section>
         </div>
@@ -71,5 +71,5 @@ export default function AdminSettingsPage() {
 }
 
 function Field({ label, value, onChange }) {
-  return <label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">{label}</span><input required minLength={8} type="password" value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>;
+  return <label className="block"><span className="text-xs font-black uppercase tracking-wider text-slate-500">{label}</span><input required minLength={8} type="password" value={value} onChange={(event) => onChange(event.target.value)} className="form-control mt-1" /></label>;
 }

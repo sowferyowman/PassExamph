@@ -355,7 +355,7 @@ export default function DashboardLayout() {
         }
       `}</style>
 
-      <div className="flex h-screen overflow-hidden bg-slate-50">
+      <div className="app-shell">
         
         {/* DESKTOP SIDEBAR */}
         <aside className={`sidebar-gradient hidden shrink-0 flex-col text-white shadow-xl border-r border-white/5 transition-[width] duration-200 md:flex ${sidebarCollapsed ? "w-20" : "w-64"}`}>
@@ -561,8 +561,8 @@ export default function DashboardLayout() {
         )}
 
         {/* MAIN BODY LAYOUT */}
-        <main className="flex-1 overflow-y-auto bg-transparent">
-          <header className="border-b border-slate-200/50 bg-transparent px-5 py-4 md:px-8">
+        <main className="app-content">
+          <header className="app-topbar">
             <div className="flex items-center justify-between">
               <button 
                 type="button" 
@@ -578,7 +578,7 @@ export default function DashboardLayout() {
             </div>
           </header>
 
-          <div className="p-5 md:p-8 max-w-7xl mx-auto w-full">
+          <div className="app-page">
             <Outlet />
           </div>
         </main>

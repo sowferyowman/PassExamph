@@ -169,29 +169,28 @@ export default function CommunityForumPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-5 py-8 text-slate-900 md:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="page-shell text-slate-900">
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <p className="text-xs font-black uppercase tracking-wider text-blue-700">Community Forum</p>
-            <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">Student Discussion Hub</h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Ask questions, compare strategies, and react to useful student posts.</p>
+            <p className="page-eyebrow">Community Forum</p>
+            <h1 className="page-title">Student Discussion Hub</h1>
+            <p className="page-description">Ask questions, compare strategies, and react to useful student posts.</p>
           </div>
-          <button onClick={() => setShowTopicForm((value) => !value)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-md transition hover:bg-blue-700">
+          <button onClick={() => setShowTopicForm((value) => !value)} className="button-primary">
             <FaPlus /> New Topic
           </button>
         </header>
 
         {showTopicForm && (
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="card-section">
             <form onSubmit={submitTopic}>
               <div className="grid gap-3 md:grid-cols-[1fr_12rem]">
-                <input value={topicForm.title} onChange={(event) => setTopicForm((current) => ({ ...current, title: event.target.value }))} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Topic title" />
-                <select value={topicForm.tag} onChange={(event) => setTopicForm((current) => ({ ...current, tag: event.target.value }))} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">{forumCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
+                <input value={topicForm.title} onChange={(event) => setTopicForm((current) => ({ ...current, title: event.target.value }))} className="form-control" placeholder="Topic title" />
+                <select value={topicForm.tag} onChange={(event) => setTopicForm((current) => ({ ...current, tag: event.target.value }))} className="form-control">{forumCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
               </div>
-              <textarea value={topicForm.body} onChange={(event) => setTopicForm((current) => ({ ...current, body: event.target.value }))} className="mt-3 h-28 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="What do you want to discuss?" />
+              <textarea value={topicForm.body} onChange={(event) => setTopicForm((current) => ({ ...current, body: event.target.value }))} className="form-control mt-3 h-28 resize-none" placeholder="What do you want to discuss?" />
               <div className="mt-3 flex justify-end">
-                <button className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-md hover:bg-blue-700">Post Topic</button>
+                <button className="button-primary">Post Topic</button>
               </div>
             </form>
           </section>
@@ -296,7 +295,7 @@ export default function CommunityForumPage() {
 
                     {expandedThreadIds[thread.id] && <div className="mt-5 flex gap-2.5">
                       <input value={replyDrafts[thread.id] || ""} onChange={(event) => setReplyDrafts((current) => ({ ...current, [thread.id]: event.target.value }))} className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Write a supportive reply..." />
-                      <button onClick={() => submitReply(thread.id)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-700"><FaReply /> Reply</button>
+                      <button onClick={() => submitReply(thread.id)} className="button-primary text-xs"><FaReply /> Reply</button>
                     </div>}
                   </article>
                 ))}
@@ -305,7 +304,7 @@ export default function CommunityForumPage() {
                   <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
                     <p className="text-lg font-black text-slate-950">No discussions yet.</p>
                     <p className="mt-1 text-sm font-semibold text-slate-500">Be the first to start a helpful conversation in this category.</p>
-                    <button type="button" onClick={() => setShowTopicForm(true)} className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white">Create a topic</button>
+                    <button type="button" onClick={() => setShowTopicForm(true)} className="button-primary mt-4 text-xs">Create a topic</button>
                   </div>
                 )}
               </section>
@@ -355,7 +354,6 @@ export default function CommunityForumPage() {
             </aside>
           </div>
         )}
-      </div>
     </div>
   );
 }
@@ -392,7 +390,7 @@ function PaginationControls({ page, totalPages, onPageChange }) {
       <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-30">Previous</button>
       <div className="flex flex-wrap items-center gap-2">
         {pages.map((item) => (
-          <button key={item} type="button" onClick={() => onPageChange(item)} className={`grid h-9 w-9 place-items-center rounded-xl text-xs font-black transition ${page === item ? "bg-blue-600 text-white shadow-sm" : "border border-gray-200 bg-white text-slate-500 hover:bg-gray-50"}`}>{item}</button>
+          <button key={item} type="button" onClick={() => onPageChange(item)} className={`grid h-9 w-9 place-items-center rounded-xl text-xs font-black transition ${page === item ? "bg-primary text-white shadow-sm hover:bg-[#002A4C]" : "border border-gray-200 bg-white text-slate-500 hover:bg-gray-50"}`}>{item}</button>
         ))}
       </div>
       <button type="button" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-30">Next</button>

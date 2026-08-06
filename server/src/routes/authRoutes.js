@@ -47,6 +47,6 @@ router.post("/forgot-password-sms", async (req, res) => { try { res.json(await a
 router.post("/reset-password-sms", async (req, res) => { try { res.json(await auth.resetPasswordWithSms(req.body?.code, req.body?.newPassword)); } catch (e) { error(res, e); } });
 router.post("/forgot-password-email", async (req, res) => { try { res.json(await auth.requestEmailReset(req.body?.email)); } catch (e) { error(res, e); } });
 router.post("/reset-password-email", async (req, res) => { try { res.json(await auth.resetPasswordWithEmail(req.body?.code, req.body?.newPassword)); } catch (e) { error(res, e); } });
-router.patch("/profile", authenticate, async (req, res) => { try { auth.updateProfile(req.user.id, req.body || {}); res.json({ ok: true }); } catch (e) { error(res, e); } });
+router.patch("/profile", authenticate, async (req, res) => { try { const user = auth.updateProfile(req.user.id, req.body || {}); res.json({ user }); } catch (e) { error(res, e); } });
 
 module.exports = { router, setSessionCookies };

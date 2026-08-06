@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { FaArrowLeft, FaCheck, FaRedo, FaSpinner } from "react-icons/fa";
+import { FaArrowLeft, FaBrain, FaCheck, FaRedo, FaSpinner } from "react-icons/fa";
 import { routeAdaptiveLearning } from "../api/aiApi";
 import { loadDrillSessions, saveDrillSessionToApi } from "../api/drillApi";
 import {
@@ -17,6 +17,66 @@ import {
 } from "../services/storage";
 
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
+
+const TIERS = {
+  strength: { label: "Strength", badge: "bg-emerald-100 text-emerald-700", accent: "text-emerald-700", hex: "#10b981" },
+  developing: { label: "Developing", badge: "bg-blue-100 text-blue-700", accent: "text-blue-700", hex: "#2563eb" },
+  priority: { label: "Priority", badge: "bg-rose-100 text-rose-700", accent: "text-rose-700", hex: "#f43f5e" }
+};
+
+function getTier(pct) {
+  if (pct >= 80) return TIERS.strength;
+  if (pct >= 65) return TIERS.developing;
+  return TIERS.priority;
+}
+
+function RichText({ text, boldClassName = "font-black text-[var(--wd-text)]" }) {
+  if (!text) return null;
+  const parts = String(text).split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i} className={boldClassName}>{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
+function CircularProgress({ pct, size, strokeWidth, color, trackColor = "#e2e8f0", active = true, duration = 900, delay = 0, children }) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const [drawn, setDrawn] = useState(0);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    const t = setTimeout(() => setDrawn(pct), delay);
+    return () => clearTimeout(t);
+  }, [pct, active, delay]);
+
+  const offset = circumference - (drawn / 100) * circumference;
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: `stroke-dashoffset ${duration}ms cubic-bezier(0.65,0,0.35,1)` }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">{children}</div>
+    </div>
+  );
+}
 
 function GlobalStyle() {
   return (
@@ -40,12 +100,12 @@ function GlobalStyle() {
       .progress-fill { background: var(--wd-accent); border-radius: 999px; transition: width 0.4s ease; }
 
       .btn-primary {
-        background: var(--wd-accent);
+        background: #003A6C;
         color: #fff;
         border-radius: 8px;
         transition: background 0.15s ease;
       }
-      .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+      .btn-primary:hover:not(:disabled) { background: #002A4C; }
       .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
 
       .btn-secondary {
@@ -65,10 +125,17 @@ function GlobalStyle() {
       .option-row:hover:not(.is-disabled) { border-color: #d1d5db; }
       .option-row.is-selected { border-color: var(--wd-accent); background: var(--wd-accent-soft); }
 
+      .subject-card {
+        transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .subject-card:hover:not(.is-disabled) { border-color: #d1d5db; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06); transform: translateY(-1px); }
+      .subject-card:active:not(.is-disabled) { transform: translateY(0); }
+
       .focus-ring:focus-visible { outline: 2px solid var(--wd-accent); outline-offset: 2px; }
 
       @media (prefers-reduced-motion: reduce) {
         .progress-fill { transition: none; }
+        .subject-card { transition: none; }
       }
     `}</style>
   );
@@ -191,15 +258,15 @@ export default function WeaknessDrillsPage() {
     setResults(scored);
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────
+  //  Empty state 
   if (!analysis.hasAttempts) {
     return (
       <div className="min-h-screen bg-white p-6" style={{ fontFamily: FONT }}>
         <GlobalStyle />
         <div className="mx-auto flex min-h-[80vh] max-w-md flex-col items-center justify-center text-center">
-          <h1 className="text-3xl font-bold text-[var(--wd-text)]">No drills yet</h1>
-          <p className="mt-2 text-base text-[var(--wd-text-muted)]">Complete a mock exam and this page will recommend what to practice, based on your results.</p>
-          <Link to="/exam" className="btn-primary focus-ring mt-6 inline-flex items-center px-5 py-2.5 text-base font-semibold">
+          <h1 className="text-2xl font-bold text-[var(--wd-text)]">No drills yet</h1>
+          <p className="mt-2 text-sm text-[var(--wd-text-muted)]">Complete a mock exam and this page will recommend what to practice, based on your results.</p>
+          <Link to="/exam" className="btn-primary focus-ring mt-6 inline-flex items-center px-5 py-2.5 text-sm font-semibold">
             View mock exams
           </Link>
         </div>
@@ -207,7 +274,7 @@ export default function WeaknessDrillsPage() {
     );
   }
 
-  // ── Active drill ────────────────────────────────────────────────────────
+  //  Active drill  
   if (activeSubject) {
     const currentQuestion = questions[activeIndex];
     const progressPercent = questions.length ? Math.round(((activeIndex + 1) / questions.length) * 100) : 0;
@@ -216,18 +283,18 @@ export default function WeaknessDrillsPage() {
       <div className="min-h-screen bg-white p-5 md:p-10" style={{ fontFamily: FONT }}>
         <GlobalStyle />
         <div className="mx-auto max-w-2xl space-y-6">
-          <button onClick={() => setActiveSubject(null)} className="focus-ring inline-flex items-center gap-2 text-base font-medium text-[var(--wd-text-muted)] transition hover:text-[var(--wd-text)]">
-            <FaArrowLeft className="text-sm" /> Back
+          <button onClick={() => setActiveSubject(null)} className="focus-ring inline-flex items-center gap-2 text-sm font-medium text-[var(--wd-text-muted)] transition hover:text-[var(--wd-text)]">
+            <FaArrowLeft className="text-xs" /> Back
           </button>
 
           {!questions.length ? (
             <div className="card p-8 text-center">
-              <h2 className="text-xl font-bold text-[var(--wd-text)]">No questions available</h2>
-              <p className="mt-1.5 text-base text-[var(--wd-text-muted)]">There isn't a practice pool for this subject yet.</p>
+              <h2 className="text-lg font-bold text-[var(--wd-text)]">No questions available</h2>
+              <p className="mt-1.5 text-sm text-[var(--wd-text-muted)]">There isn't a practice pool for this subject yet.</p>
             </div>
           ) : !results ? (
             <div>
-              <div className="flex items-center justify-between text-sm font-medium text-[var(--wd-text-muted)]">
+              <div className="flex items-center justify-between text-xs font-medium text-[var(--wd-text-muted)]">
                 <span>{activeSubject}</span>
                 <span>{activeIndex + 1} / {questions.length}</span>
               </div>
@@ -236,14 +303,14 @@ export default function WeaknessDrillsPage() {
               </div>
 
               <div className="card mt-6 p-6 md:p-8">
-                <div className="text-xl font-semibold leading-relaxed text-[var(--wd-text)]" dangerouslySetInnerHTML={{ __html: currentQuestion?.stem }} />
+                <div className="text-lg font-semibold leading-relaxed text-[var(--wd-text)]" dangerouslySetInnerHTML={{ __html: currentQuestion?.stem }} />
                 <div className="mt-6">{currentQuestion && renderQuestionInput(currentQuestion, activeIndex)}</div>
               </div>
 
               <button
                 disabled={responses[activeIndex] === undefined || responses[activeIndex] === ""}
                 onClick={() => (activeIndex === questions.length - 1 ? submitDrill() : setActiveIndex((index) => index + 1))}
-                className="btn-primary focus-ring mt-5 w-full px-6 py-3 text-base font-semibold"
+                className="btn-primary focus-ring mt-5 w-full px-6 py-3 text-sm font-semibold"
               >
                 {activeIndex === questions.length - 1 ? "Submit" : "Next question"}
               </button>
@@ -261,26 +328,27 @@ export default function WeaknessDrillsPage() {
     );
   }
 
-  // ── Main list ───────────────────────────────────────────────────────────
+  //  Main list 
   return (
     <div className="min-h-screen bg-white p-6" style={{ fontFamily: FONT }}>
       <GlobalStyle />
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[var(--wd-text)]">Weakness drills</h1>
-            <p className="mt-1 text-base text-[var(--wd-text-muted)]">Recommended practice, ranked by your lowest-performing subjects.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--wd-text)]">Weakness drills</h1>
+            <p className="mt-1 text-sm text-[var(--wd-text-muted)]">Recommended practice, ranked by your lowest-performing subjects across all your attempts.</p>
           </div>
-          <p className="text-sm text-[var(--wd-text-muted)]">{rankedWeakSubjects.length} subject{rankedWeakSubjects.length === 1 ? "" : "s"} · {sessions.length} drill{sessions.length === 1 ? "" : "s"} logged</p>
+          <p className="text-xs text-[var(--wd-text-muted)]">{rankedWeakSubjects.length} subject{rankedWeakSubjects.length === 1 ? "" : "s"} · {sessions.length} drill{sessions.length === 1 ? "" : "s"} logged</p>
         </header>
 
         <AdaptiveGateBanner gate={adaptiveGate} status={gateStatus} />
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[300px_1fr]">
-          <div className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
-            <DiagnosticReport analysis={analysis} adaptiveGate={adaptiveGate} />
-            {sessions.length > 0 && <PreviousDrillResults sessions={sessions} />}
-          </div>
+        <div className={`mt-6 grid items-start gap-6 ${sessions.length > 0 ? "lg:grid-cols-[300px_1fr]" : ""}`}>
+          {sessions.length > 0 && (
+            <div className="lg:sticky lg:top-6 lg:h-fit">
+              <PreviousDrillResults sessions={sessions} />
+            </div>
+          )}
 
           <div className="space-y-3">
             {rankedWeakSubjects.map((subject, index) => (
@@ -311,7 +379,7 @@ export default function WeaknessDrillsPage() {
                 key={optionIndex}
                 onClick={() => saveResponse(index, optionIndex)}
                 disabled={Boolean(results)}
-                className={`option-row focus-ring flex w-full items-center gap-3 px-4 py-3 text-left text-base font-medium text-[var(--wd-text)] ${selected ? "is-selected" : ""} ${results ? "is-disabled cursor-not-allowed opacity-60" : ""}`}
+                className={`option-row focus-ring flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-[var(--wd-text)] ${selected ? "is-selected" : ""} ${results ? "is-disabled cursor-not-allowed opacity-60" : ""}`}
               >
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? "border-[var(--wd-accent)] bg-[var(--wd-accent)]" : "border-gray-300"}`}>
                   {selected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -334,7 +402,7 @@ export default function WeaknessDrillsPage() {
                 key={optionIndex}
                 onClick={() => toggleCheckbox(index, optionIndex)}
                 disabled={Boolean(results)}
-                className={`option-row focus-ring flex w-full items-center gap-3 px-4 py-3 text-left text-base font-medium text-[var(--wd-text)] ${selected ? "is-selected" : ""} ${results ? "is-disabled cursor-not-allowed opacity-60" : ""}`}
+                className={`option-row focus-ring flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-[var(--wd-text)] ${selected ? "is-selected" : ""} ${results ? "is-disabled cursor-not-allowed opacity-60" : ""}`}
               >
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border ${selected ? "border-[var(--wd-accent)] bg-[var(--wd-accent)]" : "border-gray-300"}`}>
                   {selected && <FaCheck className="text-[10px] text-white" />}
@@ -352,35 +420,42 @@ export default function WeaknessDrillsPage() {
         value={responses[index] || ""}
         disabled={Boolean(results)}
         onChange={(event) => saveResponse(index, event.target.value)}
-        className="focus-ring w-full rounded-lg border border-gray-300 px-4 py-3 text-base font-medium text-[var(--wd-text)] outline-none transition focus:border-[var(--wd-accent)]"
+        className="focus-ring w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-[var(--wd-text)] outline-none transition focus:border-[var(--wd-accent)]"
         placeholder="Type your answer..."
       />
     );
   }
 }
 
-// ── Subject row ─────────────────────────────────────────────────────────
 function SubjectRow({ subject, isAiFocus, description, onStart }) {
   const pct = safePercent(subject.averagePct);
+  const tier = getTier(pct);
 
   return (
-    <div className={`card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between ${isAiFocus ? "border-[var(--wd-accent)]" : ""}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onStart}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onStart();
+        }
+      }}
+      className={`card subject-card focus-ring flex cursor-pointer items-center gap-4 p-5 ${isAiFocus ? "border-[var(--wd-accent)]" : ""}`}
+    >
+      <CircularProgress pct={pct} size={64} strokeWidth={6} color={tier.hex} duration={900}>
+        <span className={`text-sm font-black ${tier.accent}`}>{pct}%</span>
+      </CircularProgress>
+
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold text-[var(--wd-text)]">{subject.subject}</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-semibold text-[var(--wd-text)]">{subject.subject}</h3>
           {isAiFocus && <AIFocusTag />}
+          <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${tier.badge}`}>{tier.label}</span>
         </div>
-        <p className="mt-0.5 text-base text-[var(--wd-text-muted)]">{description}</p>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="progress-track h-1.5 w-32">
-            <div className="progress-fill h-full" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-sm font-medium text-[var(--wd-text-muted)]">{pct}% avg</span>
-        </div>
+        <p className="mt-0.5 text-sm text-[var(--wd-text-muted)]">{description}</p>
       </div>
-      <button onClick={onStart} className="btn-primary focus-ring shrink-0 px-4 py-2 text-base font-semibold">
-        Practice
-      </button>
     </div>
   );
 }
@@ -388,105 +463,115 @@ function SubjectRow({ subject, isAiFocus, description, onStart }) {
 function AIFocusTag() {
   return (
     <span className="group relative inline-flex">
-      <span tabIndex="0" className="cursor-help rounded-full bg-[var(--wd-accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--wd-accent)]">
+      <span tabIndex="0" className="cursor-help rounded-full bg-[var(--wd-accent-soft)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--wd-accent)]">
         AI focus
       </span>
-      <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-56 rounded-lg border border-[var(--wd-border)] bg-white px-3 py-2 text-sm font-medium leading-5 text-[var(--wd-text)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100">
+      <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-56 rounded-lg border border-[var(--wd-border)] bg-white px-3 py-2 text-xs font-medium leading-5 text-[var(--wd-text)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100">
         Highest priority for improvement based on your recent exam performance.
       </span>
     </span>
   );
 }
 
-// ── Diagnostic report card ─────────────────────────────────────────────
-function DiagnosticReport({ analysis, adaptiveGate }) {
-  const aiFocusSubject = adaptiveGate?.focus_subject;
+//  Adaptive routing banner 
 
-  const diagnostic = useMemo(() => {
-    if (!aiFocusSubject || !analysis.diagnosticInsights) return analysis.primaryDiagnostic;
-    return analysis.diagnosticInsights.find((item) => item.category === aiFocusSubject) || analysis.primaryDiagnostic;
-  }, [analysis.primaryDiagnostic, analysis.diagnosticInsights, aiFocusSubject]);
-
-  const narrative = buildDiagnosticNarrativeFromDiagnostic(analysis, diagnostic);
-
-  return (
-    <section className="card p-5">
-      <p className="text-sm font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">Diagnostic</p>
-      <h2 className="mt-1.5 text-lg font-bold leading-snug text-[var(--wd-text)]">{diagnostic ? getDiagnosticHeadline(diagnostic) : "Insights unlock after your first mock exam."}</h2>
-      {diagnostic && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-[var(--wd-text-muted)]">
-          <span>Avg. time</span>
-          <span className="font-semibold text-[var(--wd-text)]">{formatAverageTime(diagnostic.averageSeconds)}</span>
-        </div>
-      )}
-      <p className="mt-3 text-base leading-6 text-[var(--wd-text-muted)]">{narrative}</p>
-      {diagnostic && (
-        <ul className="mt-3 space-y-1 text-base text-[var(--wd-text)]">
-          <li>· Practice {diagnostic.skillTag || diagnostic.subcategory || diagnostic.category} first.</li>
-          <li>· Drill 10 items, then review every miss.</li>
-        </ul>
-      )}
-      {diagnostic?.path?.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {diagnostic.path.map((label) => (
-            <span key={label} className="rounded-md bg-[var(--wd-surface)] px-2 py-1 text-[11px] font-medium text-[var(--wd-text-muted)]">{label}</span>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ── Adaptive routing banner ────────────────────────────────────────────
 function AdaptiveGateBanner({ gate, status }) {
   if (status === "idle") return null;
 
+  if (status === "loading") {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-[var(--wd-border)] bg-[var(--wd-surface)] px-6 py-5">
+        <FaSpinner className="shrink-0 animate-spin text-[var(--wd-accent)]" />
+        <p className="text-sm font-medium text-[var(--wd-text-muted)]">Reading your diagnostics to route the next drill…</p>
+      </div>
+    );
+  }
+
+  const confidencePct = Number.isFinite(gate?.confidence) ? Math.round(gate.confidence * 100) : null;
+  const tags = [...new Set([...(gate?.reviewer_focus_tags || []), ...(gate?.exam_focus_tags || [])])].slice(0, 5);
+  const upNext = (gate?.drill_subject_order || []).filter((subject) => subject !== gate?.focus_subject).slice(0, 3);
+
   return (
-    <section className="flex items-start gap-3 rounded-lg border border-[var(--wd-border)] bg-[var(--wd-surface)] px-4 py-3">
-      {status === "loading" ? (
-        <>
-          <FaSpinner className="mt-0.5 shrink-0 animate-spin text-base text-[var(--wd-text-muted)]" />
-          <p className="text-base text-[var(--wd-text-muted)]">Reading your diagnostics to route the next drill…</p>
-        </>
-      ) : (
-        <div>
-          <p className="text-base font-semibold text-[var(--wd-text)]">
-            {gate?.focus_subject ? `Recommended focus: ${gate.focus_subject}` : "Building your route"}
-          </p>
-          <p className="mt-0.5 text-base text-[var(--wd-text-muted)]">{gate?.rationale || "Complete a mock exam to activate automatic drill routing."}</p>
+    <div className="overflow-hidden rounded-2xl border-l-4 border-[var(--wd-accent)] bg-white p-6 shadow-sm">
+      <div className="flex items-start gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--wd-accent-soft)]">
+          <FaBrain className="text-lg text-[var(--wd-accent)]" />
         </div>
-      )}
-    </section>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-[var(--wd-accent)]">Recommendations</p>
+            {confidencePct != null && (
+              <span className="rounded-full bg-[var(--wd-surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--wd-text-muted)]">
+                {confidencePct}% confidence
+              </span>
+            )}
+          </div>
+
+          <h2 className="mt-1 text-lg font-bold text-[var(--wd-text)]">{gate?.focus_subject || "Building your route"}</h2>
+
+          <p className="mt-2 text-sm leading-6 text-[var(--wd-text-muted)]">
+            {gate?.rationale ? (
+              <RichText text={gate.rationale} boldClassName="font-bold text-[var(--wd-text)]" />
+            ) : (
+              "Complete a mock exam to activate automatic drill routing."
+            )}
+          </p>
+
+          {tags.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {tags.map((tag) => (
+                <span key={tag} className="rounded-full bg-[var(--wd-surface)] px-2.5 py-1 text-[10px] font-semibold text-[var(--wd-text-muted)]">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {upNext.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-[var(--wd-border)] pt-3 text-xs text-[var(--wd-text-muted)]">
+              <span className="font-semibold text-[var(--wd-text)]">Up next after this:</span>
+              {upNext.map((subject, i) => (
+                <span key={subject}>
+                  {i > 0 && <span className="mx-1 text-[var(--wd-border)]">·</span>}
+                  {subject}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ── Results panel ──────────────────────────────────────────────────────
+//  Results panel 
 function ResultsPanel({ results, activeSubject, onRetake, onBack }) {
   return (
     <div className="card p-6 md:p-8">
-      <p className="text-sm font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">{activeSubject}</p>
-      <p className="mt-2 text-6xl font-bold tracking-tight text-[var(--wd-text)]">{results.pct}%</p>
-      <p className="mt-1 text-base text-[var(--wd-text-muted)]">{results.correct} of {results.total} correct</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">{activeSubject}</p>
+      <p className="mt-2 text-5xl font-bold tracking-tight text-[var(--wd-text)]">{results.pct}%</p>
+      <p className="mt-1 text-sm text-[var(--wd-text-muted)]">{results.correct} of {results.total} correct</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-[var(--wd-border)] p-4">
-          <p className="text-sm font-medium text-[var(--wd-text-muted)]">Best streak</p>
-          <p className="mt-1 text-3xl font-bold text-[var(--wd-text)]">{results.bestStreak}</p>
+          <p className="text-xs font-medium text-[var(--wd-text-muted)]">Best streak</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--wd-text)]">{results.bestStreak}</p>
         </div>
         <div className="rounded-lg border border-[var(--wd-border)] p-4">
-          <p className="text-sm font-medium text-[var(--wd-text-muted)]">Points earned</p>
-          <p className="mt-1 text-3xl font-bold text-[var(--wd-text)]">{results.points}</p>
+          <p className="text-xs font-medium text-[var(--wd-text-muted)]">Points earned</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--wd-text)]">{results.points}</p>
         </div>
       </div>
 
       <div className="mt-6">
-        <p className="text-sm font-medium text-[var(--wd-text-muted)]">Answer review</p>
+        <p className="text-xs font-medium text-[var(--wd-text-muted)]">Answer review</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {results.items.map((item, index) => (
             <span
               key={index}
               title={item.isCorrect ? "Correct" : "Incorrect"}
-              className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                 item.isCorrect ? "bg-[var(--wd-success-soft)] text-[var(--wd-success)]" : "bg-gray-100 text-gray-400"
               }`}
             >
@@ -497,10 +582,10 @@ function ResultsPanel({ results, activeSubject, onRetake, onBack }) {
       </div>
 
       <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-        <button onClick={onRetake} className="btn-primary focus-ring inline-flex items-center justify-center gap-2 px-5 py-2.5 text-base font-semibold">
-          <FaRedo className="text-sm" /> Try again
+        <button onClick={onRetake} className="btn-primary focus-ring inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold">
+          <FaRedo className="text-xs" /> Try again
         </button>
-        <button onClick={onBack} className="btn-secondary focus-ring px-5 py-2.5 text-base font-semibold">
+        <button onClick={onBack} className="btn-secondary focus-ring px-5 py-2.5 text-sm font-semibold">
           Back to recommendations
         </button>
       </div>
@@ -508,11 +593,11 @@ function ResultsPanel({ results, activeSubject, onRetake, onBack }) {
   );
 }
 
-// ── Previous drill sessions ────────────────────────────────────────────
+//  Previous drill sessions 
 function PreviousDrillResults({ sessions }) {
   return (
     <section className="card p-5">
-      <p className="text-sm font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">Previous results</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">Previous results</p>
       <div className="mt-3 space-y-1">
         {sessions.slice(0, 5).map((session, index) => {
           const score = safePercent(session?.pct);
@@ -521,43 +606,18 @@ function PreviousDrillResults({ sessions }) {
           return (
             <div key={session?.id || `${session?.subject}-${index}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition hover:bg-[var(--wd-surface)]">
               <div className="min-w-0">
-                <p className="truncate text-base font-medium text-[var(--wd-text)]">{session?.subject || "Practice drill"}</p>
-                <p className="mt-0.5 truncate text-sm text-[var(--wd-text-muted)]">
+                <p className="truncate text-sm font-medium text-[var(--wd-text)]">{session?.subject || "Practice drill"}</p>
+                <p className="mt-0.5 truncate text-xs text-[var(--wd-text-muted)]">
                   {Number.isFinite(correct) && Number.isFinite(total) && total > 0 ? `${correct}/${total} correct` : "Score recorded"} · {session?.completedAt ? new Date(session.completedAt).toLocaleDateString() : "Recent"}
                 </p>
               </div>
-              <span className={`shrink-0 rounded-md px-2 py-1 text-sm font-semibold ${score >= 75 ? "bg-[var(--wd-success-soft)] text-[var(--wd-success)]" : "bg-[var(--wd-surface)] text-[var(--wd-text-muted)]"}`}>{score}%</span>
+              <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${score >= 75 ? "bg-[var(--wd-success-soft)] text-[var(--wd-success)]" : "bg-[var(--wd-surface)] text-[var(--wd-text-muted)]"}`}>{score}%</span>
             </div>
           );
         })}
       </div>
     </section>
   );
-}
-
-function buildDiagnosticNarrativeFromDiagnostic(analysis, diagnostic) {
-  if (!analysis.hasAttempts || !diagnostic) {
-    return analysis.hasAttempts
-      ? "Complete another mock exam to add more per-question timing, answer-change, and diagnostic data to this report."
-      : "Take a mock exam first to identify performance bottlenecks and useful practice areas.";
-  }
-  const target = diagnostic.skillTag && diagnostic.skillTag !== "Untyped Skill" ? `${diagnostic.subcategory} with ${diagnostic.skillTag}` : diagnostic.subcategory || diagnostic.category;
-  if (diagnostic.insightType === "self-doubt") return `Your recent attempts show correct choices changing to wrong answers under pressure during ${diagnostic.category}. Review your reasoning before changing an answer, especially for ${target}.`;
-  if (diagnostic.insightType === "time-bottleneck") return `Timing data points to a bottleneck in ${target}. You spend an average of ${formatAverageTime(diagnostic.averageSeconds)} on these questions.`;
-  return `Your misses are clustering around ${target}. The drills below prioritize available questions that match those diagnostic labels.`;
-}
-
-function getDiagnosticHeadline(diagnostic) {
-  if (diagnostic.insightType === "self-doubt") return "Behavioral pattern: second-guessing under pressure";
-  if (diagnostic.insightType === "time-bottleneck") return "Time bottleneck detected";
-  return "Structural weakness detected";
-}
-
-function formatAverageTime(seconds = 0) {
-  const safeSeconds = Number(seconds);
-  if (!Number.isFinite(safeSeconds) || safeSeconds < 5) return "Not enough data yet";
-  if (safeSeconds < 60) return `${Math.round(safeSeconds)}s`;
-  return `${(safeSeconds / 60).toFixed(1)} min`;
 }
 
 function safePercent(value) {
@@ -589,7 +649,7 @@ function buildLocalGate(analysis) {
   return {
     focus_subject: focus,
     confidence: 0.4,
-    rationale: `Local routing is prioritizing ${focus} from your lowest mastery score while Groq is unavailable.`,
+    rationale: `**${focus}** is your lowest average right now, so that's the local pick while your coach reconnects.`,
     drill_subject_order: analysis.weakSubjects?.map((subject) => subject.subject) || [focus],
     reviewer_focus_tags: [focus],
     exam_focus_tags: [focus],

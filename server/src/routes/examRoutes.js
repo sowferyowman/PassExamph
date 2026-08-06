@@ -18,5 +18,6 @@ router.post("/sessions/:id/start-section", (req, res) => { try { res.json(sessio
 router.patch("/sessions/:id/progress", (req, res) => { try { res.json(sessions.saveProgress(req.params.id, req.user.id, req.body || {})); } catch (error) { sendError(res, error); } });
 router.post("/sessions/:id/advance", (req, res) => { try { res.json(sessions.advanceSection(req.params.id, req.user.id)); } catch (error) { sendError(res, error); } });
 router.post("/sessions/:id/complete", (req, res) => { try { res.json(sessions.completeSession(req.params.id, req.user.id)); } catch (error) { sendError(res, error); } });
+router.post("/sessions/:id/abandon", (req, res) => { try { res.json(sessions.abandonSession(req.params.id, req.user.id)); } catch (error) { sendError(res, error); } });
 
 module.exports = router;

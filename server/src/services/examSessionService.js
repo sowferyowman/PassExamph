@@ -96,4 +96,13 @@ function completeSession(id, studentId) {
   return serialise(getSession(id, studentId), now);
 }
 
-module.exports = { createExamSession, getActiveExamSession, startSection, saveProgress, advanceSection, completeSession, getSession, serialise };
+function abandonSession(id, studentId) {
+  const session = getSession(id, studentId);
+  const now = Date.now();
+  if (["overview", "intermission", "active"].includes(session.status)) {
+    getDb().prepare("UPDATE exam_sessions SET status='abandoned', updated_at_ms=? WHERE id=?").run(now, id);
+  }
+  return serialise(getSession(id, studentId), now);
+}
+
+module.exports = { createExamSession, getActiveExamSession, startSection, saveProgress, advanceSection, completeSession, abandonSession, getSession, serialise };

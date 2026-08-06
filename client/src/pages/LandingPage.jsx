@@ -9,7 +9,7 @@ const EXAMS = [
   { icon: FaBriefcase, name: "Civil Service", full: "Civil Service Examination", org: "CSC Philippines", status: "soon" },
   { icon: FaHeartbeat, name: "Nursing LE", full: "Nurse Licensure Examination", org: "PRC Philippines", status: "soon" },
   { icon: FaBook, name: "Teachers LE", full: "Licensure Exam for Teachers", org: "PRC Philippines", status: "soon" },
-  { icon: FaEllipsisH, name: "More Exams", full: "Many more coming", org: "Suggest one", status: "suggest" },
+  { icon: FaEllipsisH, name: "More Exams", full: "Many more coming"},
 ];
 
 const FEATURES = [
@@ -42,6 +42,9 @@ const FEATURES = [
   },
 ];
 
+const CTA_BUTTON_CLASSES =
+  "inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 h-12 text-sm font-bold text-white hover:bg-white/20 transition-colors";
+
 export default function LandingPage() {
   return (
     <>
@@ -52,65 +55,6 @@ export default function LandingPage() {
           background-image:
             radial-gradient(ellipse 800px 500px at 50% 0%, rgba(59, 130, 246, 0.16), transparent 70%),
             linear-gradient(to bottom, #001529 0%, #002147 50%, #000d1a 100%);
-        }
-
-        .tooltip-container {
-          --background: #ffffff;
-          --color: #ffffff;
-          position: relative;
-          cursor: pointer;
-          transition: all .4s cubic-bezier(.23,1,.32,1);
-          font-size: 14px;
-          font-weight: 700;
-          color: var(--color);
-          height: 48px;
-          padding: 0 28px;
-          display: inline-grid;
-          place-items: center;
-          border-radius: 9999px;
-          border: 1px solid rgba(255, 255, 255, 0.25);
-          overflow: hidden;
-          background: rgba(255, 255, 255, 0.06);
-          backdrop-filter: blur(6px);
-        }
-
-        .tooltip-container .text {
-          position: relative;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all .4s cubic-bezier(.23,1,.32,1);
-          z-index: 2;
-        }
-
-        .tooltip-container .hover-text {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          background: var(--background);
-          color: #001529;
-          border-radius: 9999px;
-          transform: scale(0);
-          transform-origin: left;
-          transition: all .4s cubic-bezier(.23,1,.32,1);
-          z-index: 1;
-        }
-
-        .tooltip-container:hover {
-          border-color: transparent;
-          transform: translateY(-2px);
-        }
-
-        .tooltip-container:hover .text {
-          opacity: 0;
-          transform: scale(.5);
-        }
-
-        .tooltip-container:hover .hover-text {
-          transform: scale(1);
         }
 
         .glass-card {
@@ -127,7 +71,7 @@ export default function LandingPage() {
       `}</style>
 
       <div className="studio-background min-h-screen text-white">
-        {/* ================= NAV ================= */}
+        {/*  NAV  */}
         <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#001529]/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-10">
           <div className="flex items-center gap-3">
@@ -136,16 +80,13 @@ export default function LandingPage() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sky-300/80">Philippine Exam Prep Platform</p>
             </div>
           </div>
-          <Link to="/login" className="tooltip-container">
-            <span className="text">Get Started</span>
-            <span className="hover-text">
-              <span className="flex items-center gap-2 text-sm font-bold">Log In <FaArrowRight /></span>
-            </span>
+          <Link to="/login" className={CTA_BUTTON_CLASSES}>
+            Get Started 
           </Link>
         </div>
         </nav>
 
-        {/* ================= HERO ================= */}
+        {/*  HERO  */}
         <section className="mx-auto grid max-w-7xl gap-12 px-6 py-16 lg:grid-cols-2 lg:items-center lg:px-10 lg:py-24">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/50">
@@ -163,11 +104,8 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-10 flex flex-wrap items-center gap-6">
-              <Link to="/login" className="tooltip-container">
-                <span className="text">Get Started — It's Free</span>
-                <span className="hover-text">
-                  <span className="flex items-center gap-2 text-sm font-bold">Start Exam <FaArrowRight /></span>
-                </span>
+              <Link to="/login" className={CTA_BUTTON_CLASSES}>
+                Get Started — It's Free <FaArrowRight />
               </Link>
               <div className="flex items-center gap-3">
                 <div className="flex -space-x-2">
@@ -200,7 +138,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ================= STATS BAR ================= */}
+        {/*  STATS BAR  */}
         <section className="border-y border-white/10 bg-white/[0.03]">
           <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-6 py-10 lg:grid-cols-4 lg:px-10">
             {[
@@ -217,7 +155,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ================= CHOOSE YOUR EXAM ================= */}
+        {/*  CHOOSE YOUR EXAM  */}
         <section className="mx-auto max-w-7xl px-6 py-24 text-center lg:px-10">
           <span className="inline-block rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-black uppercase tracking-widest text-sky-300/90">
             Choose Your Exam
@@ -249,11 +187,10 @@ export default function LandingPage() {
                 <p className={`mt-0.5 text-xs font-bold ${status === "live" ? "text-sky-300" : "text-white/40"}`}>{org}</p>
                 {status === "live" ? (
                   <Link to="/login" className="mt-4 inline-block text-xs font-black uppercase tracking-wide text-sky-300">
-                    Start Practicing →
+                    Start Practicing 
                   </Link>
                 ) : (
                   <button className="mt-4 text-xs font-black uppercase tracking-wide text-white/40">
-                    {status === "suggest" ? "Suggest one →" : "Notify me when available"}
                   </button>
                 )}
               </div>
@@ -261,7 +198,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ================= FEATURES ================= */}
+        {/*  FEATURES  */}
         <section className="mx-auto max-w-7xl px-6 pb-24 lg:px-10">
           <div className="grid gap-6 lg:grid-cols-3">
             {FEATURES.map(({ tag, image, stat, statLabel, title, body, Icon }) => (
@@ -291,7 +228,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ================= CTA BANNER ================= */}
+        {/*  CTA BANNER  */}
         <section className="mx-auto max-w-7xl px-6 pb-24 lg:px-10">
           <div className="glass-card flex flex-col items-start justify-between gap-8 rounded-3xl p-10 lg:flex-row lg:items-center lg:p-14">
             <div>
@@ -307,17 +244,14 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="text-center lg:text-right">
-              <Link to="/login" className="tooltip-container">
-                <span className="text">Claim Your Account</span>
-                <span className="hover-text">
-                  <span className="flex items-center gap-2 text-sm font-bold">Let's Go <FaArrowRight /></span>
-                </span>
+              <Link to="/login" className={CTA_BUTTON_CLASSES}>
+                Claim Your Account <FaArrowRight />
               </Link>
             </div>
           </div>
         </section>
 
-        {/* ================= FOOTER ================= */}
+        {/*  FOOTER  */}
         <footer className="border-t border-white/10">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 text-center lg:flex-row lg:px-10 lg:text-left">
             <div className="flex items-center gap-3">

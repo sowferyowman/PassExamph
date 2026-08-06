@@ -4,6 +4,9 @@ import { useAuthContext } from "../context/AuthContext";
 import { FaArrowLeft, FaArrowRight, FaEnvelope, FaGoogle, FaLock, FaUser, FaUserPlus } from "react-icons/fa";
 import { hydrateDashboardStoreFromServer, migrateLocalStorageToServer } from "../services/storage";
 
+const SUBMIT_BUTTON_CLASSES =
+  "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 h-12 text-sm font-bold text-white hover:bg-white/20 transition-colors";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, register } = useAuthContext();
@@ -18,7 +21,7 @@ export default function LoginPage() {
       navigate("/admin/dashboard", { replace: true });
       return;
     }
-    navigate(user.profileCompleted ? "/dashboard" : "/student-profiling", { replace: true });
+    navigate(user.profileCompleted ? "/dashboard" : "/settings", { replace: true, state: user.profileCompleted ? undefined : { profileSetupRequired: true } });
   }
 
   async function handleSignIn(event) {
@@ -60,68 +63,6 @@ export default function LoginPage() {
           backdrop-filter: blur(12px);
           border: 1px solid rgba(255, 255, 255, 0.08);
           transition: all .4s cubic-bezier(.23,1,.32,1);
-        }
-
-        .tooltip-container {
-          --background: #ffffff;
-          --color: #ffffff;
-          position: relative;
-          cursor: pointer;
-          transition: all .4s cubic-bezier(.23,1,.32,1);
-          font-size: 14px;
-          font-weight: 700;
-          color: var(--color);
-          height: 48px;
-          padding: 0 28px;
-          display: inline-grid;
-          place-items: center;
-          border-radius: 9999px;
-          border: 1px solid rgba(255, 255, 255, 0.25);
-          overflow: hidden;
-          background: rgba(255, 255, 255, 0.06);
-          backdrop-filter: blur(6px);
-          width: 100%;
-        }
-
-        .tooltip-container .text {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: all .4s cubic-bezier(.23,1,.32,1);
-          z-index: 2;
-          width: 100%;
-        }
-
-        .tooltip-container .hover-text {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          background: var(--background);
-          color: #001529;
-          border-radius: 9999px;
-          transform: scale(0);
-          transform-origin: left;
-          transition: all .4s cubic-bezier(.23,1,.32,1);
-          z-index: 1;
-        }
-
-        .tooltip-container:hover {
-          border-color: transparent;
-          transform: translateY(-2px);
-        }
-
-        .tooltip-container:hover .text {
-          opacity: 0;
-          transform: scale(.5);
-        }
-
-        .tooltip-container:hover .hover-text {
-          transform: scale(1);
         }
 
         /* Custom Input styling to match dark glass aesthetic */
@@ -198,11 +139,8 @@ export default function LoginPage() {
                 <label className="flex items-center gap-2 text-white/60"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded accent-sky-400" /> Remember Me</label>
                 <RecoveryLink onClick={() => navigate("/forgot-password-sms")} />
               </div>
-              <button type="submit" className="tooltip-container mt-2">
-                <span className="text">Sign In <FaArrowRight className="text-xs" /></span>
-                <span className="hover-text">
-                  <span className="flex items-center gap-2 text-sm font-bold">Let's Go <FaArrowRight /></span>
-                </span>
+              <button type="submit" className={SUBMIT_BUTTON_CLASSES}>
+                Sign In
               </button>
             </form>
           ) : (
@@ -237,11 +175,8 @@ export default function LoginPage() {
                 placeholder="Create a secure password"
                 icon={<FaLock />}
               />
-              <button type="submit" className="tooltip-container mt-2">
-                <span className="text">Create Account <FaArrowRight className="text-xs" /></span>
-                <span className="hover-text">
-                  <span className="flex items-center gap-2 text-sm font-bold">Let's Go <FaArrowRight /></span>
-                </span>
+              <button type="submit" className={SUBMIT_BUTTON_CLASSES}>
+                Create Account 
               </button>
             </form>
           )}

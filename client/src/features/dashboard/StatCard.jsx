@@ -1,3 +1,6 @@
+import { motion } from "framer-motion";
+import { FaArrowDown, FaArrowUp, FaMinus } from "react-icons/fa";
+
 const accents = {
   blue: "border-sky-200 bg-sky-50 text-sky-700",
   indigo: "border-indigo-200 bg-indigo-50 text-indigo-700",
@@ -8,16 +11,29 @@ const accents = {
 export default function StatCard({ stat, index = 0 }) {
   const accent = accents[stat.accent] || accents.blue;
   const progress = Number.isFinite(Number(stat.progress)) ? Math.max(0, Math.min(100, Number(stat.progress))) : null;
+  const trend = stat.trend;
+  const trendStyles = trend?.direction === "up"
+    ? "bg-emerald-100 text-emerald-700"
+    : trend?.direction === "down"
+      ? "bg-rose-100 text-rose-700"
+      : "bg-slate-100 text-slate-600";
+  const TrendIcon = trend?.direction === "up" ? FaArrowUp : trend?.direction === "down" ? FaArrowDown : FaMinus;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: index * 0.08, ease: "easeOut" }}
-      className={`rounded-2xl border p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${accent}`}
+      className={`interactive-card p-6 ${accent}`}
     >
       <p className="text-xs font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
       <p className="mt-2 text-3xl font-black text-slate-900">{stat.value}</p>
+      {trend && (
+        <p className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black ${trendStyles}`}>
+          <TrendIcon className="text-[9px]" aria-hidden="true" />
+          {trend.text}
+        </p>
+      )}
       {progress !== null && (
         <div className="mt-4">
           <div className="h-2 overflow-hidden rounded-full bg-white/80">
@@ -37,4 +53,3 @@ export default function StatCard({ stat, index = 0 }) {
     </motion.div>
   );
 }
-import { motion } from "framer-motion";

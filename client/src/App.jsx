@@ -15,7 +15,6 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ForgotPasswordSms from "./pages/ForgotPasswordSms";
 import ReviewersPage from "./pages/ReviewersPage";
 import SettingsPage from "./pages/SettingsPage";
-import StudentProfilingPage from "./pages/StudentProfilingPage";
 import WeaknessDrillsPage from "./pages/WeaknessDrillsPage";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -29,7 +28,6 @@ export default function App() {
       <Route path="/forgot-password-sms" element={<ForgotPasswordSms />} />
 
       <Route element={<ProtectedRoute allowedRole="student" />}>
-        <Route path="/student-profiling" element={<StudentProfilingPage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
         </Route>

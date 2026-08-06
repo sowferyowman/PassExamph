@@ -315,14 +315,14 @@ export default function AdminReviewDashboard() {
     : null;
 
   return (
-    <main className="flex h-screen overflow-hidden bg-slate-100">
+    <main className="admin-shell">
       <AdminSidebar active="dashboard" />
-      <div className="flex-1 overflow-y-auto p-6 md:p-8">
-        <div className="mx-auto max-w-7xl space-y-6">
+      <div className="admin-content">
+        <div className="admin-page max-w-7xl space-y-6">
           <header>
-            <p className="text-[10px] font-black uppercase tracking-wider text-[#003A6C]">Dashboard</p>
-            <h1 className="mt-1 text-2xl font-black text-slate-950">Admin Control Center</h1>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Your central command for user management and AI evaluation approvals.</p>
+            <p className="workspace-eyebrow">Dashboard</p>
+            <h1 className="workspace-title">Admin Control Center</h1>
+            <p className="workspace-description">Your central command for user management and AI evaluation approvals.</p>
           </header>
 
           {error && (
@@ -820,7 +820,7 @@ function StudentProfileModal({ mode, student, onClose, onSave }) {
   const viewOnly = mode === "view";
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-5">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="max-h-[calc(100vh-2.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div><p className="text-[10px] font-black uppercase tracking-wider text-[#003A6C]">Student profile</p><h3 className="mt-1 text-lg font-black text-slate-950">{viewOnly ? "Profile details" : "Edit student details"}</h3></div>
           <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><FaTimes className="text-sm" /></button>
@@ -831,7 +831,7 @@ function StudentProfileModal({ mode, student, onClose, onSave }) {
           <AdminField label="Email" value={student.email || ""} disabled />
           <AdminField label="School / Institution" value={form.school} disabled={viewOnly} onChange={(school) => setForm((current) => ({ ...current, school }))} />
           <AdminField label="Mobile number" value={form.smsNumber} disabled={viewOnly} onChange={(smsNumber) => setForm((current) => ({ ...current, smsNumber }))} />
-          <AdminField label="Recovery email" value={form.recoveryEmail} disabled={viewOnly} onChange={(recoveryEmail) => setForm((current) => ({ ...current, recoveryEmail }))} />
+          <AdminField label="Gmail address" value={form.recoveryEmail} disabled={viewOnly} onChange={(recoveryEmail) => setForm((current) => ({ ...current, recoveryEmail }))} />
         </div>
         {viewOnly && <p className="mt-4 text-[10px] font-semibold text-slate-500">Student ID: <span className="font-mono text-slate-700">{student.id}</span></p>}
         <div className="mt-6 flex justify-end gap-3"><button onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-[10px] font-black text-slate-600 hover:bg-slate-50">{viewOnly ? "Close" : "Cancel"}</button>{!viewOnly && <button onClick={() => onSave(form)} className="rounded-lg bg-[#003A6C] px-4 py-2 text-[10px] font-black text-white hover:bg-[#002A4C]">Review changes</button>}</div>
@@ -845,7 +845,7 @@ function AdminField({ label, value, onChange, disabled = false }) {
 }
 
 function TemporaryPasswordDialog({ name, password, onClose }) {
-  return <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-5"><div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Password reset complete</p><h3 className="mt-1 text-base font-black text-slate-950">Temporary password for {name}</h3><p className="mt-3 rounded-lg bg-slate-100 px-4 py-3 font-mono text-sm font-black text-slate-900">{password}</p><p className="mt-3 text-[10px] font-semibold text-slate-500">Give this to the student securely. They should change it after signing in.</p><div className="mt-6 flex justify-end"><button onClick={onClose} className="rounded-lg bg-[#003A6C] px-4 py-2 text-[10px] font-black text-white hover:bg-[#002A4C]">Done</button></div></div></div>;
+  return <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4"><div className="max-h-[calc(100vh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Password reset complete</p><h3 className="mt-1 text-base font-black text-slate-950">Temporary password for {name}</h3><p className="mt-3 break-all rounded-lg bg-slate-100 px-4 py-3 font-mono text-sm font-black text-slate-900">{password}</p><p className="mt-3 text-[10px] font-semibold text-slate-500">Give this to the student securely. They should change it after signing in.</p><div className="mt-6 flex justify-end"><button onClick={onClose} className="rounded-lg bg-[#003A6C] px-4 py-2 text-[10px] font-black text-white hover:bg-[#002A4C]">Done</button></div></div></div>;
 }
 
 function ConfirmDialog({ title, message, confirmLabel, tone, onCancel, onConfirm }) {

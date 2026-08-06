@@ -237,14 +237,39 @@ function updateProfile(userId, { name, nickname, school, phoneNumber, recoveryEm
   const profileName = String(name || "").trim();
   const displayNickname = String(nickname || "").trim();
   const email = String(recoveryEmail || "").trim().toLowerCase();
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error("Enter a valid recovery email."), { status: 400 });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error("Enter a valid email address."), { status: 400 });
   const targetSchool = String(school || "").trim();
   const db = getDb();
-  db.prepare("UPDATE users SET name=CASE WHEN ? <> '' THEN ? ELSE name END,nickname=?,phone_number=?,sms_number=?,recovery_email=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(profileName, profileName, displayNickname || null, phone || null, phone || null, email || null, userId);
+  const currentUser = db.prepare("SELECT * FROM users WHERE id=?").get(userId);
+  if (!currentUser) throw Object.assign(new Error("Account not found."), { status: 404 });
+  const accountEmail = email || currentUser.email;
+  const duplicate = db.prepare("SELECT id FROM users WHERE lower(email)=lower(?) AND id<>?").get(accountEmail, userId);
+  if (duplicate) throw Object.assign(new Error("That email address is already in use."), { status: 409 });
+
+  db.prepare("UPDATE users SET email=?,name=CASE WHEN ? <> '' THEN ? ELSE name END,nickname=?,phone_number=?,sms_number=?,recovery_email=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(accountEmail, profileName, profileName, displayNickname || null, phone || null, phone || null, accountEmail, userId);
   const existingProfile = db.prepare("SELECT user_id FROM student_profiles WHERE user_id=?").get(userId);
   if (existingProfile) db.prepare("UPDATE student_profiles SET display_name=CASE WHEN ? <> '' THEN ? ELSE display_name END,target_school=? WHERE user_id=?").run(profileName, profileName, targetSchool, userId);
   else db.prepare("INSERT INTO student_profiles (user_id,display_name,target_school) VALUES (?,?,?)").run(userId, profileName || "Student", targetSchool);
-  return { name: profileName, nickname: displayNickname, school: targetSchool, phoneNumber: phone, recoveryEmail: email };
+
+  // Legacy browser data is keyed by email inside each user's private record.
+  // Keep that key aligned when an account email changes so the admin dashboard
+  // and the student keep seeing the same saved activity.
+  if (accountEmail !== currentUser.email) {
+    const records = db.prepare("SELECT namespace,data_key,payload FROM app_data WHERE user_id=?").all(userId);
+    records.forEach((record) => {
+      try {
+        const value = JSON.parse(record.payload);
+        if (!value || typeof value !== "object" || Array.isArray(value) || !Object.prototype.hasOwnProperty.call(value, currentUser.email)) return;
+        value[accountEmail] = value[currentUser.email];
+        delete value[currentUser.email];
+        db.prepare("UPDATE app_data SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND namespace=? AND data_key=?").run(JSON.stringify(value), userId, record.namespace, record.data_key);
+      } catch (_error) {
+        // Leave a malformed legacy record untouched rather than blocking a profile update.
+      }
+    });
+  }
+
+  return publicUser(db.prepare("SELECT * FROM users WHERE id=?").get(userId));
 }
 
 async function resetStudentPasswordByAdmin(userId) {

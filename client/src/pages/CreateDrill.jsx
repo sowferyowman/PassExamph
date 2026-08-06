@@ -356,23 +356,23 @@ export default function CreateDrill() {
   }
 
   return (
-    <main className="flex h-screen overflow-hidden bg-slate-100">
+    <main className="admin-shell">
       <AdminSidebar active="drill" />
       
-      <div className="flex-1 overflow-y-auto">
-        <header className="border-b border-slate-200 bg-white px-6 py-4">
+      <div className="admin-content">
+        <header className="workspace-header">
           <div className="mx-auto max-w-[1800px]">
-            <p className="text-xs font-black uppercase tracking-wider text-blue-600">Admin Workspace</p>
-            <h1 className="text-2xl font-black text-slate-950">
+            <p className="workspace-eyebrow">Admin Workspace</p>
+            <h1 className="workspace-title">
               {editingId ? "Edit Drill" : "Create Drill"}
             </h1>
-            <p className="mt-1 text-sm font-semibold text-slate-500">
+            <p className="workspace-description">
               Create, import, publish, and manage targeted remediation drills.
             </p>
           </div>
         </header>
         
-        <div className="mx-auto grid max-w-[1800px] gap-6 p-6 lg:grid-cols-[1fr_24rem]">
+        <div className="mx-auto grid max-w-[1800px] gap-6 p-4 sm:p-6 lg:grid-cols-[1fr_24rem]">
           <section className="min-w-0 space-y-5">
             {editingId && (
               <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-700">
