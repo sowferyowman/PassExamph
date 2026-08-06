@@ -1,0 +1,32 @@
+{
+  "name": "acet-exam-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "server:dev": "nodemon server/src/index.js",
+    "server:start": "node server/src/index.js",
+    "install:all": "npm install && npm --prefix client install",
+    "knip": "knip"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "groq-sdk": "^0.32.0",
+    "helmet": "^8.1.0",
+    "nodemailer": "^6.10.1",
+    "twilio": "^5.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "concurrently": "^9.1.2",
+    "knip": "^6.27.0",
+    "nodemon": "^3.1.9",
+    "typescript": "^7.0.2"
+  }
+}

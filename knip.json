@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["server/src/index.js"],
+      "project": ["server/src/**/*.js"]
+    },
+    "client": {
+      "entry": ["src/main.jsx"],
+      "project": ["src/**/*.{js,jsx}"]
+    }
+  },
+  "tags": [
+    "-lintignore"
+  ]
+}
