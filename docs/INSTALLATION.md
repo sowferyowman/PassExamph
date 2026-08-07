@@ -1,45 +1,22 @@
-# Installation guide
+# Installation and demo packaging
 
-## Requirements
+## Local setup
 
-- Node.js 22 LTS or later. The server uses Node's built-in `node:sqlite` API.
-- npm 10 or later.
-- A Git client.
+Requires Node.js 22+ and npm.
 
-Optional integrations require their own accounts and credentials: Groq, SMTP, and Twilio.
-
-## Set up locally
-
-```bash
-git clone <repository-url>
-cd ACET-DEMO-MVP
+```powershell
 copy server\.env.example server\.env
 copy client\.env.example client\.env
 npm run install:all
-```
-
-Open `server/.env` and set at least the admin credentials and `JWT_SECRET`. Generate a long random secret; do not use the sample or commit this file.
-
-```bash
 npm run dev
 ```
 
-The client is available at `http://localhost:5173`; the API is at `http://localhost:4000`. Vite proxies browser requests from `/api` to the local API.
+Set all `DEFAULT_ADMIN_*` values and `JWT_SECRET` in `server/.env`.
 
-## Production build
+## Client demo ZIP
 
-```bash
-npm run client:build
-npm run server:start
-```
+`server/data/acet.sqlite` is the live database snapshot. It includes current server-side users, content, and records. A recipient gets an independent copy, not live synchronization.
 
-The static client output is written to `client/dist`. See [Deployment](DEPLOYMENT.md) for serving it with an API reverse proxy, a domain, and HTTPS.
+Create the ZIP from a separate copy, not the live worktree. Stop the API cleanly, include `acet.sqlite`, and exclude `acet.before-exam-history-reset.sqlite` (old backup), `server/.env`, `node_modules/`, and `client/dist/`.
 
-## Verification
-
-```bash
-npm run knip
-npm run client:build
-```
-
-`knip` may report intentionally dynamic imports; review findings before deleting code or packages.
+If zipping while SQLite is running, include `acet.sqlite`, `acet.sqlite-wal`, and `acet.sqlite-shm` together; WAL may contain recent writes. After a clean shutdown, WAL/SHM can normally be omitted.
