@@ -119,7 +119,7 @@ export default function DashboardOverview({
                     <button
                       type="button"
                       key={notification.id}
-                      onClick={() => openNotification(notification.id)}
+                      onClick={() => openNotification(notification)}
                       className="block w-full border-b border-slate-100 px-3 py-3 text-left transition hover:bg-slate-50"
                     >
                       <div className="flex items-start gap-2">

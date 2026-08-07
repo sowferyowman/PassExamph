@@ -3,7 +3,7 @@ import { BlockMath, InlineMath } from "react-katex";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { FaArrowLeft, FaBookOpen, FaChevronLeft, FaClock, FaFileAlt, FaPlayCircle } from "react-icons/fa";
-import { getCurrentUser, getReviewerBlueprints, getReviewerProgress, setReviewerModuleCompletion } from "../services/storage";
+import { getCurrentUser, getReviewerBlueprints, getReviewerProgress, hydrateAllFromServer, setReviewerModuleCompletion } from "../services/storage";
 
 const RESUME_KEY = "acetReviewerResume";
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
@@ -54,13 +54,21 @@ function getVideoId(url) {
 
 export default function ReviewersPage() {
   const user = getCurrentUser();
-  const reviewers = getReviewerBlueprints();
+  const [reviewers, setReviewers] = useState(() => getReviewerBlueprints());
   const [progress, setProgress] = useState(() => getReviewerProgress(user?.email));
   const [resume, setResume] = useState(() => readResume(user?.email));
   const [selectedReviewerId, setSelectedReviewerId] = useState(null);
   const [selectedModuleId, setSelectedModuleId] = useState(null);
   const [mobileOutlineOpen, setMobileOutlineOpen] = useState(false);
   const contentRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    hydrateAllFromServer().catch(() => false).then(() => {
+      if (active) setReviewers(getReviewerBlueprints());
+    });
+    return () => { active = false; };
+  }, []);
 
   const reviewer = reviewers.find((item) => item.id === selectedReviewerId);
   const modules = reviewer?.modules || [];

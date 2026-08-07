@@ -1,7 +1,6 @@
-const USERS_KEY = "exams_ph_users";
-const APP_STUDENTS_KEY = "app_students";
+import http from "../api/http";
+
 const SESSION_KEY = "exams_ph_current_user";
-const USER_ACCOUNTS_KEY = "userAccounts";
 const CURRENT_ACTIVE_USER_KEY = "currentActiveUser";
 const EXAMS_KEY = "global_exam_blueprints";
 const EXAMS_DATA_KEY = "examsData";
@@ -14,13 +13,6 @@ const LEGACY_FORUM_KEY = "acet_forum_threads";
 const FORUM_KEY = "forumPosts";
 const NOTIFICATIONS_KEY = "notificationsData";
 const REVIEWER_PROGRESS_KEY = "reviewer_progress";
-const STAN_DASHBOARD_RESET_KEY = "acet_stan_dashboard_reset_20260715_v1";
-const EXAM_HISTORY_RESET_KEY = "acet_exam_history_reset_20260729_v1";
-
-// Authentication is handled by the server.  Never seed usernames, emails, or
-// passwords in the client bundle (the bundle is public and can be inspected).
-const defaultUsers = [];
-const defaultUserAccounts = [];
 
 const defaultForumThreads = [
   { id: "forum_welcome", title: "Welcome to the ACET Study Community", body: "Start by introducing yourself, ask respectful questions, and share study methods that helped you. Keep replies constructive and protect exam integrity.", tag: "Get Started", author: "ACET Study Team", createdAt: "2026-07-24T08:00:00.000Z", replies: [] },
@@ -351,23 +343,38 @@ function readJson(key, fallback) {
 
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
-  if (typeof window !== "undefined" && !SERVER_AUTH_KEYS?.has?.(key)) {
+  if (typeof window !== "undefined" && key !== REVIEWERS_KEY && !SERVER_AUTH_KEYS?.has?.(key)) {
     fetch(`/api/data/legacy/${encodeURIComponent(key)}`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }).catch(() => {});
   }
 }
 
-const SERVER_AUTH_KEYS = new Set([USERS_KEY, USER_ACCOUNTS_KEY, SESSION_KEY, CURRENT_ACTIVE_USER_KEY]);
+const SERVER_AUTH_KEYS = new Set([SESSION_KEY, CURRENT_ACTIVE_USER_KEY]);
 
-// Do not overwrite an existing server dashboard with a browser's stale copy at
-// sign-in. This is especially important after an admin has reviewed an essay.
-export async function hydrateDashboardStoreFromServer() {
+export async function hydrateAllFromServer() {
   const response = await fetch("/api/data/legacy", { credentials: "include" });
   if (!response.ok) return false;
   const records = await response.json();
-  const dashboardRecord = Array.isArray(records) && records.find((record) => record.key === DASHBOARD_KEY);
-  if (!dashboardRecord || dashboardRecord.value === undefined) return false;
-  localStorage.setItem(DASHBOARD_KEY, JSON.stringify(dashboardRecord.value));
-  return true;
+  if (!Array.isArray(records)) return false;
+
+  let wroteRecord = false;
+  records.forEach((record) => {
+    if (!record || typeof record.key !== "string" || SERVER_AUTH_KEYS.has(record.key)) return;
+    localStorage.setItem(record.key, JSON.stringify(record.value));
+    wroteRecord = true;
+  });
+  const [sharedReviewers, sharedExams, sharedForum, notifications] = await Promise.all([
+    http.get("/content/reviewers").catch(() => null), http.get("/content/exams").catch(() => null),
+    http.get("/content/forum").catch(() => null), http.get("/content/notifications").catch(() => null)
+  ]);
+  if (Array.isArray(sharedReviewers?.data?.reviewers)) { localStorage.setItem(REVIEWERS_KEY, JSON.stringify(sharedReviewers.data.reviewers)); wroteRecord = true; }
+  if (Array.isArray(sharedExams?.data?.exams)) { localStorage.setItem(EXAMS_KEY, JSON.stringify(sharedExams.data.exams)); wroteRecord = true; }
+  if (Array.isArray(sharedForum?.data?.threads)) { localStorage.setItem(FORUM_KEY, JSON.stringify(sharedForum.data.threads)); wroteRecord = true; }
+  if (Array.isArray(notifications?.data?.notifications)) {
+    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications.data.notifications));
+    window.dispatchEvent(new CustomEvent("notificationsUpdated"));
+    wroteRecord = true;
+  }
+  return wroteRecord;
 }
 
 export async function migrateLocalStorageToServer() {
@@ -388,29 +395,13 @@ export async function migrateLocalStorageToServer() {
 }
 
 export function initializeLocalStorage() {
-  if (!localStorage.getItem(USERS_KEY)) {
-    writeJson(USERS_KEY, defaultUsers);
-  } else {
-    const users = readJson(USERS_KEY, []);
-    const mergedUsers = defaultUsers.reduce((accounts, defaultUser) => {
-      const existingIndex = accounts.findIndex((account) => account.username === defaultUser.username || account.id === defaultUser.id);
-      if (existingIndex >= 0) {
-        accounts[existingIndex] = { ...accounts[existingIndex], ...defaultUser };
-        return accounts;
-      }
-      return [...accounts, defaultUser];
-    }, users);
-    writeJson(USERS_KEY, mergedUsers);
-  }
-
   if (!localStorage.getItem(EXAMS_DATA_KEY)) writeJson(EXAMS_DATA_KEY, examsData);
   if (!localStorage.getItem(STUDY_PLAN_KEY)) writeJson(STUDY_PLAN_KEY, studyPlanData);
   if (!localStorage.getItem(EXAMS_KEY)) writeJson(EXAMS_KEY, transformExamsDataToBlueprints(readJson(EXAMS_DATA_KEY, examsData)));
   if (!readJson(EXAMS_KEY, []).length) writeJson(EXAMS_KEY, transformExamsDataToBlueprints(readJson(EXAMS_DATA_KEY, examsData)));
   const storedBlueprints = readJson(EXAMS_KEY, []);
   if (!storedBlueprints.some((exam) => exam.id === essayExamSeed.id)) writeJson(EXAMS_KEY, [...storedBlueprints, essayExamSeed]);
-  const storedReviewers = readJson(REVIEWERS_KEY, null);
-  if (!Array.isArray(storedReviewers) || storedReviewers.length === 0) writeJson(REVIEWERS_KEY, reviewerBlueprintSeed.map((reviewer) => ({ ...reviewer, status: "published", createdAt: "2026-07-22T00:00:00.000Z" })));
+  if (!localStorage.getItem(REVIEWERS_KEY)) localStorage.setItem(REVIEWERS_KEY, JSON.stringify(reviewerBlueprintSeed.map((reviewer) => ({ ...reviewer, status: "published", createdAt: "2026-07-22T00:00:00.000Z" }))));
   const storedDrills = readJson(DRILL_BANK_KEY, null);
   if (!Array.isArray(storedDrills) || storedDrills.length === 0) writeJson(DRILL_BANK_KEY, drillBankSeed);
   if (!localStorage.getItem(DASHBOARD_KEY)) writeJson(DASHBOARD_KEY, {});
@@ -421,62 +412,6 @@ export function initializeLocalStorage() {
   removeSeededForumUsers();
   if (!localStorage.getItem(NOTIFICATIONS_KEY)) writeJson(NOTIFICATIONS_KEY, []);
 
-  if (!localStorage.getItem(EXAM_HISTORY_RESET_KEY)) {
-    const dashboardStore = readJson(DASHBOARD_KEY, {});
-    const clearedDashboards = Object.fromEntries(Object.entries(dashboardStore).map(([email, dashboard]) => [email, {
-      ...dashboard,
-      attempts: [],
-      exams: [],
-      progression: [],
-      subjects: [],
-      rewards: [],
-      stats: createEmptyDashboard(email).stats,
-      hasDashboardData: false
-    }]));
-    writeJson(DASHBOARD_KEY, clearedDashboards);
-    localStorage.setItem(EXAM_HISTORY_RESET_KEY, "true");
-  }
-
-  if (!localStorage.getItem(USER_ACCOUNTS_KEY)) {
-    const legacyUsers = readJson(USERS_KEY, defaultUsers);
-    const accounts = mergeUserAccounts(defaultUserAccounts, legacyUsers.map(normalizeLegacyUserAccount));
-    writeJson(USER_ACCOUNTS_KEY, accounts);
-  } else {
-    const accounts = readJson(USER_ACCOUNTS_KEY, []);
-    writeJson(USER_ACCOUNTS_KEY, mergeUserAccounts(defaultUserAccounts, accounts));
-  }
-
-  const accounts = readJson(USER_ACCOUNTS_KEY, defaultUserAccounts);
-  const session = readJson(CURRENT_ACTIVE_USER_KEY, readJson(SESSION_KEY, null));
-  if (session && !accounts.some((user) => user.id === session.id || (user.email === session.email && user.role === session.role))) {
-    localStorage.removeItem(CURRENT_ACTIVE_USER_KEY);
-    localStorage.removeItem(SESSION_KEY);
-  }
-
-  if (!localStorage.getItem(STAN_DASHBOARD_RESET_KEY)) {
-    const dashboardStore = readJson(DASHBOARD_KEY, {});
-    const stanEmails = new Set(
-      accounts
-        .filter((account) => /stan/i.test(`${account.name || ""} ${account.nickname || ""} ${account.username || ""}`))
-        .map((account) => account.email)
-        .filter(Boolean)
-    );
-    defaultUserAccounts
-      .filter((account) => /stan/i.test(`${account.name || ""} ${account.nickname || ""} ${account.username || ""}`))
-      .forEach((account) => stanEmails.add(account.email));
-
-    const nextDashboardStore = { ...dashboardStore };
-    stanEmails.forEach((email) => {
-      nextDashboardStore[email] = createEmptyDashboard(email);
-    });
-    writeJson(DASHBOARD_KEY, nextDashboardStore);
-    localStorage.setItem(STAN_DASHBOARD_RESET_KEY, "true");
-  }
-}
-
-export function getUsers() {
-  initializeLocalStorage();
-  return readJson(USERS_KEY, defaultUsers);
 }
 
 export function getExamsData() {
@@ -489,162 +424,6 @@ export function getStudyPlanData() {
   return readJson(STUDY_PLAN_KEY, studyPlanData);
 }
 
-export function getUserAccounts() {
-  initializeLocalStorage();
-  return readJson(USER_ACCOUNTS_KEY, defaultUserAccounts);
-}
-
-export function loginUser(identifier, password) {
-  const user = getUserAccounts().find(
-    (account) =>
-      (account.username?.toLowerCase() === identifier.toLowerCase() ||
-        account.email?.toLowerCase() === identifier.toLowerCase()) &&
-      account.password === password
-  );
-
-  if (!user) return null;
-
-  const sessionUser = {
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    recoveryEmail: user.recoveryEmail || "",
-    role: user.role,
-    name: user.name,
-    nickname: user.nickname,
-    school: user.school || "",
-    smsNumber: user.smsNumber,
-    isGoogleLinked: Boolean(user.isGoogleLinked),
-    profileCompleted: Boolean(user.profileCompleted),
-    academicMetrics: user.academicMetrics || { target: "", strengths: [], weakTags: [] }
-  };
-
-  writeJson(CURRENT_ACTIVE_USER_KEY, sessionUser);
-  writeJson(SESSION_KEY, sessionUser);
-  return sessionUser;
-}
-
-export function createStudentAccount({ email, password, smsNumber }) {
-  const accounts = getUserAccounts();
-  const normalizedEmail = String(email || "").trim().toLowerCase();
-  if (!normalizedEmail || !password) return { error: "Email and password are required." };
-  if (accounts.some((account) => account.email?.toLowerCase() === normalizedEmail)) {
-    return { error: "An account with that email already exists." };
-  }
-
-  const account = {
-    id: crypto.randomUUID(),
-    name: "",
-    nickname: "",
-    school: "",
-    email: normalizedEmail,
-    password,
-    smsNumber: String(smsNumber || "").trim(),
-    role: "student",
-    isGoogleLinked: false,
-    profileCompleted: false,
-    academicMetrics: { target: "", strengths: [], weakTags: [] }
-  };
-
-  writeJson(USER_ACCOUNTS_KEY, [account, ...accounts]);
-  return { user: setCurrentActiveUser(account) };
-}
-
-export function signInWithGoogleProfile(profile = {}) {
-  const accounts = getUserAccounts();
-  const googleProfile = {
-    name: profile.name || "Google Student",
-    email: String(profile.email || "google.student@example.com").trim().toLowerCase()
-  };
-  const existing = accounts.find((account) => account.email?.toLowerCase() === googleProfile.email);
-  const account = existing
-    ? { ...existing, name: existing.name || googleProfile.name, isGoogleLinked: true }
-    : {
-        id: crypto.randomUUID(),
-        name: googleProfile.name,
-    nickname: "",
-    school: "",
-        email: googleProfile.email,
-        password: "",
-        smsNumber: "",
-        role: "student",
-        isGoogleLinked: true,
-        profileCompleted: false,
-        academicMetrics: { target: "", strengths: [], weakTags: [] }
-      };
-
-  const nextAccounts = existing
-    ? accounts.map((item) => (item.id === account.id ? account : item))
-    : [account, ...accounts];
-  writeJson(USER_ACCOUNTS_KEY, nextAccounts);
-  return setCurrentActiveUser(account);
-}
-
-export function updateCurrentStudentProfile(updates) {
-  const current = getCurrentUser();
-  if (!current) return null;
-
-  const accounts = getUserAccounts();
-  const nextAccount = {
-    ...accounts.find((account) => account.id === current.id),
-    ...current,
-    ...updates,
-    academicMetrics: {
-      ...(current.academicMetrics || {}),
-      ...(updates.academicMetrics || {})
-    }
-  };
-  nextAccount.profileCompleted = isStudentProfileComplete(nextAccount);
-
-  const nextAccounts = accounts.map((account) => (account.id === current.id ? { ...account, ...nextAccount } : account));
-  writeJson(USER_ACCOUNTS_KEY, nextAccounts);
-  return setCurrentActiveUser(nextAccount);
-}
-
-export function updateStudentAccount(studentId, updates) {
-  const accounts = getUserAccounts();
-  const existing = accounts.find((account) => account.id === studentId && account.role === "student");
-  if (!existing) return null;
-  const allowed = {
-    name: String(updates?.name || "").trim(),
-    nickname: String(updates?.nickname || "").trim(),
-    school: String(updates?.school || "").trim(),
-    smsNumber: String(updates?.smsNumber || "").trim(),
-    recoveryEmail: String(updates?.recoveryEmail || "").trim().toLowerCase()
-  };
-  const nextAccount = { ...existing, ...allowed };
-  writeJson(USER_ACCOUNTS_KEY, accounts.map((account) => account.id === studentId ? nextAccount : account));
-  return nextAccount;
-}
-
-export function resetStudentPassword(studentId) {
-  const accounts = getUserAccounts();
-  const existing = accounts.find((account) => account.id === studentId && account.role === "student");
-  if (!existing) return null;
-  const temporaryPassword = `ACET-${Math.random().toString(36).slice(2, 8).toUpperCase()}!`;
-  const nextAccount = { ...existing, password: temporaryPassword, passwordResetAt: new Date().toISOString() };
-  writeJson(USER_ACCOUNTS_KEY, accounts.map((account) => account.id === studentId ? nextAccount : account));
-  return { student: nextAccount, temporaryPassword };
-}
-
-export function deleteStudentAccount(studentId) {
-  const accounts = getUserAccounts();
-  const existing = accounts.find((account) => account.id === studentId && account.role === "student");
-  if (!existing) return false;
-  writeJson(USER_ACCOUNTS_KEY, accounts.filter((account) => account.id !== studentId));
-
-  const dashboard = readJson(DASHBOARD_KEY, {});
-  const reviewerProgress = readJson(REVIEWER_PROGRESS_KEY, {});
-  const drillSessions = readJson(DRILL_SESSIONS_KEY, {});
-  delete dashboard[existing.email];
-  delete reviewerProgress[existing.email];
-  delete drillSessions[existing.email];
-  writeJson(DASHBOARD_KEY, dashboard);
-  writeJson(REVIEWER_PROGRESS_KEY, reviewerProgress);
-  writeJson(DRILL_SESSIONS_KEY, drillSessions);
-  return true;
-}
-
 export function getCurrentUser() {
   initializeLocalStorage();
   return readJson(CURRENT_ACTIVE_USER_KEY, readJson(SESSION_KEY, null));
@@ -653,36 +432,6 @@ export function getCurrentUser() {
 export function logoutUser() {
   localStorage.removeItem(CURRENT_ACTIVE_USER_KEY);
   localStorage.removeItem(SESSION_KEY);
-}
-
-function normalizeLegacyUserAccount(user) {
-  return {
-    id: user.id || crypto.randomUUID(),
-    username: user.username,
-    name: user.name || "",
-    nickname: user.nickname || "",
-    school: user.school || "",
-    email: user.email || "",
-    password: user.password || "",
-    smsNumber: user.smsNumber || "",
-    role: user.role || "student",
-    isGoogleLinked: Boolean(user.isGoogleLinked),
-    profileCompleted: user.role === "admin" ? true : Boolean(user.profileCompleted ?? user.name),
-    academicMetrics: user.academicMetrics || { target: user.role === "admin" ? "Admin" : "ACET", strengths: [], weakTags: [] }
-  };
-}
-
-function mergeUserAccounts(seedAccounts, storedAccounts) {
-  return [...seedAccounts, ...storedAccounts].reduce((accounts, account) => {
-    const existingIndex = accounts.findIndex(
-      (item) => item.id === account.id || (item.email && account.email && item.email.toLowerCase() === account.email.toLowerCase())
-    );
-    if (existingIndex >= 0) {
-      accounts[existingIndex] = { ...accounts[existingIndex], ...account };
-      return accounts;
-    }
-    return [...accounts, account];
-  }, []);
 }
 
 function setCurrentActiveUser(user) {
@@ -801,7 +550,9 @@ export function getActiveExamBlueprint() {
   return blueprints[blueprints.length - 1] || null;
 }
 
-export function publishExamBlueprint(blueprint) {
+async function saveSharedExams(exams) { await http.put("/content/exams", { exams }); localStorage.setItem(EXAMS_KEY, JSON.stringify(exams)); return exams; }
+
+export async function publishExamBlueprint(blueprint) {
   const blueprints = getExamBlueprints();
   const nextBlueprint = {
     ...blueprint,
@@ -810,8 +561,7 @@ export function publishExamBlueprint(blueprint) {
     status: "published"
   };
 
-  writeJson(EXAMS_KEY, [...blueprints, nextBlueprint]);
-  createExamPublishedNotifications(nextBlueprint);
+  await saveSharedExams([...blueprints, nextBlueprint]);
   return nextBlueprint;
 }
 
@@ -820,7 +570,13 @@ export function getReviewerBlueprints() {
   return readJson(REVIEWERS_KEY, []);
 }
 
-export function publishReviewerBlueprint(reviewer) {
+async function saveSharedReviewers(reviewers) {
+  await http.put("/content/reviewers", { reviewers });
+  localStorage.setItem(REVIEWERS_KEY, JSON.stringify(reviewers));
+  return reviewers;
+}
+
+export async function publishReviewerBlueprint(reviewer) {
   const reviewers = getReviewerBlueprints();
   const nextReviewer = {
     ...reviewer,
@@ -829,12 +585,7 @@ export function publishReviewerBlueprint(reviewer) {
     status: "published"
   };
 
-  writeJson(REVIEWERS_KEY, [...reviewers, nextReviewer]);
-  createPublishedContentNotifications({
-    type: "new_reviewer",
-    message: `New Reviewer Posted: ${nextReviewer.title || "Untitled Reviewer"}`,
-    metadata: { reviewerId: nextReviewer.id }
-  });
+  await saveSharedReviewers([...reviewers, nextReviewer]);
   return nextReviewer;
 }
 
@@ -842,21 +593,19 @@ export function setAuthenticatedUser(user) {
   return setCurrentActiveUser(user);
 }
 
-export function updateReviewerBlueprint(reviewerId, updates) {
+export async function updateReviewerBlueprint(reviewerId, updates) {
   const updated = getReviewerBlueprints().map((reviewer) => reviewer.id === reviewerId ? { ...reviewer, ...updates, id: reviewerId, status: "published" } : reviewer);
-  writeJson(REVIEWERS_KEY, updated);
+  await saveSharedReviewers(updated);
   return updated.find((reviewer) => reviewer.id === reviewerId);
 }
 
-export function deleteReviewerBlueprint(reviewerId) {
+export async function deleteReviewerBlueprint(reviewerId) {
   const next = getReviewerBlueprints().filter((reviewer) => reviewer.id !== reviewerId);
-  writeJson(REVIEWERS_KEY, next);
+  await saveSharedReviewers(next);
   return next;
 }
 
-// ============================================
-// NEW ADMIN FUNCTIONS FOR EXAM MANAGEMENT
-// ============================================
+//ADMIN FUNCTIONS FOR EXAM MANAGEMENT
 
 // Get a single exam by ID for editing
 export function getExamBlueprintById(examId) {
@@ -865,22 +614,15 @@ export function getExamBlueprintById(examId) {
 }
 
 // Delete an exam by ID
-export function deleteExamBlueprint(examId) {
+export async function deleteExamBlueprint(examId) {
   const blueprints = getExamBlueprints();
   const filtered = blueprints.filter((exam) => exam.id !== examId);
-  writeJson(EXAMS_KEY, filtered);
-  
-  createPublishedContentNotifications({
-    type: "exam_deleted",
-    message: `An exam has been removed from your available tests.`,
-    metadata: { examId }
-  });
-  
+  await saveSharedExams(filtered);
   return filtered;
 }
 
 // Hide/Unhide an exam
-export function toggleExamVisibility(examId) {
+export async function toggleExamVisibility(examId) {
   const blueprints = getExamBlueprints();
   const updated = blueprints.map((exam) => {
     if (exam.id === examId) {
@@ -892,12 +634,12 @@ export function toggleExamVisibility(examId) {
     }
     return exam;
   });
-  writeJson(EXAMS_KEY, updated);
+  await saveSharedExams(updated);
   return updated.find((exam) => exam.id === examId);
 }
 
 // Update an existing exam
-export function updateExamBlueprint(examId, updates) {
+export async function updateExamBlueprint(examId, updates) {
   const blueprints = getExamBlueprints();
   const updated = blueprints.map((exam) => {
     if (exam.id === examId) {
@@ -909,20 +651,11 @@ export function updateExamBlueprint(examId, updates) {
     }
     return exam;
   });
-  writeJson(EXAMS_KEY, updated);
-  
-  createPublishedContentNotifications({
-    type: "exam_updated",
-    message: `"${updates.title || 'An exam'}" has been updated.`,
-    metadata: { examId }
-  });
-  
+  await saveSharedExams(updated);
   return updated.find((exam) => exam.id === examId);
 }
 
-// ============================================
-// END OF NEW ADMIN FUNCTIONS
-// ============================================
+// END OF ADMIN FUNCTIONS
 
 export function getDrillBankQuestions() {
   initializeLocalStorage();
@@ -955,11 +688,6 @@ export function publishDrillQuestion(question) {
   };
 
   writeJson(DRILL_BANK_KEY, [nextQuestion, ...drillBank]);
-  createPublishedContentNotifications({
-    type: "new_drill",
-    message: `New Drill Posted: ${category}${subCategory ? ` - ${subCategory}` : ""}`,
-    metadata: { drillId: nextQuestion.id, category, subCategory, weaknessTag }
-  });
   return nextQuestion;
 }
 
@@ -1012,12 +740,9 @@ function normalizeEssayReviewStatuses(dashboard) {
     const essays = getEssayResponses(attempt);
     if (!essays.length) return attempt;
     const reviewed = essays.every((essay) => essay.status === "approved");
-    const next = recalculateEssayAttempt({
-      ...attempt,
-      essayResponses: essays,
-      status: reviewed ? "Reviewed" : "Pending Review",
-      hasPendingEssays: !reviewed
-    });
+    const next = reviewed
+      ? recalculateEssayAttempt({ ...attempt, essayResponses: essays, status: "Reviewed", hasPendingEssays: false })
+      : { ...attempt, essayResponses: essays, finalPct: null, passed: null, status: "Pending Review", hasPendingEssays: true };
     if (JSON.stringify(next) !== JSON.stringify(attempt)) changed = true;
     return next;
   });
@@ -1098,16 +823,12 @@ function normalizeDashboardAnalytics(dashboard, email) {
   const totalAvailableMocks = getExamBlueprints().length;
   const rewardSummary = buildCommunityRewardSummary(email, { ...dashboard, attempts });
   const studyPoints = rewardSummary.totalPoints;
-  const placement = getRawLeaderboardPlacement(email, { ...dashboard, attempts });
   const attemptsBeforeLatest = latestCompletedAttempt
     ? attempts.filter((attempt) => attempt !== latestCompletedAttempt)
     : attempts;
   const previousRewardSummary = latestCompletedAttempt
     ? buildCommunityRewardSummary(email, { ...dashboard, attempts: attemptsBeforeLatest })
     : rewardSummary;
-  const previousPlacement = latestCompletedAttempt
-    ? getRawLeaderboardPlacement(email, { ...dashboard, attempts: attemptsBeforeLatest })
-    : null;
   const latestScore = Number(latestCompletedAttempt?.finalPct ?? latestCompletedAttempt?.score ?? 0);
   const previousScore = Number(previousCompletedAttempt?.finalPct ?? previousCompletedAttempt?.score ?? 0);
   const scoreDifference = latestScore - previousScore;
@@ -1116,12 +837,6 @@ function normalizeDashboardAnalytics(dashboard, email) {
     : latestCompletedAttempt
       ? { direction: "same", text: "First completed attempt" }
       : null;
-  const placementDifference = previousPlacement?.rank && placement.rank ? previousPlacement.rank - placement.rank : 0;
-  const placementTrend = latestCompletedAttempt
-    ? previousPlacement?.rank && placement.rank
-      ? { direction: placementDifference > 0 ? "up" : placementDifference < 0 ? "down" : "same", text: placementDifference === 0 ? "No change from previous attempt" : `${Math.abs(placementDifference)} place${Math.abs(placementDifference) === 1 ? "" : "s"} ${placementDifference > 0 ? "higher" : "lower"} than previous attempt` }
-      : { direction: "same", text: "First completed attempt" }
-    : null;
   const pointsDifference = studyPoints - previousRewardSummary.totalPoints;
   const pointsTrend = latestCompletedAttempt
     ? { direction: pointsDifference > 0 ? "up" : pointsDifference < 0 ? "down" : "same", text: pointsDifference === 0 ? "No points change from this attempt" : `${pointsDifference > 0 ? "+" : ""}${pointsDifference.toLocaleString()} pts from latest attempt` }
@@ -1148,10 +863,9 @@ function normalizeDashboardAnalytics(dashboard, email) {
       },
       {
         label: "Leaderboard Placement",
-        value: placement.rank ? `#${placement.rank}` : "-",
-        detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet",
-        accent: "indigo",
-        trend: placementTrend
+        value: "-",
+        detail: "See the Community leaderboard for your current rank",
+        accent: "indigo"
       },
       {
         label: "Study Points",
@@ -1168,37 +882,18 @@ function normalizeDashboardAnalytics(dashboard, email) {
   };
 }
 
-function getRawLeaderboardPlacement(email, currentDashboard) {
-  const dashboardStore = readJson(DASHBOARD_KEY, {});
-  const students = mergeUserAccounts(
-    defaultUserAccounts,
-    readJson(USER_ACCOUNTS_KEY, defaultUserAccounts)
-  ).filter((account) => account.role === "student");
-
-  const rows = students
-    .map((student) => {
-      const dashboard = student.email === email ? currentDashboard : dashboardStore[student.email] || createEmptyDashboard(student.email);
-      return {
-        email: student.email,
-        points: buildCommunityRewardSummary(student.email, dashboard).totalPoints
-      };
-    })
-    .sort((a, b) => b.points - a.points || a.email.localeCompare(b.email));
-
-  const rank = rows.findIndex((row) => row.email === email) + 1;
-  return { rank, total: rows.length };
-}
-
-export function saveExamAttemptForStudent(user, blueprint, responses, results, meta = {}) {
+export async function saveExamAttemptForStudent(user, blueprint, responses, results, meta = {}) {
+  if (!user?.email) throw new Error("Your signed-in student account is unavailable.");
   const currentDashboard = getStudentDashboard(user.email);
   const attemptNumber = currentDashboard.exams.length + 1;
   const takenAt = new Date().toISOString();
   const durationSeconds = Number(meta.durationSeconds || 0);
+  const isPendingEssayReview = Boolean(results.hasEssays);
   // Academic points are the single score basis: earned question points out of
   // available question points. Community rewards never change an exam score.
-  const earnedMockPoints = Math.max(0, Number(results.earnedPoints || 0));
+  const earnedMockPoints = isPendingEssayReview ? 0 : Math.max(0, Number(results.earnedPoints || 0));
   const passingScore = Number.isFinite(Number(blueprint.passingScore)) ? Number(blueprint.passingScore) : 75;
-  const passed = Number(results.finalPct) >= passingScore;
+  const passed = isPendingEssayReview ? null : Number(results.finalPct) >= passingScore;
   // Freeze all question fields with the attempt so admin history remains
   // complete even if the exam blueprint is later edited or replaced.
   const itemDiagnostics = snapshotAttemptDiagnostics(blueprint, responses, results.itemDiagnostics);
@@ -1217,8 +912,9 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     })
   );
   const reviewStatus = essayResponses.length ? "Pending Review" : "Analyzed";
+  const finalScore = isPendingEssayReview ? null : results.finalPct;
   const exams = [
-    { examId: blueprint.id, name: blueprint.title, takenAt, score: results.finalPct, finalPct: results.finalPct, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), durationSeconds, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
+    { examId: blueprint.id, name: blueprint.title, takenAt, score: finalScore, finalPct: finalScore, earnedPoints: Number(results.earnedPoints || 0), totalPoints: Number(results.totalPoints || 0), durationSeconds, passingScore, passed, status: reviewStatus, hasPendingEssays: essayResponses.length > 0 },
     ...currentDashboard.exams
   ];
 
@@ -1228,7 +924,7 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
       examId: blueprint.id,
       examTitle: blueprint.title,
       takenAt,
-      finalPct: results.finalPct,
+      finalPct: finalScore,
       passingScore,
       passed,
       earnedMockPoints,
@@ -1244,8 +940,8 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     ...(currentDashboard.attempts || [])
   ];
 
-  const isPendingEssayReview = (attempt) => attempt?.hasPendingEssays || attempt?.status === "Pending Review";
-  const completedAttempts = attempts.filter((attempt) => !isPendingEssayReview(attempt));
+  const hasPendingEssayReview = (attempt) => attempt?.hasPendingEssays || attempt?.status === "Pending Review";
+  const completedAttempts = attempts.filter((attempt) => !hasPendingEssayReview(attempt));
   const latestCompletedAttempt = completedAttempts[0];
   const progression = [...completedAttempts].reverse().map((attempt, index) => ({
     label: attempt.examTitle || `Mock ${index + 1}`,
@@ -1253,13 +949,14 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     takenAt: attempt.takenAt,
     examTitle: attempt.examTitle || `Mock ${index + 1}`
   }));
-  const subjects = results.subjectScores.map((subject) => ({
+  const subjects = (isPendingEssayReview ? [] : results.subjectScores).map((subject) => ({
     name: subject.title,
     mastery: subject.pct,
     color: subject.pct >= 90 ? "emerald" : subject.pct >= 80 ? "blue" : subject.pct >= 70 ? "amber" : "rose"
   }));
 
   const studyPlan = getStudyPlanCards().map((item, index) => {
+    if (isPendingEssayReview) return item;
     const weakness = results.weaknesses[index % Math.max(1, results.weaknesses.length)];
     if (!weakness) return item;
     return {
@@ -1270,15 +967,13 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     };
   });
   const rewardSummary = buildCommunityRewardSummary(user.email, { ...currentDashboard, attempts });
-  const placement = getRawLeaderboardPlacement(user.email, { ...currentDashboard, attempts });
-
   const nextDashboard = {
     ...currentDashboard,
     hasDashboardData: true,
     stats: [
       { label: "Latest Mock Score", value: latestCompletedAttempt ? `${Number(latestCompletedAttempt.finalPct ?? latestCompletedAttempt.score ?? 0)}%` : "0%", detail: latestCompletedAttempt ? `Scored from ${latestCompletedAttempt.examTitle || latestCompletedAttempt.name || "completed mock exam"}` : "No completed exam attempts yet", accent: "blue" },
       { label: "Total Tests Taken", value: String(exams.length), detail: `${exams.length} completed mock exam${exams.length === 1 ? "" : "s"} out of ${getExamBlueprints().length} available`, accent: "purple" },
-      { label: "Leaderboard Placement", value: placement.rank ? `#${placement.rank}` : "-", detail: placement.rank ? `Rank #${placement.rank} on the leaderboard` : "No ranking yet", accent: "indigo" },
+      { label: "Leaderboard Placement", value: "-", detail: "See the Community leaderboard for your current rank", accent: "indigo" },
       { label: "Study Points", value: rewardSummary.totalPoints.toLocaleString(), detail: "From exams and completed modules", accent: "teal" }
     ],
     progression,
@@ -1287,13 +982,19 @@ export function saveExamAttemptForStudent(user, blueprint, responses, results, m
     attempts,
     studyPlan,
     rewards: [{ title: `${attemptNumber} Mock${attemptNumber === 1 ? "" : "s"} Completed`, description: "Earned from completed localStorage-tracked exams.", points: earnedMockPoints }],
-    aiInsight: results.weaknesses.length
+    aiInsight: isPendingEssayReview
+      ? { title: "Essay review pending", priority: "Awaiting Review", detail: "Your final score and recommendations will be available after the essay review is complete." }
+      : results.weaknesses.length
       ? { title: `AI Deep Dive: ${results.weaknesses[0].title}`, priority: "Priority Intervention Required", detail: `Your latest attempt showed lower mastery in ${results.weaknesses[0].topicFocus}.` }
       : { title: "AI Deep Dive: Strong Performance", priority: "Maintenance Mode", detail: "You scored above the intervention threshold across all MCQ subjects." }
   };
 
   const normalizedDashboard = normalizeDashboardAnalytics(nextDashboard, user.email);
   saveStudentDashboard(user.email, normalizedDashboard);
+  // An exam is only complete once the server has accepted the exact dashboard
+  // record used by the results, dashboard, points, and drill recommendations.
+  const dashboardStore = getDashboardStore();
+  await http.put(`/data/legacy/${encodeURIComponent(DASHBOARD_KEY)}`, { value: dashboardStore });
   return normalizedDashboard;
 }
 
@@ -1393,8 +1094,8 @@ export function scoreBlueprintAttempt(blueprint, responses, meta = {}) {
       const correctItem = isCorrectAnswer(question, response);
       sectionTotal += 1;
       total += 1;
-      // Every item, including an essay awaiting review, belongs in the same
-      // total. A pending essay earns 0 until an admin assigns its final score.
+      // Keep the essay in the saved attempt for later recalculation, but do
+      // not expose a score while an administrator has not reviewed it.
       sectionTotalPoints += points;
       totalPoints += points;
 
@@ -1426,11 +1127,11 @@ export function scoreBlueprintAttempt(blueprint, responses, meta = {}) {
     };
   });
 
-  const finalPct = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
-  const weaknesses = subjectScores.filter((subject) => subject.total > 0 && subject.pct < 80).map((subject) => ({ ...subject, topicFocus: subject.title }));
+  const calculatedPct = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
   const essayQuestions = blueprint.sections.flatMap((section) => section.questions.filter((question) => question.type === "paragraph" || question.type === "essay"));
   const hasEssays = essayQuestions.length > 0;
-  return { finalPct, correct, total, earnedPoints, totalPoints, subjectScores, weaknesses, itemDiagnostics, hasEssays, essayCount: essayQuestions.length, status: hasEssays ? "Pending Review" : "Analyzed" };
+  const weaknesses = hasEssays ? [] : subjectScores.filter((subject) => subject.total > 0 && subject.pct < 80).map((subject) => ({ ...subject, topicFocus: subject.title }));
+  return { finalPct: hasEssays ? null : calculatedPct, correct, total, earnedPoints, totalPoints, subjectScores, weaknesses, itemDiagnostics, hasEssays, essayCount: essayQuestions.length, status: hasEssays ? "Pending Review" : "Analyzed" };
 }
 
 export function getWeaknessAnalysis(email, threshold = 75) {
@@ -1552,41 +1253,8 @@ function buildCommunityRewardSummary(email, dashboard) {
   };
 }
 
-export function getLeaderboard(currentEmail) {
-  initializeLocalStorage();
-  // `userAccounts` is the active account store. Keep `app_students` in the
-  // merge for installations that still persist their student records there.
-  // Do not fall back to the legacy `exams_ph_users` list: it is not updated by
-  // the current sign-up flow.
-  const activeAccounts = readJson(USER_ACCOUNTS_KEY, defaultUserAccounts);
-  const appStudents = readJson(APP_STUDENTS_KEY, []);
-  const students = mergeUserAccounts(
-    Array.isArray(activeAccounts) ? activeAccounts : [],
-    Array.isArray(appStudents) ? appStudents : []
-  ).filter((student) => student?.role === "student" && typeof student.email === "string" && student.email.trim());
-
-  const rows = students.map((student) => {
-    const summary = getCommunityRewardSummary(student.email);
-    // Some active-account records carry their latest aggregate directly,
-    // while older records derive it from dashboard data. Nullish checks retain
-    // legitimate zero scores and zero-point accounts.
-    const totalPoints = Number(student.totalPoints ?? student.points ?? summary.totalPoints) || 0;
-    const latestScore = Number(student.latestScore ?? student.score ?? summary.latestScore) || 0;
-    return {
-      id: student.id,
-      email: student.email,
-      name: student.name || student.username || student.email,
-      totalPoints,
-      latestScore,
-      isCurrent: student.email === currentEmail
-    };
-  }).sort((a, b) => b.totalPoints - a.totalPoints || a.email.localeCompare(b.email));
-  return rows.map((row, index) => ({ ...row, rank: index + 1 }));
-}
-
-// The local version above is retained for offline rendering. Use this when
-// displaying global standings so every account is ranked against the server's
-// current, per-student records.
+// Use this when displaying global standings so every account is ranked against
+// the server's current, per-student records.
 export async function getFreshLeaderboard(currentEmail) {
   const response = await fetch("/api/data/leaderboard", {
     credentials: "include",
@@ -1602,81 +1270,25 @@ export function getForumThreads() {
   return readJson(FORUM_KEY, []).map(normalizeForumThread).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
-export function createForumThread(user, payload) {
-  const threads = getForumThreads();
-  const nextThread = normalizeForumThread({
-    id: crypto.randomUUID(),
-    title: payload.title,
-    body: payload.body,
-    tag: payload.tag,
-    author: getUserDisplayName(user),
-    authorId: user?.id,
-    authorEmail: user?.email,
-    createdAt: new Date().toISOString(),
-    replies: []
-  });
-  writeJson(FORUM_KEY, [nextThread, ...threads]);
-  window.dispatchEvent(new CustomEvent("forumPostsUpdated", { detail: nextThread }));
-  return nextThread;
+export async function createForumThread(_user, payload) {
+  const { data } = await http.post("/content/forum/threads", payload);
+  localStorage.setItem(FORUM_KEY, JSON.stringify(data.threads));
+  window.dispatchEvent(new CustomEvent("forumPostsUpdated", { detail: data.thread }));
+  return data.thread;
 }
 
-export function addForumReply(user, threadId, body) {
-  const threads = getForumThreads();
-  let targetThread = null;
-  const reply = { id: crypto.randomUUID(), author: getUserDisplayName(user), authorId: user?.id, authorEmail: user?.email, body, createdAt: new Date().toISOString() };
-  const updated = threads.map((thread) => {
-    if (thread.id !== threadId) return thread;
-    targetThread = thread;
-    return { ...thread, replies: [...(thread.replies || []), reply] };
-  });
-  writeJson(FORUM_KEY, updated);
-  if (targetThread?.authorId && targetThread.authorId !== user?.id) {
-    createNotification({
-      userId: targetThread.authorId,
-      type: "new_reply",
-      message: `${reply.author} replied to your post: ${targetThread.title}`,
-      metadata: { threadId, replyId: reply.id }
-    });
-  }
-  window.dispatchEvent(new CustomEvent("forumPostsUpdated", { detail: { threadId, reply } }));
-  return reply;
+export async function addForumReply(_user, threadId, body) {
+  const { data } = await http.post(`/content/forum/threads/${encodeURIComponent(threadId)}/replies`, { body });
+  localStorage.setItem(FORUM_KEY, JSON.stringify(data.threads));
+  window.dispatchEvent(new CustomEvent("forumPostsUpdated", { detail: { threadId, reply: data.reply } }));
+  return data.reply;
 }
 
-export function toggleForumReaction(threadId, reactionType, userId) {
-  const threads = getForumThreads();
-  let targetThread = null;
-  let activeAfterToggle = false;
-  const updated = threads.map((thread) => {
-    if (thread.id !== threadId) return thread;
-    targetThread = thread;
-    const reactions = normalizeReactions(thread.reactions);
-    const reaction = reactions[reactionType] || { count: 0, userIds: [] };
-    const userIds = reaction.userIds || [];
-    const active = userIds.includes(userId);
-    const nextUserIds = active ? userIds.filter((id) => id !== userId) : [...userIds, userId];
-    activeAfterToggle = !active;
-    return {
-      ...thread,
-      reactions: {
-        ...reactions,
-        [reactionType]: {
-          count: Math.max(0, Number(reaction.count || 0) + (active ? -1 : 1)),
-          userIds: nextUserIds
-        }
-      }
-    };
-  });
-  writeJson(FORUM_KEY, updated);
-  if (activeAfterToggle && targetThread?.authorId && targetThread.authorId !== userId) {
-    createNotification({
-      userId: targetThread.authorId,
-      type: "post_reaction",
-      message: `Someone reacted to your post: ${targetThread.title}`,
-      metadata: { threadId, reactionType }
-    });
-  }
+export async function toggleForumReaction(threadId, reactionType, _userId) {
+  const { data } = await http.post(`/content/forum/threads/${encodeURIComponent(threadId)}/reactions`, { type: reactionType });
+  localStorage.setItem(FORUM_KEY, JSON.stringify(data.threads));
   window.dispatchEvent(new CustomEvent("forumPostsUpdated"));
-  return updated.find((thread) => thread.id === threadId);
+  return data.threads.find((thread) => thread.id === threadId);
 }
 
 export function getNotificationsForUser(userId) {
@@ -1695,27 +1307,11 @@ export function markNotificationsRead(userId, notificationId = null) {
   });
   writeJson(NOTIFICATIONS_KEY, updated);
   window.dispatchEvent(new CustomEvent("notificationsUpdated"));
+  // Notification read status belongs to the signed-in student, so persist it
+  // before the next server hydration can replace this browser copy.
+  http.patch("/content/notifications/read", notificationId ? { notificationId } : {})
+    .catch((error) => console.warn("Unable to save notification read status:", error));
   return updated.filter((notification) => notification.userId === userId);
-}
-
-function createExamPublishedNotifications(exam) {
-  createPublishedContentNotifications({
-    type: "new_exam",
-    message: `New Exam Posted: ${exam.title || "Untitled Mock Exam"}`,
-    metadata: { examId: exam.id }
-  });
-}
-
-function createPublishedContentNotifications({ type, message, metadata = {} }) {
-  const students = getUserAccounts().filter((account) => account.role === "student");
-  students.forEach((student) => {
-    createNotification({
-      userId: student.id,
-      type,
-      message,
-      metadata
-    });
-  });
 }
 
 function removeSeededForumUsers() {
@@ -1779,7 +1375,7 @@ function buildItemDiagnostic({ section, question, response, isCorrect, metrics =
   const points = Math.max(1, Number(question.points || 1));
   return {
     ...tags,
-    // --- new fields needed for the exam submissions viewer ---
+    //  new fields needed for the exam submissions viewer 
     questionId: question.id || null,
     questionText: question.stem || "",
     questionType: question.type || "multiple_choice",
@@ -1790,7 +1386,7 @@ function buildItemDiagnostic({ section, question, response, isCorrect, metrics =
     correctText: question.correctText || "",
     points,
     earnedPoints: isCorrect ? points : 0,
-    // --- existing fields ---
+    //  existing fields 
     responseDurationSeconds,
     isCorrect,
     errorFlag: isCorrect === false,
@@ -1928,7 +1524,9 @@ export function updateLatestEssayReview(email, essayId, updates) {
     if (!getEssayResponses(attempt).some((essay) => essay.id === essayId)) return attempt;
     const essayResponses = getEssayResponses(attempt).map((essay) => essay.id === essayId ? { ...essay, ...updates } : essay);
     const reviewed = essayResponses.length > 0 && essayResponses.every((essay) => essay.status === "approved");
-    return recalculateEssayAttempt({ ...attempt, essayResponses, status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed });
+    return reviewed
+      ? recalculateEssayAttempt({ ...attempt, essayResponses, status: "Reviewed", hasPendingEssays: false })
+      : { ...attempt, essayResponses, finalPct: null, passed: null, status: "Pending Review", hasPendingEssays: true };
   });
   const updatedAttemptIndex = nextAttempts.findIndex((attempt) => getEssayResponses(attempt).some((essay) => essay.id === essayId));
   const updatedAttempt = nextAttempts[updatedAttemptIndex];

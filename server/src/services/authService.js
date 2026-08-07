@@ -3,7 +3,7 @@ const { getDb } = require("../config/database");
 const { sendSms } = require("./smsService");
 const { sendEmail } = require("./emailService");
 
-const ACCESS_TTL = 15 * 60 * 1000;
+const ACCESS_TTL = 8 * 60 * 60 * 1000;
 const REFRESH_TTL = 7 * 24 * 60 * 60 * 1000;
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
@@ -41,11 +41,16 @@ function token(payload, expiresIn) {
 
 function verifyToken(value) {
   const [header, body, signature] = String(value || "").split(".");
-  if (!header || !body || !signature) throw new Error("Invalid token");
+  if (!header || !body || !signature) throw Object.assign(new Error("Invalid token"), { status: 401 });
   const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${body}`).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ) throw new Error("Invalid token");
-  const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-  if (payload.exp < Date.now()) throw new Error("Token expired");
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ) throw Object.assign(new Error("Invalid token"), { status: 401 });
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  } catch (_error) {
+    throw Object.assign(new Error("Invalid token"), { status: 401 });
+  }
+  if (payload.exp < Date.now()) throw Object.assign(new Error("Token expired"), { status: 401 });
   return payload;
 }
 
@@ -136,6 +141,7 @@ function createSession(db, user, meta) {
 }
 
 async function refresh(refreshToken, req) {
+  if (!refreshToken) throw Object.assign(new Error("Refresh token is missing."), { status: 401 });
   const payload = verifyToken(refreshToken);
   const db = getDb();
   const session = db.prepare("SELECT * FROM sessions WHERE id=? AND refresh_token=? AND is_revoked=0").get(payload.sid, refreshToken);
@@ -285,4 +291,4 @@ async function resetStudentPasswordByAdmin(userId) {
 
 function verifyEmail(value) { const db = getDb(); const row = db.prepare("SELECT * FROM email_verification_tokens WHERE token=? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP").get(value); if (!row) throw Object.assign(new Error("Verification token is invalid or expired."), { status: 400 }); db.prepare("UPDATE users SET is_verified=1 WHERE id=?").run(row.user_id); db.prepare("UPDATE email_verification_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?").run(row.id); }
 
-module.exports = { ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, revokeAllExcept, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };
+module.exports = { ACCESS_TTL, ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, revokeAllExcept, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };

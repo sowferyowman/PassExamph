@@ -11,6 +11,7 @@ import TinyMCEEditor from "../components/TinyMCEEditor";
 import {
   getExamBlueprints,
   getReviewerBlueprints,
+  hydrateAllFromServer,
   updateReviewerBlueprint,
   deleteReviewerBlueprint,
   publishExamBlueprint,
@@ -474,6 +475,14 @@ export default function CreateExamPage() {
     setMode(routeMode);
   }, [searchParams]);
 
+  useEffect(() => {
+    let active = true;
+    hydrateAllFromServer().catch(() => false).then(() => {
+      if (active) setReviewers(getReviewerBlueprints());
+    });
+    return () => { active = false; };
+  }, []);
+
   // Helper function to show confirmation
   function showConfirm({ title, message, onConfirm, confirmText = "Delete", isDanger = true }) {
     setConfirmDialog({
@@ -533,10 +542,14 @@ export default function CreateExamPage() {
     showConfirm({ 
       title: "Delete Reviewer", 
       message: `Delete "${reviewer?.title || "this reviewer"}"?`, 
-      onConfirm: () => { 
-        deleteReviewerBlueprint(reviewerId); 
-        setReviewers(getReviewerBlueprints()); 
-        setMessage("Reviewer deleted successfully."); 
+      onConfirm: async () => { 
+        try {
+          await deleteReviewerBlueprint(reviewerId);
+          setReviewers(getReviewerBlueprints());
+          setMessage("Reviewer deleted successfully.");
+        } catch (error) {
+          setMessage(error.response?.data?.error || "Reviewer could not be deleted.");
+        }
       } 
     });
   }
@@ -546,18 +559,19 @@ export default function CreateExamPage() {
     showConfirm({
       title: "Delete Exam",
       message: `Delete "${exam?.title || 'this exam'}"?\n\nThis action cannot be undone.\nAll student attempts and data for this exam will also be removed.`,
-      onConfirm: () => {
-        deleteExamBlueprint(examId);
-        setBlueprints(getExamBlueprints());
-        setMessage("Exam deleted successfully.");
+      onConfirm: async () => {
+        try { await deleteExamBlueprint(examId); setBlueprints(getExamBlueprints()); setMessage("Exam deleted successfully."); }
+        catch (error) { setMessage(error.response?.data?.error || "Exam could not be deleted."); }
       }
     });
   }
 
-  function handleToggleVisibility(examId) {
-    const updated = toggleExamVisibility(examId);
-    setBlueprints(getExamBlueprints());
-    setMessage(updated.isHidden ? "Exam hidden from students." : "Exam is now visible to students.");
+  async function handleToggleVisibility(examId) {
+    try {
+      const updated = await toggleExamVisibility(examId);
+      setBlueprints(getExamBlueprints());
+      setMessage(updated.isHidden ? "Exam hidden from students." : "Exam is now visible to students.");
+    } catch (error) { setMessage(error.response?.data?.error || "Exam visibility could not be updated."); }
   }
 
   function updateSection(sectionIndex, updates) {
@@ -812,7 +826,7 @@ export default function CreateExamPage() {
     return "";
   }
 
-  function publishItem() {
+  async function publishItem() {
     if (mode === "exam") {
       const validationError = validateExamBlueprint();
       if (validationError) {
@@ -821,7 +835,7 @@ export default function CreateExamPage() {
       }
 
       if (editingExamId) {
-        const updated = updateExamBlueprint(editingExamId, {
+        const updated = await updateExamBlueprint(editingExamId, {
           ...examForm,
           accessType: examForm.accessType || "unlimited",
           maxAttempts: examForm.accessType === "once" ? 1 : examForm.accessType === "limited" ? (examForm.maxAttempts || 3) : 999
@@ -836,7 +850,7 @@ export default function CreateExamPage() {
         return;
       }
 
-      const published = publishExamBlueprint({
+      const published = await publishExamBlueprint({
         ...examForm,
         accessType: examForm.accessType || "unlimited",
         maxAttempts: examForm.accessType === "once" ? 1 : examForm.accessType === "limited" ? (examForm.maxAttempts || 3) : 999
@@ -856,21 +870,26 @@ export default function CreateExamPage() {
       return;
     }
 
-    if (editingReviewerId) {
-      const updated = updateReviewerBlueprint(editingReviewerId, reviewerForm);
+    try {
+      if (editingReviewerId) {
+        const updated = await updateReviewerBlueprint(editingReviewerId, reviewerForm);
+        setReviewers(getReviewerBlueprints());
+        setMessage(`"${updated.title}" was updated successfully!`);
+        setEditingReviewerId(null);
+        setReviewerForm(initialReviewerForm);
+        return;
+      }
+      const published = await publishReviewerBlueprint(reviewerForm);
       setReviewers(getReviewerBlueprints());
-      setMessage(`"${updated.title}" was updated successfully!`);
-      setEditingReviewerId(null);
-      setReviewerForm(initialReviewerForm);
-      return;
+      setMessage(`"${published.title}" was published successfully! Students can now access this reviewer.`);
+      setReviewerForm({
+        ...initialReviewerForm,
+        modules: [{ ...initialReviewerForm.modules[0], id: crypto.randomUUID() }]
+      });
+    } catch (error) {
+      const reason = error.response?.data?.error || error.message || "Unknown connection error";
+      setMessage(`Reviewer could not be saved: ${reason}. Please sign in again and retry.`);
     }
-    const published = publishReviewerBlueprint(reviewerForm);
-    setReviewers(getReviewerBlueprints());
-    setMessage(`"${published.title}" was published successfully! Students can now access this reviewer.`);
-    setReviewerForm({
-      ...initialReviewerForm,
-      modules: [{ ...initialReviewerForm.modules[0], id: crypto.randomUUID() }]
-    });
   }
 
   return (

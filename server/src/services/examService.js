@@ -37,7 +37,11 @@ function scoreExamAttempt(responses, studentId = 1) {
       };
     });
 
-  const finalPct = total ? Math.round((correct / total) * 100) : 0;
+  const calculatedPct = total ? Math.round((correct / total) * 100) : 0;
+  const hasEssays = blueprint.some((section) => (section.questions || []).some((question) => question.type === "paragraph" || question.type === "essay"));
+  // The database requires a numeric placeholder, but no provisional score is
+  // returned to the student while an essay is awaiting review.
+  const finalPct = hasEssays ? null : calculatedPct;
   
   try {
     const insertLog = db.prepare(`
@@ -51,8 +55,7 @@ function scoreExamAttempt(responses, studentId = 1) {
     const currentDate = new Date().toISOString().split("T")[0];
     const examName = `ACET Mock Practice #${attemptCount + 1}`;
     
-    const hasEssays = blueprint.some((section) => (section.questions || []).some((question) => question.type === "paragraph" || question.type === "essay"));
-    insertLog.run(studentId, examName, currentDate, finalPct, hasEssays ? "Pending Review" : "Analyzed");
+    insertLog.run(studentId, examName, currentDate, finalPct ?? 0, hasEssays ? "Pending Review" : "Analyzed");
 
     // Essay-backed attempts are incomplete until their responses are reviewed.
     // Do not plot their MCQ-only subtotal as a completed progression score.
@@ -67,7 +70,7 @@ function scoreExamAttempt(responses, studentId = 1) {
       ON CONFLICT(student_id, name) DO UPDATE SET mastery = excluded.mastery
     `);
 
-    subjectScores.forEach((subject) => {
+    if (!hasEssays) subjectScores.forEach((subject) => {
       upsertSubject.run(studentId, subject.title, subject.pct, getSubjectColor(subject.pct));
     });
 
@@ -76,7 +79,7 @@ function scoreExamAttempt(responses, studentId = 1) {
     console.error("Failed to write exam log record to database:", error);
   }
 
-  const weaknesses = subjectScores
+  const weaknesses = hasEssays ? [] : subjectScores
     .filter((subject) => subject.pct < 80)
     .map((subject) => ({
       ...subject,
@@ -93,9 +96,11 @@ function scoreExamAttempt(responses, studentId = 1) {
     finalPct,
     correct,
     total,
-    targetScore: Math.min(100, finalPct + 12),
+    targetScore: hasEssays ? null : Math.min(100, finalPct + 12),
     subjectScores,
-    weaknesses
+    weaknesses,
+    hasEssays,
+    status: hasEssays ? "Pending Review" : "Analyzed"
   };
 }
 
@@ -109,7 +114,7 @@ function saveEssayResponses(responses, studentId, examName) {
     const response = String(responses?.[sectionIndex]?.[questionIndex] || "");
     const row = insert.run(studentId, examLog?.id || null, examName, questionIndex, response, question.rubric || "", Math.max(1, Number(question.points || 1)));
     scoreEssay({ response, rubric: question.rubric, points: question.points || 1 }).then((scored) => {
-      if (scored.status === "ai_graded") db.prepare("UPDATE essay_responses SET ai_score = ?, status = 'ai_graded' WHERE id = ?").run(scored.score, row.lastInsertRowid);
+      if (scored.status === "ai_graded") db.prepare("UPDATE essay_responses SET ai_score = ?, ai_rationale = ?, status = 'ai_graded' WHERE id = ?").run(scored.score, scored.rationale, row.lastInsertRowid);
     }).catch(() => {});
   }));
 }

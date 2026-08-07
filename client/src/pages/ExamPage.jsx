@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-  import { useNavigate } from "react-router-dom";
+  import { useLocation, useNavigate } from "react-router-dom";
   import { 
     FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, 
     FaPlay, FaArrowUp, FaArrowDown, FaMinus, FaSearch
@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
     getCurrentUser,
     getExamBlueprints,
     getStudentDashboard,
-    hydrateDashboardStoreFromServer,
+    hydrateAllFromServer,
     saveExamAttemptForStudent,
     saveIncompleteExamAttemptForStudent,
     scoreBlueprintAttempt,
@@ -67,16 +67,35 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
     return getAttemptsUsedForExam(dashboard, exam) >= maxAttempts;
   }
 
+  function resultsFromReviewedAttempt(attempt) {
+    const items = Array.isArray(attempt?.itemDiagnostics) ? attempt.itemDiagnostics : [];
+    const subjectScores = Array.isArray(attempt?.subjectScores) ? attempt.subjectScores : [];
+    return {
+      finalPct: Number(attempt?.finalPct || 0),
+      correct: items.filter((item) => Number(item.earnedPoints || 0) > 0).length,
+      total: items.length,
+      passingScore: Number(attempt?.passingScore || 75),
+      passed: Boolean(attempt?.passed),
+      subjectScores,
+      weaknesses: subjectScores.filter((subject) => Number(subject.pct || 0) < 80).map((subject) => ({ ...subject, topicFocus: subject.title })),
+      itemDiagnostics: items,
+      hasEssays: false,
+      status: "Reviewed"
+    };
+  }
+
   export default function ExamPage({ historyOnly = false }) {
     const navigate = useNavigate();
+    const location = useLocation();
+    const reviewedAttempt = location.state?.reviewedAttempt;
     const [availableExams, setAvailableExams] = useState([]);
     const [sections, setSections] = useState([]);
     const [blueprint, setBlueprint] = useState(null);
     const [responses, setResponses] = useState([]);
     const [activeSection, setActiveSection] = useState(0);
     const [activeQuestion, setActiveQuestion] = useState(0);
-    const [phase, setPhase] = useState(historyOnly ? "history" : "loading");
-    const [results, setResults] = useState(null);
+    const [phase, setPhase] = useState(reviewedAttempt ? "results" : historyOnly ? "history" : "loading");
+    const [results, setResults] = useState(() => reviewedAttempt ? resultsFromReviewedAttempt(reviewedAttempt) : null);
     const [error, setError] = useState(null);
     const [startedAt, setStartedAt] = useState(null);
     const [questionMetrics, setQuestionMetrics] = useState([]);
@@ -99,7 +118,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
         try {
           const user = getCurrentUser();
           // Exam Records must use the server copy after an admin reviews an essay.
-          await hydrateDashboardStoreFromServer().catch(() => false);
+          await hydrateAllFromServer().catch(() => false);
           const dashboard = getStudentDashboard(user?.email);
           
           // Process exams with additional data
@@ -313,27 +332,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
         setPhase("submitting");
         await flushProgress();
         if (sessionRef.current) await completeExamSession(sessionRef.current.id).then(applySession);
-        const user = getCurrentUser();
         const rawResults = scoreBlueprintAttempt(blueprint, responses, { questionMetrics: finalQuestionMetrics });
         const passingScore = Number.isFinite(Number(blueprint.passingScore)) ? Number(blueprint.passingScore) : 75;
-        const passed = rawResults.finalPct >= passingScore;
+        const passed = rawResults.hasEssays ? null : rawResults.finalPct >= passingScore;
         const scoredResults = {
           ...rawResults,
           passingScore,
           passed,
           // For a failed attempt, the next-attempt target is the exact score
           // required by this exam. Omit it after a pass so no stale target is shown.
-          ...(passed ? {} : { targetScore: passingScore })
+          ...(!rawResults.hasEssays && !passed ? { targetScore: passingScore } : {})
         };
         const durationSeconds = startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / 1000)) : 0;
-        const nextDashboard = saveExamAttemptForStudent(user, blueprint, responses, scoredResults, { durationSeconds, questionMetrics: finalQuestionMetrics });
+        const user = getCurrentUser();
+        const nextDashboard = await saveExamAttemptForStudent(user, blueprint, responses, scoredResults, { durationSeconds, questionMetrics: finalQuestionMetrics });
         const essays = nextDashboard.attempts?.[0]?.essayResponses || [];
         if (essays.length) {
           await Promise.all(essays.map(async (essay) => {
             try {
               const scored = await scoreEssay({ response: essay.response, rubric: essay.rubric, points: blueprint.sections[essay.sectionIndex].questions[essay.questionIndex].points || 1 });
               if (Number.isFinite(Number(scored.score))) {
-                updateLatestEssayReview(user.email, essay.id, { aiScore: Number(scored.score), status: "ai_graded" });
+                updateLatestEssayReview(user.email, essay.id, { aiScore: Number(scored.score), aiRationale: scored.rationale || "", status: "ai_graded" });
               }
             } catch (error) {
               console.warn("Essay AI scoring unavailable; kept pending review.", error);

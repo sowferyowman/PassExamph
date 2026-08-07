@@ -154,6 +154,11 @@ export default function ResultsView({ results, onBack }) {
 
     async function loadDiagnostic() {
       if (!results) return;
+      if (results.hasEssays || results.status === "Pending Review") {
+        setAiDiagnostic(null);
+        setDiagnosticStatus("idle");
+        return;
+      }
       try {
         setDiagnosticStatus("loading");
         const diagnostic = await diagnoseExam({
@@ -206,6 +211,22 @@ export default function ResultsView({ results, onBack }) {
 
   const scoreTier = getTier(results?.finalPct ?? 0);
   const animatedScore = useCountUp(results?.finalPct ?? 0, mounted && !results?.hasEssays, 1300);
+  const pendingReview = Boolean(results?.hasEssays || results?.status === "Pending Review");
+
+  if (pendingReview) {
+    return (
+      <div className="min-h-screen bg-slate-100 p-6">
+        <div className="mx-auto max-w-2xl space-y-6">
+          <button onClick={onBack} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"><FaArrowLeft /> Dashboard</button>
+          <section className="rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-dashed border-amber-300 bg-amber-50"><FaHourglassHalf className="text-2xl text-amber-500" /></div>
+            <h1 className="mt-5 text-2xl font-black text-slate-900">Essay review pending</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Your essay response is awaiting review. Your final score, pass/fail result, and recommendations will appear only after an administrator completes the review.</p>
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">

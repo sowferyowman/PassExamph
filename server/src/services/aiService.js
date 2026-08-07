@@ -409,4 +409,41 @@ function normalizeGate(value, fallback) {
   };
 }
 
-module.exports = { diagnoseExam, buildAdaptiveGate };
+async function scoreEssay({ response, rubric, points }) {
+  const maxPoints = Math.max(1, Number(points || 1));
+  const submission = String(response || "").trim();
+  if (!submission) {
+    return { score: 0, rationale: "No written response was submitted.", status: "ai_graded", source: "local_validation" };
+  }
+
+  try {
+    const groq = getGroqClient();
+    const completion = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "You are a careful academic essay evaluator. Return ONLY JSON with exactly two keys: score (number) and rationale (string). Score only against the provided rubric, from 0 to the stated maximum. The rationale must be 2-4 concise sentences explaining the awarded score, naming at least one strength and one specific improvement where applicable. Do not claim the response says something it does not say."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ rubric: String(rubric || "Assess clarity, reasoning, evidence, organization, and relevance."), maxPoints, response: submission })
+        }
+      ]
+    });
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+    const value = JSON.parse(raw);
+    const score = Number(value.score);
+    if (!Number.isFinite(score)) throw new Error("Groq returned no numeric essay score.");
+    const rationale = String(value.rationale || "").trim();
+    if (!rationale) throw new Error("Groq returned no essay rationale.");
+    return { score: Math.max(0, Math.min(maxPoints, score)), rationale, status: "ai_graded", source: "groq" };
+  } catch (error) {
+    console.error("Groq essay grading fallback:", error.message);
+    return { score: null, rationale: "Automatic essay grading is temporarily unavailable. This response remains pending administrator review.", status: "pending_review", source: "unavailable", warning: error.message };
+  }
+}
+
+module.exports = { diagnoseExam, buildAdaptiveGate, scoreEssay };

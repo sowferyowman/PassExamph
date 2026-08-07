@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const { getDb } = require("../config/database");
 const { resetStudentPasswordByAdmin, updateProfile } = require("../services/authService");
+const { randomUUID } = require("crypto");
 
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Admin access required." });
@@ -82,6 +83,7 @@ router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
     if (!dashboard) return res.status(404).json({ error: "No saved exam history was found for this student." });
     let updated = false;
     let updatedAttemptIndex = -1;
+    let wasReviewed = false;
     dashboard.attempts = (dashboard.attempts || []).map((attempt, attemptIndex) => {
       const essayResponses = (attempt.essayResponses || []).map((essay) => {
         if (essay.id !== essayId) return essay;
@@ -90,6 +92,7 @@ router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
       });
       if (!essayResponses.some((essay) => essay.id === essayId)) return attempt;
       updatedAttemptIndex = attemptIndex;
+      wasReviewed = attempt.status === "Reviewed" && !attempt.hasPendingEssays;
       return recalculateEssayAttempt({ ...attempt, essayResponses });
     });
     if (!updated) return res.status(404).json({ error: "Essay response not found." });
@@ -108,6 +111,19 @@ router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
       } : exam);
     }
     db.prepare("UPDATE app_data SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").run(JSON.stringify(store), studentId);
+    // Notify once, only after every essay in this attempt has been finalized.
+    if (updatedAttempt?.status === "Reviewed" && !updatedAttempt.hasPendingEssays && !wasReviewed) {
+      db.prepare("INSERT INTO user_notifications (id,user_id,payload) VALUES (?,?,?)").run(
+        randomUUID(),
+        studentId,
+        JSON.stringify({
+          id: randomUUID(), userId: studentId, type: "essay_reviewed",
+          message: `Your essay for ${updatedAttempt.examTitle || "your mock exam"} has been reviewed. Your final result is ready.`,
+          isRead: false, timestamp: Date.now(),
+          metadata: { attemptId: updatedAttempt.id, examId: updatedAttempt.examId }
+        })
+      );
+    }
     res.json({ ok: true, attempt: updatedAttempt, dashboard });
   } catch (_error) {
     res.status(500).json({ error: "Could not update the saved exam score." });
@@ -172,7 +188,7 @@ router.delete("/students/:studentId", (req, res) => {
 router.get("/essays/pending", (_req, res) => {
   const rows = getDb().prepare(`
     SELECT id, student_id AS studentId, exam_name AS examName, question_index AS questionIndex,
-      response, rubric, points, ai_score AS aiScore, final_score AS finalScore, status, created_at AS createdAt
+      response, rubric, points, ai_score AS aiScore, ai_rationale AS aiRationale, final_score AS finalScore, status, created_at AS createdAt
     FROM essay_responses WHERE status IN ('pending_review', 'ai_graded') ORDER BY created_at ASC
   `).all();
   res.json(rows);
