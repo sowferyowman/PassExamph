@@ -82,7 +82,7 @@ BAD: "You can do it! Believe in yourself and never give up!" (empty hype, avoid 
 // fixes.
 const ADAPTIVE_GATE_SYSTEM_PROMPT = `You are the same warm, direct academic coach from the exam diagnostic — now looking at a student's history across several attempts to decide what they should drill next. You're talking directly to the student, not writing an internal report.
 
-Return ONLY a strict JSON object with exactly these keys: focus_subject, confidence, rationale, drill_subject_order, reviewer_focus_tags, exam_focus_tags.
+Return ONLY a strict JSON object with exactly these keys: focus_subject, confidence, rationale, drill_subject_order, recommended_drill_ids, reviewer_focus_tags, exam_focus_tags.
 
 - focus_subject (string): the single subject name to prioritize next.
 - confidence (number, 0-1): how clear-cut this call is given the data. Low weak-subject signal or very few attempts should mean lower confidence.
@@ -91,6 +91,7 @@ Return ONLY a strict JSON object with exactly these keys: focus_subject, confide
   BAD: "Your active review track has been programmatically updated based on cumulative tracking metrics." (jargon, not a sentence a coach would say)
   BAD: "This exam shows a weakness in Math." (wrong lens — this is about the trend across attempts, not a single exam)
 - drill_subject_order (array of strings): subjects ordered by priority, most urgent first.
+- recommended_drill_ids (array of strings): choose 1-10 IDs from the availableDrills candidate list that best target the student's most urgent recurring weakness. Check every candidate before choosing. Return only IDs that appear in availableDrills, favoring exact subject, subcategory, and weakness-tag matches. If no drill is a meaningful match, return an empty array rather than inventing an ID.
 - reviewer_focus_tags (array of strings): short topic labels, not full sentences.
 - exam_focus_tags (array of strings): short topic labels, not full sentences.
 
@@ -162,8 +163,8 @@ async function buildAdaptiveGate(payload) {
   const fallback = buildFallbackGate(payload);
 
   try {
-    // OPTIMIZATION FILTER START 
-    // Extract past metadata attempts to dramatically condense historical analytics arrays sent to the API.
+    // The client pre-ranks drills by the admin's subject/skill labels. Keep a
+    // hard cap here as well so a malformed client payload cannot inflate cost.
     const cleanHistory = Array.isArray(payload?.diagnosticHistory)
       ? payload.diagnosticHistory.slice(-3).map(attempt => {
           const subjectMastery = attempt.aiDiagnostic?.subject_mastery || attempt.subjectScores || [];
@@ -175,7 +176,18 @@ async function buildAdaptiveGate(payload) {
           };
         })
       : [];
-    // OPTIMIZATION FILTER END
+    const availableDrills = Array.isArray(payload?.contentPools?.drills)
+      ? payload.contentPools.drills
+          .filter((drill) => drill && drill.id)
+          .map((drill) => ({
+            id: String(drill.id),
+            title: String(drill.title || "Untitled drill"),
+            subject: String(drill.subject || "General Practice"),
+            subCategory: String(drill.subCategory || ""),
+            weaknessTag: String(drill.weaknessTag || "")
+          }))
+          .slice(0, 50)
+      : [];
 
     const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
@@ -191,7 +203,9 @@ async function buildAdaptiveGate(payload) {
           role: "user",
           content: JSON.stringify({
             task: "Tell this student, in your own coaching voice, which subject to drill next based on their pattern across the attempts below — not just one exam. Ground every field in the actual data given.",
-            studentHistorySummary: cleanHistory
+            studentHistorySummary: cleanHistory,
+            availableDrills,
+            instruction: "Review every availableDrills candidate before choosing recommended_drill_ids. Select only IDs from that candidate list."
           })
         }
       ]
@@ -352,6 +366,11 @@ function buildFallbackGate(payload = {}) {
   });
 
   const focusSubject = [...weakCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "General Comprehensive Review";
+  const availableDrills = Array.isArray(payload?.contentPools?.drills) ? payload.contentPools.drills : [];
+  const recommendedDrillIds = availableDrills
+    .filter((drill) => String(drill?.subject || "").toLowerCase() === String(focusSubject).toLowerCase())
+    .slice(0, 10)
+    .map((drill) => String(drill.id));
 
   const analyticalFallbackRationale = weakCounts.size
     ? `**${focusSubject}** keeps showing up as your softest spot across your recent attempts, so that's where the next block of practice will help most. Clearing this now gives you the biggest lift to your overall score before your next mock exam.`
@@ -362,6 +381,8 @@ function buildFallbackGate(payload = {}) {
     confidence: weakCounts.size ? 0.72 : 0.35,
     rationale: analyticalFallbackRationale,
     drill_subject_order: [focusSubject],
+    recommended_drill_ids: recommendedDrillIds,
+    available_drill_ids: availableDrills.map((drill) => String(drill.id)),
     reviewer_focus_tags: [focusSubject],
     exam_focus_tags: [focusSubject],
     source: "local_fallback"
@@ -398,11 +419,16 @@ function normalizeDiagnostic(value, fallback) {
 }
 
 function normalizeGate(value, fallback) {
+  const availableIds = new Set((fallback.available_drill_ids || []).map(String));
+  const recommendedDrillIds = Array.isArray(value.recommended_drill_ids)
+    ? [...new Set(value.recommended_drill_ids.map(String).filter((id) => availableIds.has(id)))].slice(0, 10)
+    : fallback.recommended_drill_ids;
   return {
     focus_subject: value.focus_subject || fallback.focus_subject,
     confidence: Number(value.confidence ?? fallback.confidence),
     rationale: value.rationale || fallback.rationale,
     drill_subject_order: Array.isArray(value.drill_subject_order) ? value.drill_subject_order : fallback.drill_subject_order,
+    recommended_drill_ids: recommendedDrillIds,
     reviewer_focus_tags: Array.isArray(value.reviewer_focus_tags) ? value.reviewer_focus_tags : fallback.reviewer_focus_tags,
     exam_focus_tags: Array.isArray(value.exam_focus_tags) ? value.exam_focus_tags : fallback.exam_focus_tags,
     source: "groq"

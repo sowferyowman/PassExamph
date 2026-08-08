@@ -403,7 +403,15 @@ export function initializeLocalStorage() {
   if (!storedBlueprints.some((exam) => exam.id === essayExamSeed.id)) writeJson(EXAMS_KEY, [...storedBlueprints, essayExamSeed]);
   if (!localStorage.getItem(REVIEWERS_KEY)) localStorage.setItem(REVIEWERS_KEY, JSON.stringify(reviewerBlueprintSeed.map((reviewer) => ({ ...reviewer, status: "published", createdAt: "2026-07-22T00:00:00.000Z" }))));
   const storedDrills = readJson(DRILL_BANK_KEY, null);
-  if (!Array.isArray(storedDrills) || storedDrills.length === 0) writeJson(DRILL_BANK_KEY, drillBankSeed);
+  const drillBank = Array.isArray(storedDrills) && storedDrills.length ? storedDrills : drillBankSeed;
+  // Older published drills predate the required title field. Give them a
+  // meaningful, admin-facing title from the labels they already have.
+  const titledDrills = drillBank.map((drill) => (
+    String(drill.title || "").trim() ? drill : { ...drill, title: buildDrillTitle(drill) }
+  ));
+  if (!Array.isArray(storedDrills) || storedDrills.length === 0 || titledDrills.some((drill, index) => drill !== drillBank[index])) {
+    writeJson(DRILL_BANK_KEY, titledDrills);
+  }
   if (!localStorage.getItem(DASHBOARD_KEY)) writeJson(DASHBOARD_KEY, {});
   if (!localStorage.getItem(REVIEWER_PROGRESS_KEY)) writeJson(REVIEWER_PROGRESS_KEY, {});
   // An empty forum is a valid, intentional state. Do not repopulate it with
@@ -412,6 +420,15 @@ export function initializeLocalStorage() {
   removeSeededForumUsers();
   if (!localStorage.getItem(NOTIFICATIONS_KEY)) writeJson(NOTIFICATIONS_KEY, []);
 
+}
+
+function buildDrillTitle(drill = {}) {
+  const labels = [
+    drill.subjectTitle || drill.category,
+    drill.diagnosticSubcategory || drill.subCategory,
+    drill.diagnosticSkillTag || drill.weaknessTag
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  return labels.length ? labels.join(" · ") : "Practice Drill";
 }
 
 export function getExamsData() {
@@ -1012,7 +1029,7 @@ export function saveIncompleteExamAttemptForStudent(user, blueprint, sessionId) 
       score: null,
       status: "Incomplete",
       incomplete: true,
-      passed: false
+      passed: null
     }, ...(dashboard.exams || [])]
   };
   saveStudentDashboard(user.email, nextDashboard);

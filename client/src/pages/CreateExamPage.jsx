@@ -22,9 +22,8 @@ import {
   updateExamBlueprint
 } from "../services/storage";
 
-// ============================================
 // CONFIRMATION DIALOG COMPONENT (Built-in)
-// ============================================
+
 function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmText = "Delete", cancelText = "Cancel", isDanger = true }) {
   if (!isOpen) return null;
 
@@ -73,9 +72,9 @@ function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmText
   );
 }
 
-// ============================================
+
 // ACTION DROPDOWN COMPONENT
-// ============================================
+
 function ExamActionsDropdown({ blueprint, onEdit, onToggleVisibility, onDelete }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -204,9 +203,7 @@ function ReviewerActionsDropdown({ reviewer, onEdit, onDelete }) {
   );
 }
 
-// ============================================
 // MAIN COMPONENT
-// ============================================
 
 const emptyQuestion = {
   type: "multiple_choice",
@@ -266,10 +263,8 @@ function getOptionLabel(index) {
   return String.fromCharCode(65 + index); // A, B, C, D, ...
 }
 
-// ============================================
-// CSV BULK IMPORT HELPERS
-// ============================================
 
+// CSV BULK IMPORT HELPERS
 // Column layout expected in the uploaded CSV (header row required, order does not matter):
 // subject_category, time_minutes, question_type, question_text,
 // option_a, option_b, option_c, option_d, option_e, option_f,
@@ -1139,7 +1134,7 @@ export default function CreateExamPage() {
               </label>
 
               <label className="block">
-                <span className="text-xs font-bold text-slate-600">Passing Score <span className="text-rose-500">*</span></span>
+                <span className="text-xs font-bold text-slate-600">Passing Score % <span className="text-rose-500">*</span></span>
                 <input
                   type="number"
                   min="0"
@@ -1308,7 +1303,7 @@ export default function CreateExamPage() {
                     value={section.subjectTitle}
                     onChange={(event) => updateSection(sectionIndex, { subjectTitle: event.target.value })}
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="e.g., Mathematics, English, Science"
+                    placeholder="Mathematics, English, Science"
                   />
                 </label>
                 <label>
@@ -1548,7 +1543,7 @@ export default function CreateExamPage() {
                 value={question.diagnosticSubcategory || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSubcategory: event.target.value })}
                 className="mt-1 w-full rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
-                placeholder="e.g., Algebra, Grammar, Reading"
+                placeholder="Algebra, Grammar, Reading"
               />
             </label>
             <label>
@@ -1557,7 +1552,7 @@ export default function CreateExamPage() {
                 value={question.diagnosticSkillTag || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSkillTag: event.target.value })}
                 className="mt-1 w-full rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
-                placeholder="e.g., Addition, Theme Analysis, Vocabulary"
+                placeholder="Addition, Theme Analysis, Vocabulary"
               />
             </label>
           </div>
@@ -1592,7 +1587,7 @@ export default function CreateExamPage() {
                 value={reviewerForm.subjectCategory}
                 onChange={(event) => setReviewerForm((current) => ({ ...current, subjectCategory: event.target.value }))}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
-                placeholder="e.g., Mathematics, English, Science"
+                placeholder="Mathematics, English, Science"
               />
             </label>
           </div>
@@ -1626,7 +1621,7 @@ export default function CreateExamPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-bold text-slate-600">Time <span className="text-slate-400">(min)</span></span>
+                  <span className="text-xs font-bold text-slate-600">Estimated Time <span className="text-slate-400">(min)</span></span>
                   <input
                     type="number"
                     min="1"

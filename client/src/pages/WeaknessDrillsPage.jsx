@@ -162,6 +162,10 @@ export default function WeaknessDrillsPage() {
     }).catch(() => {});
   }, []);
   const rankedWeakSubjects = useMemo(() => rankWeakSubjects(analysis.weakSubjects, adaptiveGate), [analysis.weakSubjects, adaptiveGate]);
+  const groqDrillCandidates = useMemo(
+    () => selectDrillCandidates(getDrillBankQuestions(), analysis),
+    [analysis]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -175,8 +179,9 @@ export default function WeaknessDrillsPage() {
           weakSubjects: analysis.weakSubjects,
           diagnosticInsights: analysis.diagnosticInsights || [],
           contentPools: {
-            drills: getDrillBankQuestions().map((question) => ({
+            drills: groqDrillCandidates.map((question) => ({
               id: question.id,
+              title: question.title,
               subject: question.subjectTitle,
               subCategory: question.diagnosticSubcategory || question.subCategory,
               weaknessTag: question.diagnosticSkillTag || question.weaknessTag
@@ -210,12 +215,20 @@ export default function WeaknessDrillsPage() {
     return () => {
       mounted = false;
     };
-  }, [analysis, dashboard.attempts]);
+  }, [analysis, dashboard.attempts, groqDrillCandidates]);
 
-  function startDrill(subject, questionLimit = 10) {
+  function startDrill(subject, questionLimit = 10, drillIds = []) {
     const diagnosticFocus = analysis.diagnosticInsights?.find((item) => item.category === subject.subject);
     const limit = Math.max(1, Number(questionLimit) || 10);
-    const pulledQuestions = getQuestionsForSubject(subject.subject, limit, diagnosticFocus).slice(0, limit);
+    const selectedIds = new Set(Array.isArray(drillIds) ? drillIds.map(String) : []);
+    const drillById = new Map(getDrillBankQuestions().map((question) => [String(question.id), question]));
+    const selectedQuestions = selectedIds.size
+      ? drillIds.map(String).map((id) => drillById.get(id)).filter(Boolean)
+      : [];
+    const pulledQuestions = (selectedQuestions.length
+      ? selectedQuestions
+      : getQuestionsForSubject(subject.subject, limit, diagnosticFocus)
+    ).slice(0, limit);
     setActiveSubject(subject.subject);
     setQuestions(pulledQuestions);
     setResponses({});
@@ -341,7 +354,17 @@ export default function WeaknessDrillsPage() {
           <p className="text-xs text-[var(--wd-text-muted)]">{rankedWeakSubjects.length} subject{rankedWeakSubjects.length === 1 ? "" : "s"} · {sessions.length} drill{sessions.length === 1 ? "" : "s"} logged</p>
         </header>
 
-        <AdaptiveGateBanner gate={adaptiveGate} status={gateStatus} />
+        <AdaptiveGateBanner
+          gate={adaptiveGate}
+          status={gateStatus}
+          onStartTailored={() => {
+            const ids = adaptiveGate?.recommended_drill_ids || [];
+            const firstDrill = getDrillBankQuestions().find((question) => ids.includes(String(question.id)));
+            const subject = rankedWeakSubjects.find((item) => item.subject === adaptiveGate?.focus_subject)
+              || { subject: firstDrill?.subjectTitle || adaptiveGate?.focus_subject || "General Practice" };
+            startDrill(subject, ids.length || 10, ids);
+          }}
+        />
 
         <div className={`mt-6 grid items-start gap-6 ${sessions.length > 0 ? "lg:grid-cols-[300px_1fr]" : ""}`}>
           {sessions.length > 0 && (
@@ -475,7 +498,7 @@ function AIFocusTag() {
 
 //  Adaptive routing banner 
 
-function AdaptiveGateBanner({ gate, status }) {
+function AdaptiveGateBanner({ gate, status, onStartTailored }) {
   if (status === "idle") return null;
 
   if (status === "loading") {
@@ -490,6 +513,7 @@ function AdaptiveGateBanner({ gate, status }) {
   const confidencePct = Number.isFinite(gate?.confidence) ? Math.round(gate.confidence * 100) : null;
   const tags = [...new Set([...(gate?.reviewer_focus_tags || []), ...(gate?.exam_focus_tags || [])])].slice(0, 5);
   const upNext = (gate?.drill_subject_order || []).filter((subject) => subject !== gate?.focus_subject).slice(0, 3);
+  const tailoredDrillCount = Array.isArray(gate?.recommended_drill_ids) ? gate.recommended_drill_ids.length : 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border-l-4 border-[var(--wd-accent)] bg-white p-6 shadow-sm">
@@ -526,6 +550,12 @@ function AdaptiveGateBanner({ gate, status }) {
                 </span>
               ))}
             </div>
+          )}
+
+          {tailoredDrillCount > 0 && (
+            <button onClick={onStartTailored} className="btn-primary focus-ring mt-4 px-4 py-2 text-sm font-semibold">
+              Start tailored {tailoredDrillCount}-question drill
+            </button>
           )}
 
           {upNext.length > 0 && (
@@ -644,6 +674,37 @@ function rankWeakSubjects(subjects, gate) {
   });
 }
 
+// Groq ranks a small, relevant set instead of receiving the complete bank.
+// Admin-entered subject, subcategory, and weakness tags are the matching keys.
+function selectDrillCandidates(drillBank, analysis, limit = 50) {
+  const normalize = (value) => String(value || "").trim().toLowerCase();
+  const weakSubjectPriority = new Map(
+    (analysis.weakSubjects || []).map((item, index) => [normalize(item.subject), 100 - index * 10])
+  );
+  const insights = analysis.diagnosticInsights || [];
+
+  return drillBank
+    .map((question, index) => {
+      const subject = normalize(question.subjectTitle || question.category);
+      const subCategory = normalize(question.diagnosticSubcategory || question.subCategory);
+      const weaknessTag = normalize(question.diagnosticSkillTag || question.weaknessTag);
+      let score = weakSubjectPriority.get(subject) || 0;
+
+      insights.forEach((insight, insightIndex) => {
+        const urgency = Math.max(1, 3 - insightIndex);
+        if (subject && subject === normalize(insight.category)) score += 30 * urgency;
+        if (subCategory && subCategory === normalize(insight.subcategory)) score += 50 * urgency;
+        if (weaknessTag && weaknessTag === normalize(insight.skillTag)) score += 80 * urgency;
+      });
+
+      return { question, score, index };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map(({ question }) => question);
+}
+
 function buildLocalGate(analysis) {
   const focus = analysis.weakSubjects?.[0]?.subject || "General Practice";
   return {
@@ -651,6 +712,7 @@ function buildLocalGate(analysis) {
     confidence: 0.4,
     rationale: `**${focus}** is your lowest average right now, so that's the local pick while your coach reconnects.`,
     drill_subject_order: analysis.weakSubjects?.map((subject) => subject.subject) || [focus],
+    recommended_drill_ids: [],
     reviewer_focus_tags: [focus],
     exam_focus_tags: [focus],
     source: "local_fallback"

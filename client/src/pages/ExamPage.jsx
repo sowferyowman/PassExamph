@@ -125,13 +125,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
           const processedExams = (dashboard.exams || []).map((exam, index, arr) => {
             const prevExam = arr[index + 1];
             const durationSeconds = Number(exam.durationSeconds ?? dashboard.attempts?.[index]?.durationSeconds ?? 0);
+            const status = exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed");
+            const incomplete = Boolean(exam.incomplete || status === "Incomplete");
             return {
               ...exam,
-              status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed"),
+              status,
+              incomplete,
               durationSeconds,
               pointsEarned: exam.earnedPoints,
               passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
-              passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
+              passed: incomplete ? null : (typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75)),
               previousScore: prevExam?.score || null,
               examId: exam.examId || dashboard.attempts?.[index]?.examId
             };
@@ -571,7 +574,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
             <header className="border-b border-slate-200 pb-3">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Choose an ACET Mock Exam</h1>
-              <p className="mt-1 text-sm text-slate-500">Browse all available admin-published exams, then open the preview screen for your selected test.</p>
             </header>
 
             {/* Compact grid — cards sit side by side instead of stacking full-width */}
@@ -597,14 +599,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
                         selectExam(exam);
                       }
                     }}
-                    className={`group flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 transition duration-200 ${unavailable ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-100 active:scale-[0.99]"}`}
+                    className={`group relative flex flex-col justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all duration-200 ${unavailable ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-md active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"}`}
                   >
                     <div className="min-w-0">
-                      <h2 className="line-clamp-2 break-words text-base font-extrabold leading-snug text-slate-900 transition-colors group-hover:text-blue-600">{exam.title}</h2>
-                      {exam.description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{exam.description}</p>}
+                      {unavailable && <span className="mb-1.5 inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Attempt limit reached</span>}
+                      <h2 className="line-clamp-2 break-words text-base font-semibold leading-snug text-gray-900 transition-colors group-hover:text-blue-600">{exam.title}</h2>
+                      {exam.description && <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-gray-500">{exam.description}</p>}
                     </div>
 
-                    <div className="flex items-stretch justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5">
+                    <div className="flex items-stretch justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                       <MiniFact label="Sections" value={exam.sections?.length || 0} />
                       <span className="w-px shrink-0 bg-slate-200" />
                       <MiniFact label="Items" value={questionCount} />
@@ -869,6 +872,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
                   exams.map((exam, index, arr) => {
                     const trend = getTrend(exam, index, arr);
                     const isPending = exam.status === "Pending Review";
+                    const isIncomplete = Boolean(exam.incomplete || exam.status === "Incomplete");
                     
                     return (
                       <tr 
@@ -885,7 +889,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
                         </td>
                         
                         <td className={`px-6 py-4 font-mono text-sm font-semibold tabular-nums ${dark ? "text-slate-200" : "text-slate-700"}`}>
-                          {exam.status === "Pending Review" ? "—" : `${exam.score}%`}
+                          {isPending || isIncomplete ? "—" : `${exam.score}%`}
                         </td>
                         
                         <td className={`px-6 py-4 font-semibold ${dark ? "text-white/70" : "text-slate-700"}`}>

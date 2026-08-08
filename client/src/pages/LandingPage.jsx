@@ -19,7 +19,7 @@ const FEATURES = [
     stat: "10,000+",
     statLabel: "Questions in Data Bank",
     title: "Unlimited Practice Tests",
-    body: "Take as many tests as you want. Encounter all possible questions that may appear on the actual ACET with 10,000+ questions in our data bank.",
+    body: "Take as many tests as you want. Encounter all possible questions that may appear on your exam with 10,000+ questions in our data bank.",
     Icon: FaFileAlt,
   },
   {
@@ -28,7 +28,7 @@ const FEATURES = [
     stat: "1:1",
     statLabel: "Exam Simulation Fidelity",
     title: "Build your Familiarity",
-    body: "Practice tests simulated on actual testing conditions same exam structure, level of difficulty, number of items, time duration, and passing rates as the real ACET.",
+    body: "Practice tests simulated on actual testing conditions — same exam structure, level of difficulty, number of items, time duration, and passing rates as your target exam.",
     Icon: FaClock,
   },
   {
@@ -144,7 +144,7 @@ export default function LandingPage() {
             {[
               ["10,000+", "Practice Questions"],
               ["Real-Time", "Adaptive Feedback"],
-              ["100%", "Exam Condition Accuracy"],
+              ["Exam-Like", "Timing & Format"],
               ["AI", "Powered Diagnostics"],
             ].map(([stat, label]) => (
               <div key={label} className="border-l border-white/10 pl-6 first:border-l-0 first:pl-0">
@@ -156,10 +156,13 @@ export default function LandingPage() {
         </section>
 
         {/*  CHOOSE YOUR EXAM  */}
-        <section className="mx-auto max-w-7xl px-6 py-24 text-center lg:px-10">
-          <span className="inline-block rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-black uppercase tracking-widest text-sky-300/90">
+        <section id="exams" className="mx-auto max-w-7xl px-6 py-24 text-center lg:px-10">
+          <a
+            href="#exams"
+            className="inline-block rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] font-black uppercase tracking-widest text-sky-300/90 hover:bg-white/10 transition-colors"
+          >
             Choose Your Exam
-          </span>
+          </a>
           <h2 className="mx-auto mt-6 max-w-2xl font-serif text-4xl font-black leading-tight lg:text-5xl">
             One Platform, <span className="italic text-sky-300">Every Major Exam</span>
           </h2>
@@ -186,8 +189,11 @@ export default function LandingPage() {
                 <p className="mt-1 text-xs font-semibold text-white/60">{full}</p>
                 <p className={`mt-0.5 text-xs font-bold ${status === "live" ? "text-sky-300" : "text-white/40"}`}>{org}</p>
                 {status === "live" ? (
-                  <Link to="/login" className="mt-4 inline-block text-xs font-black uppercase tracking-wide text-sky-300">
-                    Start Practicing 
+                  <Link
+                    to="/login"
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-sky-400/90 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#001529] hover:bg-sky-300 transition-colors"
+                  >
+                    Start Practicing <FaArrowRight className="text-[10px]" />
                   </Link>
                 ) : (
                   <button className="mt-4 text-xs font-black uppercase tracking-wide text-white/40">
