@@ -17,6 +17,8 @@ import {
 } from "../services/storage";
 
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+const MAX_DRILL_TOKENS = 100000;
+const TAILORED_BATCH_SIZE = 10;
 
 
 const TIERS = {
@@ -154,6 +156,7 @@ export default function WeaknessDrillsPage() {
   const [results, setResults] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [sessions, setSessions] = useState(() => getDrillSessions(user?.email));
+  const [tailoredPractice, setTailoredPractice] = useState(null);
   const routedDrillStarted = useRef(false);
 
   useEffect(() => {
@@ -162,10 +165,20 @@ export default function WeaknessDrillsPage() {
     }).catch(() => {});
   }, []);
   const rankedWeakSubjects = useMemo(() => rankWeakSubjects(analysis.weakSubjects, adaptiveGate), [analysis.weakSubjects, adaptiveGate]);
-  const groqDrillCandidates = useMemo(
-    () => selectDrillCandidates(getDrillBankQuestions(), analysis),
-    [analysis]
+  const groqDrillLabels = useMemo(
+    () => selectDrillLabelsWithinTokenBudget(getDrillBankQuestions()),
+    []
   );
+  const tailoredDrillIds = useMemo(
+    () => getTailoredDrillIds(getDrillBankQuestions(), adaptiveGate?.recommended_drill_filters),
+    [adaptiveGate]
+  );
+  const optionalPracticeSubjects = useMemo(() => {
+    const hasTailoredDrill = tailoredDrillIds.length > 0;
+    return hasTailoredDrill
+      ? rankedWeakSubjects.filter((subject) => subject.subject !== adaptiveGate.focus_subject)
+      : rankedWeakSubjects;
+  }, [adaptiveGate, rankedWeakSubjects, tailoredDrillIds]);
 
   useEffect(() => {
     let mounted = true;
@@ -179,13 +192,7 @@ export default function WeaknessDrillsPage() {
           weakSubjects: analysis.weakSubjects,
           diagnosticInsights: analysis.diagnosticInsights || [],
           contentPools: {
-            drills: groqDrillCandidates.map((question) => ({
-              id: question.id,
-              title: question.title,
-              subject: question.subjectTitle,
-              subCategory: question.diagnosticSubcategory || question.subCategory,
-              weaknessTag: question.diagnosticSkillTag || question.weaknessTag
-            })),
+            drills: groqDrillLabels,
             exams: getExamBlueprints().map((exam) => ({
               id: exam.id,
               title: exam.title,
@@ -215,7 +222,7 @@ export default function WeaknessDrillsPage() {
     return () => {
       mounted = false;
     };
-  }, [analysis, dashboard.attempts, groqDrillCandidates]);
+  }, [analysis, dashboard.attempts, groqDrillLabels]);
 
   function startDrill(subject, questionLimit = 10, drillIds = []) {
     const diagnosticFocus = analysis.diagnosticInsights?.find((item) => item.category === subject.subject);
@@ -234,6 +241,23 @@ export default function WeaknessDrillsPage() {
     setResponses({});
     setResults(null);
     setActiveIndex(0);
+    setTailoredPractice(null);
+  }
+
+  function startTailoredPractice(offset = 0) {
+    const batchIds = tailoredDrillIds.slice(offset, offset + TAILORED_BATCH_SIZE);
+    const firstDrill = getDrillBankQuestions().find((question) => String(question.id) === batchIds[0]);
+    const subject = rankedWeakSubjects.find((item) => item.subject === adaptiveGate?.focus_subject)
+      || { subject: firstDrill?.subjectTitle || adaptiveGate?.focus_subject || "General Practice" };
+    const diagnosticFocus = analysis.diagnosticInsights?.find((item) => item.category === subject.subject);
+    const drillById = new Map(getDrillBankQuestions().map((question) => [String(question.id), question]));
+    const pulledQuestions = batchIds.map((id) => drillById.get(id)).filter(Boolean);
+    setActiveSubject(subject.subject);
+    setQuestions(pulledQuestions.length ? pulledQuestions : getQuestionsForSubject(subject.subject, TAILORED_BATCH_SIZE, diagnosticFocus));
+    setResponses({});
+    setResults(null);
+    setActiveIndex(0);
+    setTailoredPractice({ offset, total: tailoredDrillIds.length });
   }
 
   useEffect(() => {
@@ -333,7 +357,10 @@ export default function WeaknessDrillsPage() {
               results={results}
               activeSubject={activeSubject}
               onRetake={() => startDrill({ subject: activeSubject })}
-              onBack={() => setActiveSubject(null)}
+              onContinue={tailoredPractice && tailoredPractice.offset + questions.length < tailoredPractice.total
+                ? () => startTailoredPractice(tailoredPractice.offset + questions.length)
+                : null}
+              onBack={() => { setActiveSubject(null); setTailoredPractice(null); }}
             />
           )}
         </div>
@@ -357,13 +384,8 @@ export default function WeaknessDrillsPage() {
         <AdaptiveGateBanner
           gate={adaptiveGate}
           status={gateStatus}
-          onStartTailored={() => {
-            const ids = adaptiveGate?.recommended_drill_ids || [];
-            const firstDrill = getDrillBankQuestions().find((question) => ids.includes(String(question.id)));
-            const subject = rankedWeakSubjects.find((item) => item.subject === adaptiveGate?.focus_subject)
-              || { subject: firstDrill?.subjectTitle || adaptiveGate?.focus_subject || "General Practice" };
-            startDrill(subject, ids.length || 10, ids);
-          }}
+          tailoredDrillCount={tailoredDrillIds.length}
+          onStartTailored={() => startTailoredPractice()}
         />
 
         <div className={`mt-6 grid items-start gap-6 ${sessions.length > 0 ? "lg:grid-cols-[300px_1fr]" : ""}`}>
@@ -374,11 +396,13 @@ export default function WeaknessDrillsPage() {
           )}
 
           <div className="space-y-3">
-            {rankedWeakSubjects.map((subject, index) => (
+            {tailoredDrillIds.length > 0 && optionalPracticeSubjects.length > 0 && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">Other practice areas</p>
+            )}
+            {optionalPracticeSubjects.map((subject) => (
               <SubjectRow
                 key={subject.subject}
                 subject={subject}
-                isAiFocus={adaptiveGate?.focus_subject === subject.subject}
                 description={getDrillDescription(subject, analysis)}
                 onStart={() => startDrill(subject)}
               />
@@ -450,7 +474,7 @@ export default function WeaknessDrillsPage() {
   }
 }
 
-function SubjectRow({ subject, isAiFocus, description, onStart }) {
+function SubjectRow({ subject, description, onStart }) {
   const pct = safePercent(subject.averagePct);
   const tier = getTier(pct);
 
@@ -465,7 +489,7 @@ function SubjectRow({ subject, isAiFocus, description, onStart }) {
           onStart();
         }
       }}
-      className={`card subject-card focus-ring flex cursor-pointer items-center gap-4 p-5 ${isAiFocus ? "border-[var(--wd-accent)]" : ""}`}
+      className="card subject-card focus-ring flex cursor-pointer items-center gap-4 p-5"
     >
       <CircularProgress pct={pct} size={64} strokeWidth={6} color={tier.hex} duration={900}>
         <span className={`text-sm font-black ${tier.accent}`}>{pct}%</span>
@@ -474,7 +498,6 @@ function SubjectRow({ subject, isAiFocus, description, onStart }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-semibold text-[var(--wd-text)]">{subject.subject}</h3>
-          {isAiFocus && <AIFocusTag />}
           <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${tier.badge}`}>{tier.label}</span>
         </div>
         <p className="mt-0.5 text-sm text-[var(--wd-text-muted)]">{description}</p>
@@ -483,22 +506,9 @@ function SubjectRow({ subject, isAiFocus, description, onStart }) {
   );
 }
 
-function AIFocusTag() {
-  return (
-    <span className="group relative inline-flex">
-      <span tabIndex="0" className="cursor-help rounded-full bg-[var(--wd-accent-soft)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--wd-accent)]">
-        AI focus
-      </span>
-      <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-56 rounded-lg border border-[var(--wd-border)] bg-white px-3 py-2 text-xs font-medium leading-5 text-[var(--wd-text)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100">
-        Highest priority for improvement based on your recent exam performance.
-      </span>
-    </span>
-  );
-}
-
 //  Adaptive routing banner 
 
-function AdaptiveGateBanner({ gate, status, onStartTailored }) {
+function AdaptiveGateBanner({ gate, status, tailoredDrillCount, onStartTailored }) {
   if (status === "idle") return null;
 
   if (status === "loading") {
@@ -513,7 +523,6 @@ function AdaptiveGateBanner({ gate, status, onStartTailored }) {
   const confidencePct = Number.isFinite(gate?.confidence) ? Math.round(gate.confidence * 100) : null;
   const tags = [...new Set([...(gate?.reviewer_focus_tags || []), ...(gate?.exam_focus_tags || [])])].slice(0, 5);
   const upNext = (gate?.drill_subject_order || []).filter((subject) => subject !== gate?.focus_subject).slice(0, 3);
-  const tailoredDrillCount = Array.isArray(gate?.recommended_drill_ids) ? gate.recommended_drill_ids.length : 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border-l-4 border-[var(--wd-accent)] bg-white p-6 shadow-sm">
@@ -554,7 +563,7 @@ function AdaptiveGateBanner({ gate, status, onStartTailored }) {
 
           {tailoredDrillCount > 0 && (
             <button onClick={onStartTailored} className="btn-primary focus-ring mt-4 px-4 py-2 text-sm font-semibold">
-              Start tailored {tailoredDrillCount}-question drill
+              Start tailored practice ({tailoredDrillCount} related questions)
             </button>
           )}
 
@@ -576,7 +585,7 @@ function AdaptiveGateBanner({ gate, status, onStartTailored }) {
 }
 
 //  Results panel 
-function ResultsPanel({ results, activeSubject, onRetake, onBack }) {
+function ResultsPanel({ results, activeSubject, onRetake, onContinue, onBack }) {
   return (
     <div className="card p-6 md:p-8">
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--wd-text-muted)]">{activeSubject}</p>
@@ -612,6 +621,11 @@ function ResultsPanel({ results, activeSubject, onRetake, onBack }) {
       </div>
 
       <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+        {onContinue && (
+          <button onClick={onContinue} className="btn-primary focus-ring inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold">
+            Continue tailored practice
+          </button>
+        )}
         <button onClick={onRetake} className="btn-primary focus-ring inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold">
           <FaRedo className="text-xs" /> Try again
         </button>
@@ -674,35 +688,42 @@ function rankWeakSubjects(subjects, gate) {
   });
 }
 
-// Groq ranks a small, relevant set instead of receiving the complete bank.
-// Admin-entered subject, subcategory, and weakness tags are the matching keys.
-function selectDrillCandidates(drillBank, analysis, limit = 50) {
+// Send every drill label that fits the prompt budget. Groq is responsible for
+// semantic relevance and ranking; no client-side subject or skill matching is applied.
+function selectDrillLabelsWithinTokenBudget(drillBank, tokenBudget = MAX_DRILL_TOKENS) {
+  let usedTokens = 0;
+  const labels = [];
+
+  for (const question of drillBank) {
+    const entry = {
+      id: question.id,
+      title: question.title,
+      subject: question.subjectTitle,
+      subCategory: question.diagnosticSubcategory || question.subCategory,
+      weaknessTag: question.diagnosticSkillTag || question.weaknessTag
+    };
+    const estimatedTokens = Math.ceil(JSON.stringify(entry).length / 4);
+    if (usedTokens + estimatedTokens > tokenBudget) break;
+    labels.push(entry);
+    usedTokens += estimatedTokens;
+  }
+
+  return labels;
+}
+
+function getTailoredDrillIds(drillBank, filters) {
+  if (!Array.isArray(filters) || !filters.length) return [];
   const normalize = (value) => String(value || "").trim().toLowerCase();
-  const weakSubjectPriority = new Map(
-    (analysis.weakSubjects || []).map((item, index) => [normalize(item.subject), 100 - index * 10])
-  );
-  const insights = analysis.diagnosticInsights || [];
-
   return drillBank
-    .map((question, index) => {
-      const subject = normalize(question.subjectTitle || question.category);
-      const subCategory = normalize(question.diagnosticSubcategory || question.subCategory);
-      const weaknessTag = normalize(question.diagnosticSkillTag || question.weaknessTag);
-      let score = weakSubjectPriority.get(subject) || 0;
-
-      insights.forEach((insight, insightIndex) => {
-        const urgency = Math.max(1, 3 - insightIndex);
-        if (subject && subject === normalize(insight.category)) score += 30 * urgency;
-        if (subCategory && subCategory === normalize(insight.subcategory)) score += 50 * urgency;
-        if (weaknessTag && weaknessTag === normalize(insight.skillTag)) score += 80 * urgency;
-      });
-
-      return { question, score, index };
-    })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, limit)
-    .map(({ question }) => question);
+    .filter((question) => filters.some((filter) => {
+      const subjectMatches = normalize(question.subjectTitle) === normalize(filter.subject);
+      const subCategoryMatches = !normalize(filter.subCategory)
+        || normalize(question.diagnosticSubcategory || question.subCategory) === normalize(filter.subCategory);
+      const weaknessMatches = !normalize(filter.weaknessTag)
+        || normalize(question.diagnosticSkillTag || question.weaknessTag) === normalize(filter.weaknessTag);
+      return subjectMatches && subCategoryMatches && weaknessMatches;
+    }))
+    .map((question) => String(question.id));
 }
 
 function buildLocalGate(analysis) {
@@ -712,7 +733,7 @@ function buildLocalGate(analysis) {
     confidence: 0.4,
     rationale: `**${focus}** is your lowest average right now, so that's the local pick while your coach reconnects.`,
     drill_subject_order: analysis.weakSubjects?.map((subject) => subject.subject) || [focus],
-    recommended_drill_ids: [],
+    recommended_drill_filters: [{ subject: focus, subCategory: "", weaknessTag: "" }],
     reviewer_focus_tags: [focus],
     exam_focus_tags: [focus],
     source: "local_fallback"

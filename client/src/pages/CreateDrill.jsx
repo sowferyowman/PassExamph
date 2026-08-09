@@ -37,6 +37,22 @@ const CSV_ROWS = [
 ];
 const CSV_TYPES = ["multiple_choice", "checkboxes", "short_answer", "paragraph"];
 const OPTION_KEYS = ["option_a", "option_b", "option_c", "option_d", "option_e", "option_f"];
+const MAX_DRILL_TOKENS = 100000;
+const NEW_DRILL_ID_PLACEHOLDER = "00000000-0000-4000-8000-000000000000";
+
+function getDrillLabelEntry(drill) {
+  return {
+    id: String(drill.id || NEW_DRILL_ID_PLACEHOLDER),
+    title: String(drill.title || ""),
+    subject: String(drill.subjectTitle || ""),
+    subCategory: String(drill.diagnosticSubcategory || drill.subCategory || ""),
+    weaknessTag: String(drill.diagnosticSkillTag || drill.weaknessTag || "")
+  };
+}
+
+function exceedsDrillTokenBudget(drills) {
+  return drills.reduce((total, drill) => total + Math.ceil(JSON.stringify(getDrillLabelEntry(drill)).length / 4), 0) > MAX_DRILL_TOKENS;
+}
 
 function stripHtml(html) {
   if (!html) return "";
@@ -131,6 +147,7 @@ export default function CreateDrill() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [csvImportResult, setCsvImportResult] = useState(null);
+  const [bankLimitWarning, setBankLimitWarning] = useState(null);
 
   function updateOption(index, value) {
     setForm((current) => ({ ...current, choiceOpts: current.choiceOpts.map((option, optionIndex) => optionIndex === index ? value : option) }));
@@ -188,7 +205,15 @@ export default function CreateDrill() {
   function publishDrill() {
     const error = validate(form);
     if (error) { setMessage(error); return; }
-    const published = editingId ? updateDrillQuestion(editingId, asPayload(form)) : publishDrillQuestion(asPayload(form));
+    const payload = asPayload(form);
+    const nextDrills = editingId
+      ? drillBank.map((drill) => drill.id === editingId ? { ...drill, ...payload, id: editingId } : drill)
+      : [payload, ...drillBank];
+    if (exceedsDrillTokenBudget(nextDrills)) {
+      setBankLimitWarning({ attemptedCount: nextDrills.length });
+      return;
+    }
+    const published = editingId ? updateDrillQuestion(editingId, payload) : publishDrillQuestion(payload);
     setDrillBank(getDrillBankQuestions());
     setMessage(`"${published.title}" ${editingId ? "updated" : "published"} successfully.`);
     setEditingId(null);
@@ -234,7 +259,12 @@ export default function CreateDrill() {
           return [draft];
         });
         if (!valid.length) { setCsvImportResult({ importedCount: 0, errors: errors.length ? errors : ["No valid question rows were found."] }); return; }
-        valid.forEach((draft) => publishDrillQuestion(asPayload(draft)));
+        const payloads = valid.map(asPayload);
+        if (exceedsDrillTokenBudget([...payloads, ...drillBank])) {
+          setBankLimitWarning({ attemptedCount: drillBank.length + payloads.length });
+          return;
+        }
+        payloads.forEach((payload) => publishDrillQuestion(payload));
         setDrillBank(getDrillBankQuestions());
         setCsvImportResult({ importedCount: valid.length, errors });
         setMessage(`Imported and published ${valid.length} drill question${valid.length === 1 ? "" : "s"}.`);
@@ -649,6 +679,27 @@ export default function CreateDrill() {
       </div>
 
       {/* Delete Confirmation Dialog */}
+      {bankLimitWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="drill-bank-limit-title">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-amber-100 bg-amber-50 px-6 py-4 text-amber-800">
+              <FaExclamationTriangle className="text-lg" />
+              <h3 id="drill-bank-limit-title" className="text-lg font-bold">Drill bank limit reached</h3>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm leading-6 text-slate-600">
+                This would make {bankLimitWarning.attemptedCount} published drills exceed the AI recommendation catalog budget. Save fewer or shorter-labeled drills before publishing more.
+              </p>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <button onClick={() => setBankLimitWarning(null)} className="rounded-lg bg-[#003A6C] px-4 py-2 text-sm font-semibold text-white hover:bg-[#002A4C]">
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
