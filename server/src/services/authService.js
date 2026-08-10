@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { getDb } = require("../config/database");
+const { pool } = require("../config/database.pg");
 const { sendSms } = require("./smsService");
 const { sendEmail } = require("./emailService");
 
@@ -55,11 +56,11 @@ function verifyToken(value) {
 }
 
 function requestMeta(req) { return { ip: req.ip || req.socket?.remoteAddress || "unknown", userAgent: req.get("user-agent") || "unknown" }; }
-function recordLogin(db, userId, email, req, status) { const meta = requestMeta(req); db.prepare("INSERT INTO login_history (id,user_id,email,ip_address,user_agent,status) VALUES (?,?,?,?,?,?)").run(crypto.randomUUID(), userId || null, email, meta.ip, meta.userAgent, status); return meta; }
-function publicUser(user) {
+async function recordLogin(userId, email, req, status) { const meta = requestMeta(req); await pool.query("INSERT INTO login_history (id,user_id,email,ip_address,user_agent,status) VALUES ($1,$2,$3,$4,$5,$6)", [crypto.randomUUID(), userId || null, email, meta.ip, meta.userAgent, status]); return meta; }
+async function publicUser(user) {
   const profile = user.targetSchool !== undefined
     ? { targetSchool: user.targetSchool }
-    : getDb().prepare("SELECT target_school AS targetSchool FROM student_profiles WHERE user_id=?").get(user.id);
+    : (await pool.query("SELECT target_school AS \"targetSchool\" FROM student_profiles WHERE user_id=$1", [user.id])).rows[0];
   return {
     id: user.id,
     email: user.email,
@@ -108,36 +109,36 @@ async function register({ email, username, password, name }, req) {
   const userId = result.lastInsertRowid;
   const verificationToken = crypto.randomBytes(32).toString("hex");
   db.prepare("INSERT INTO email_verification_tokens (id,user_id,token,expires_at) VALUES (?,?,?,?)").run(crypto.randomUUID(), userId, verificationToken, new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
-  recordLogin(db, userId, email, req, "registered");
+  await recordLogin(userId, email, req, "registered");
   const user = db.prepare("SELECT * FROM users WHERE id=?").get(userId);
-  const session = createSession(db, user, requestMeta(req));
+  const session = await createSession(user, requestMeta(req));
   return { ...session, verificationToken };
 }
 
 async function login(identifier, password, req) {
   const db = getDb();
   const user = db.prepare("SELECT * FROM users WHERE lower(email)=lower(?) OR lower(username)=lower(?)").get(identifier, identifier);
-  if (!user) { recordLogin(db, null, identifier, req, "failure"); throw Object.assign(new Error("Invalid credentials."), { status: 401 }); }
+  if (!user) { await recordLogin(null, identifier, req, "failure"); throw Object.assign(new Error("Invalid credentials."), { status: 401 }); }
   if (user.locked_until && new Date(user.locked_until) > new Date()) throw Object.assign(new Error("Account temporarily locked. Try again later."), { status: 423 });
   if (!(await verifyPassword(password, user.password_hash, user.password_salt))) {
     const failures = Number(user.failed_login_attempts || 0) + 1;
     const locked = failures >= 5 ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
     db.prepare("UPDATE users SET failed_login_attempts=?, locked_until=? WHERE id=?").run(failures, locked, user.id);
-    recordLogin(db, user.id, user.email, req, "failure");
+    await recordLogin(user.id, user.email, req, "failure");
     throw Object.assign(new Error(locked ? "Account temporarily locked for 30 minutes." : "Invalid credentials."), { status: 401 });
   }
   const meta = requestMeta(req);
   db.prepare("UPDATE users SET failed_login_attempts=0, locked_until=NULL,last_login_at=CURRENT_TIMESTAMP,last_login_ip=? WHERE id=?").run(meta.ip, user.id);
-  recordLogin(db, user.id, user.email, req, "success");
-  return createSession(db, user, meta);
+  await recordLogin(user.id, user.email, req, "success");
+  return createSession(user, meta);
 }
 
-function createSession(db, user, meta) {
+async function createSession(user, meta) {
   const sessionId = crypto.randomUUID();
   const accessToken = token({ sub: String(user.id), sid: sessionId, type: "access" }, ACCESS_TTL);
   const refreshToken = token({ sub: String(user.id), sid: sessionId, type: "refresh" }, REFRESH_TTL);
-  db.prepare("INSERT INTO sessions (id,user_id,refresh_token,access_token,expires_at,ip_address,user_agent) VALUES (?,?,?,?,?,?,?)").run(sessionId, user.id, refreshToken, accessToken, new Date(Date.now() + REFRESH_TTL).toISOString(), meta.ip, meta.userAgent);
-  return { user: publicUser(user), accessToken, refreshToken };
+  await pool.query("INSERT INTO sessions (id,user_id,refresh_token,access_token,expires_at,ip_address,user_agent) VALUES ($1,$2,$3,$4,$5,$6,$7)", [sessionId, user.id, refreshToken, accessToken, new Date(Date.now() + REFRESH_TTL).toISOString(), meta.ip, meta.userAgent]);
+  return { user: await publicUser(user), accessToken, refreshToken };
 }
 
 async function refresh(refreshToken, req) {
@@ -148,7 +149,7 @@ async function refresh(refreshToken, req) {
   if (!session) throw Object.assign(new Error("Session expired or revoked."), { status: 401 });
   db.prepare("UPDATE sessions SET is_revoked=1 WHERE id=?").run(session.id);
   const user = db.prepare("SELECT * FROM users WHERE id=? AND is_active=1").get(session.user_id);
-  return createSession(db, user, requestMeta(req));
+  return createSession(user, requestMeta(req));
 }
 
 function revoke(sessionId) { getDb().prepare("UPDATE sessions SET is_revoked=1 WHERE id=?").run(sessionId); }
@@ -237,7 +238,7 @@ async function resetPasswordWithEmail(code, newPassword) {
   return { success: true };
 }
 
-function updateProfile(userId, { name, nickname, school, phoneNumber, recoveryEmail }) {
+async function updateProfile(userId, { name, nickname, school, phoneNumber, recoveryEmail }) {
   const phone = normalizePhone(phoneNumber);
   if (phone && !/^\+?\d{10,15}$/.test(phone)) throw Object.assign(new Error("Enter a valid phone number."), { status: 400 });
   const profileName = String(name || "").trim();

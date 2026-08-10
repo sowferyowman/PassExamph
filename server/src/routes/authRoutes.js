@@ -37,7 +37,7 @@ router.post("/login", rateLimit, async (req, res) => { try { const result = awai
 router.post("/refresh", async (req, res) => { try { const cookies = parseCookies(req); const result = await auth.refresh(cookies.refreshToken, req); setSessionCookies(res, result, cookies.rememberMe === "1"); res.json({ user: result.user }); } catch (e) { error(res, e); } });
 router.post("/logout", authenticate, (req, res) => { auth.revoke(req.auth.sid); clearCookies(res); res.json({ ok: true }); });
 router.post("/logout-all", authenticate, (req, res) => { auth.revokeAllExcept(req.user.id, req.auth.sid); res.json({ ok: true }); });
-router.get("/me", authenticate, (req, res) => res.json({ user: auth.publicUser(req.user) }));
+router.get("/me", authenticate, async (req, res) => res.json({ user: await auth.publicUser(req.user) }));
 router.get("/sessions", authenticate, (req, res) => res.json({ sessions: auth.sessions(req.user.id) }));
 router.post("/forgot-password", async (req, res) => { const result = await auth.forgotPassword(String(req.body?.email || "").trim()); res.json({ ...result, resetToken: process.env.NODE_ENV === "production" ? undefined : result.resetToken }); });
 router.post("/reset-password", async (req, res) => { try { await auth.resetPassword(req.body?.token, req.body?.password); res.json({ ok: true }); } catch (e) { error(res, e); } });
@@ -47,6 +47,6 @@ router.post("/forgot-password-sms", async (req, res) => { try { res.json(await a
 router.post("/reset-password-sms", async (req, res) => { try { res.json(await auth.resetPasswordWithSms(req.body?.code, req.body?.newPassword)); } catch (e) { error(res, e); } });
 router.post("/forgot-password-email", async (req, res) => { try { res.json(await auth.requestEmailReset(req.body?.email)); } catch (e) { error(res, e); } });
 router.post("/reset-password-email", async (req, res) => { try { res.json(await auth.resetPasswordWithEmail(req.body?.code, req.body?.newPassword)); } catch (e) { error(res, e); } });
-router.patch("/profile", authenticate, async (req, res) => { try { const user = auth.updateProfile(req.user.id, req.body || {}); res.json({ user }); } catch (e) { error(res, e); } });
+router.patch("/profile", authenticate, async (req, res) => { try { const user = await auth.updateProfile(req.user.id, req.body || {}); res.json({ user }); } catch (e) { error(res, e); } });
 
 module.exports = { router, setSessionCookies };

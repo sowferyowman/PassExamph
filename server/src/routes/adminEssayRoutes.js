@@ -151,7 +151,7 @@ function recalculateEssayAttempt(attempt) {
   return { ...attempt, itemDiagnostics: items, earnedPoints, totalPoints, finalPct, passed: finalPct >= Number(attempt.passingScore || 75), status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed };
 }
 
-router.patch("/students/:studentId", (req, res) => {
+router.patch("/students/:studentId", async (req, res) => {
   const studentId = Number(req.params.studentId);
   const student = getDb().prepare("SELECT id FROM users WHERE id=? AND role='student'").get(studentId);
   if (!student) return res.status(404).json({ error: "Student account not found." });
@@ -162,7 +162,7 @@ router.patch("/students/:studentId", (req, res) => {
   const recoveryEmail = String(req.body?.recoveryEmail || "").trim().toLowerCase();
   if (smsNumber && !/^\+?\d{10,15}$/.test(smsNumber.replace(/[\s()-]/g, ""))) return res.status(400).json({ error: "Enter a valid mobile number." });
   if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) return res.status(400).json({ error: "Enter a valid email address." });
-  const updatedUser = updateProfile(studentId, { name, nickname, school, phoneNumber: smsNumber, recoveryEmail });
+  const updatedUser = await updateProfile(studentId, { name, nickname, school, phoneNumber: smsNumber, recoveryEmail });
   res.json({ user: updatedUser });
 });
 
