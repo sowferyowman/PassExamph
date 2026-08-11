@@ -2,12 +2,12 @@ const router = require("express").Router();
 const { getExamBlueprint, scoreExamAttempt } = require("../services/examService");
 const sessions = require("../services/examSessionService");
 
-router.get("/blueprint", (_req, res) => {
-  res.json(getExamBlueprint());
+router.get("/blueprint", async (_req, res, next) => {
+  try { res.json(await getExamBlueprint()); } catch (error) { next(error); }
 });
 
-router.post("/attempts", (req, res) => {
-  res.status(201).json(scoreExamAttempt(req.body.responses || [], req.user.id));
+router.post("/attempts", async (req, res, next) => {
+  try { res.status(201).json(await scoreExamAttempt(req.body.responses || [], req.user.id)); } catch (error) { next(error); }
 });
 
 function sendError(res, error) { res.status(error.status || 400).json({ error: error.message || "Unable to update exam session." }); }

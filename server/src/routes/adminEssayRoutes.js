@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const { getDb } = require("../config/database");
+const { pool } = require("../config/database.pg");
 const { resetStudentPasswordByAdmin, updateProfile } = require("../services/authService");
 const { randomUUID } = require("crypto");
 
@@ -153,7 +154,7 @@ function recalculateEssayAttempt(attempt) {
 
 router.patch("/students/:studentId", async (req, res) => {
   const studentId = Number(req.params.studentId);
-  const student = getDb().prepare("SELECT id FROM users WHERE id=? AND role='student'").get(studentId);
+  const student = (await pool.query("SELECT id FROM users WHERE id=$1 AND role='student'", [studentId])).rows[0];
   if (!student) return res.status(404).json({ error: "Student account not found." });
   const name = String(req.body?.name || "").trim();
   const nickname = String(req.body?.nickname || "").trim();

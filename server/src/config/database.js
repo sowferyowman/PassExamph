@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { DatabaseSync } = require("node:sqlite");
 const {
   aiInsight,
   dashboardMetrics,
@@ -19,6 +18,7 @@ let db;
 
 function getDb() {
   if (!db) {
+    const { DatabaseSync } = require("node:sqlite");
     fs.mkdirSync(dataDir, { recursive: true });
     db = new DatabaseSync(dbPath);
     db.exec("PRAGMA journal_mode = WAL");

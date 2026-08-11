@@ -1,14 +1,14 @@
-const { getDb } = require("../config/database");
+const { pool } = require("../config/database.pg");
 const { scoreEssay } = require("./aiService");
 
-function getExamBlueprint() {
-  const row = getDb().prepare("SELECT payload FROM exam_blueprint WHERE id = 1").get();
-  return JSON.parse(row.payload);
+async function getExamBlueprint() {
+  const result = await pool.query("SELECT payload FROM exam_blueprint WHERE id = 1");
+  const row = result.rows[0];
+  return typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
 }
 
-function scoreExamAttempt(responses, studentId = 1) {
-  const db = getDb();
-  const blueprint = getExamBlueprint();
+async function scoreExamAttempt(responses, studentId = 1) {
+  const blueprint = await getExamBlueprint();
   let correct = 0;
   let total = 0;
 
@@ -44,37 +44,31 @@ function scoreExamAttempt(responses, studentId = 1) {
   const finalPct = hasEssays ? null : calculatedPct;
   
   try {
-    const insertLog = db.prepare(`
-      INSERT INTO exam_logs (student_id, name, taken_at, score, status) 
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    const attemptCount = db
-      .prepare("SELECT COUNT(*) AS total FROM exam_logs WHERE student_id = ?")
-      .get(studentId).total;
+    const attemptCount = Number((await pool.query("SELECT COUNT(*) AS total FROM exam_logs WHERE student_id = $1", [studentId])).rows[0].total);
     
     const currentDate = new Date().toISOString().split("T")[0];
     const examName = `ACET Mock Practice #${attemptCount + 1}`;
     
-    insertLog.run(studentId, examName, currentDate, finalPct ?? 0, hasEssays ? "Pending Review" : "Analyzed");
+    await pool.query(`
+      INSERT INTO exam_logs (student_id, name, taken_at, score, status)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [studentId, examName, currentDate, finalPct ?? 0, hasEssays ? "Pending Review" : "Analyzed"]);
 
     // Essay-backed attempts are incomplete until their responses are reviewed.
     // Do not plot their MCQ-only subtotal as a completed progression score.
     if (!hasEssays) {
-      db.prepare("INSERT INTO progression (student_id, label, score) VALUES (?, ?, ?)")
-        .run(studentId, `Mock ${attemptCount + 1}`, finalPct);
+      await pool.query("INSERT INTO progression (student_id, label, score) VALUES ($1, $2, $3)", [studentId, `Mock ${attemptCount + 1}`, finalPct]);
     }
 
-    const upsertSubject = db.prepare(`
-      INSERT INTO subjects (student_id, name, mastery, color)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(student_id, name) DO UPDATE SET mastery = excluded.mastery
-    `);
+    if (!hasEssays) for (const subject of subjectScores) {
+      await pool.query(`
+        INSERT INTO subjects (student_id, name, mastery, color)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT(student_id, name) DO UPDATE SET mastery = excluded.mastery
+      `, [studentId, subject.title, subject.pct, getSubjectColor(subject.pct)]);
+    }
 
-    if (!hasEssays) subjectScores.forEach((subject) => {
-      upsertSubject.run(studentId, subject.title, subject.pct, getSubjectColor(subject.pct));
-    });
-
-    saveEssayResponses(responses, studentId, examName);
+    await saveEssayResponses(responses, studentId, examName);
   } catch (error) {
     console.error("Failed to write exam log record to database:", error);
   }
@@ -104,19 +98,24 @@ function scoreExamAttempt(responses, studentId = 1) {
   };
 }
 
-function saveEssayResponses(responses, studentId, examName) {
-  const blueprint = getExamBlueprint();
-  const db = getDb();
-  const examLog = db.prepare("SELECT id FROM exam_logs WHERE student_id = ? AND name = ? ORDER BY id DESC LIMIT 1").get(studentId, examName);
-  const insert = db.prepare(`INSERT INTO essay_responses (student_id, exam_log_id, exam_name, question_index, response, rubric, points, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review')`);
-  blueprint.forEach((section, sectionIndex) => (section.questions || []).forEach((question, questionIndex) => {
-    if (question.type !== "paragraph" && question.type !== "essay") return;
-    const response = String(responses?.[sectionIndex]?.[questionIndex] || "");
-    const row = insert.run(studentId, examLog?.id || null, examName, questionIndex, response, question.rubric || "", Math.max(1, Number(question.points || 1)));
-    scoreEssay({ response, rubric: question.rubric, points: question.points || 1 }).then((scored) => {
-      if (scored.status === "ai_graded") db.prepare("UPDATE essay_responses SET ai_score = ?, ai_rationale = ?, status = 'ai_graded' WHERE id = ?").run(scored.score, scored.rationale, row.lastInsertRowid);
-    }).catch(() => {});
-  }));
+async function saveEssayResponses(responses, studentId, examName) {
+  const blueprint = await getExamBlueprint();
+  const examLog = (await pool.query("SELECT id FROM exam_logs WHERE student_id = $1 AND name = $2 ORDER BY id DESC LIMIT 1", [studentId, examName])).rows[0];
+  for (const [sectionIndex, section] of blueprint.entries()) {
+    for (const [questionIndex, question] of (section.questions || []).entries()) {
+      if (question.type !== "paragraph" && question.type !== "essay") continue;
+      const response = String(responses?.[sectionIndex]?.[questionIndex] || "");
+      const row = (await pool.query(
+        `INSERT INTO essay_responses (student_id, exam_log_id, exam_name, question_index, response, rubric, points, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review')
+        RETURNING id`,
+        [studentId, examLog?.id || null, examName, questionIndex, response, question.rubric || "", Math.max(1, Number(question.points || 1))]
+      )).rows[0];
+      scoreEssay({ response, rubric: question.rubric, points: question.points || 1 }).then((scored) => {
+        if (scored.status === "ai_graded") pool.query("UPDATE essay_responses SET ai_score = $1, ai_rationale = $2, status = 'ai_graded' WHERE id = $3", [scored.score, scored.rationale, row.id]);
+      }).catch(() => {});
+    }
+  }
 }
 
 function getSubjectColor(score) {
