@@ -1,6 +1,7 @@
 const router = require("express").Router();
-const { getDb } = require("../config/database");
+const { pool } = require("../config/database.pg");
 const { resetStudentPasswordByAdmin, updateProfile } = require("../services/authService");
+const { randomUUID } = require("crypto");
 
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Admin access required." });
@@ -9,57 +10,68 @@ function requireAdmin(req, res, next) {
 
 router.use(requireAdmin);
 
-router.get("/students", (_req, res) => {
-  const students = getDb().prepare(`
-    SELECT users.id, users.email, users.username, users.name, users.nickname, users.sms_number AS smsNumber,
-      users.recovery_email AS recoveryEmail, users.is_active AS isActive,
-      COALESCE(student_profiles.display_name, users.name, users.username, users.email) AS displayName,
+router.get("/students", async (_req, res, next) => {
+  try {
+    const students = (await pool.query(`
+    SELECT users.id, users.email, users.username, users.name, users.nickname, users.sms_number AS "smsNumber",
+      users.recovery_email AS "recoveryEmail", users.is_active AS "isActive",
+      COALESCE(student_profiles.display_name, users.name, users.username, users.email) AS "displayName",
       student_profiles.target_school AS school,
-      users.created_at AS createdAt
+      users.created_at AS "createdAt"
     FROM users
     LEFT JOIN student_profiles ON student_profiles.user_id = users.id
-    WHERE users.role = 'student'
+    WHERE users.role = $1
     ORDER BY users.created_at DESC
-  `).all();
-  res.json(students);
+    `, ["student"])).rows;
+    res.json(students);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Admin data must come from each student's persisted dashboard, not the
 // administrator browser's localStorage copy.
-router.get("/student-dashboards", (_req, res) => {
-  const rows = getDb().prepare(`
+router.get("/student-dashboards", async (_req, res, next) => {
+  try {
+    const rows = (await pool.query(`
     SELECT users.email, app_data.payload
     FROM users
     LEFT JOIN app_data ON app_data.user_id = users.id
-      AND app_data.namespace = 'legacy' AND app_data.data_key = 'acet_dashboard_data'
-    WHERE users.role = 'student'
-  `).all();
-  const dashboards = {};
-  rows.forEach((row) => {
-    if (!row.payload) return;
-    try {
-      const store = JSON.parse(row.payload);
-      // Each row belongs to one student. Old browser migrations may contain a
-      // copy of other accounts too, so only trust the owner's dashboard here.
-      if (store && typeof store === "object" && store[row.email]) dashboards[row.email] = store[row.email];
-    } catch (_error) {
-      // A malformed legacy value should not prevent the rest of the class list loading.
-    }
-  });
-  res.json(dashboards);
+      AND app_data.namespace = $1 AND app_data.data_key = $2
+    WHERE users.role = $3
+    `, ["legacy", "acet_dashboard_data", "student"])).rows;
+    const dashboards = {};
+    rows.forEach((row) => {
+      if (!row.payload) return;
+      try {
+        const store = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+        // Each row belongs to one student. Old browser migrations may contain a
+        // copy of other accounts too, so only trust the owner's dashboard here.
+        if (store && typeof store === "object" && store[row.email]) dashboards[row.email] = store[row.email];
+      } catch (_error) {
+        // A malformed legacy value should not prevent the rest of the class list loading.
+      }
+    });
+    res.json(dashboards);
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.get("/students/:studentId/exam-submissions", (req, res) => {
+router.get("/students/:studentId/exam-submissions", async (req, res, next) => {
   const studentId = Number(req.params.studentId);
-  const db = getDb();
-  const student = db.prepare("SELECT id,email FROM users WHERE id=? AND role='student'").get(studentId);
-  if (!student) return res.status(404).json({ error: "Student account not found." });
-
-  const record = db.prepare("SELECT payload FROM app_data WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").get(studentId);
-  if (!record) return res.json({ attempts: [] });
-
+  let student;
+  let record;
   try {
-    const store = JSON.parse(record.payload);
+    student = (await pool.query("SELECT id,email FROM users WHERE id = $1 AND role = $2", [studentId, "student"])).rows[0];
+    record = (await pool.query("SELECT payload FROM app_data WHERE user_id = $1 AND namespace = $2 AND data_key = $3", [studentId, "legacy", "acet_dashboard_data"])).rows[0];
+  } catch (error) {
+    return next(error);
+  }
+  if (!student) return res.status(404).json({ error: "Student account not found." });
+  if (!record) return res.json({ attempts: [] });
+  try {
+    const store = typeof record.payload === "string" ? JSON.parse(record.payload) : record.payload;
     const dashboard = store?.[student.email] || {};
     res.json({ attempts: Array.isArray(dashboard.attempts) ? dashboard.attempts : [] });
   } catch (_error) {
@@ -67,21 +79,28 @@ router.get("/students/:studentId/exam-submissions", (req, res) => {
   }
 });
 
-router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
+router.patch("/students/:studentId/essay-responses/:essayId", async (req, res, next) => {
   const studentId = Number(req.params.studentId);
   const { essayId } = req.params;
-  const db = getDb();
-  const student = db.prepare("SELECT id,email FROM users WHERE id=? AND role='student'").get(studentId);
+  let student;
+  let record;
+
+  try {
+    student = (await pool.query("SELECT id,email FROM users WHERE id = $1 AND role = $2", [studentId, "student"])).rows[0];
+    record = (await pool.query("SELECT payload FROM app_data WHERE user_id = $1 AND namespace = $2 AND data_key = $3", [studentId, "legacy", "acet_dashboard_data"])).rows[0];
+  } catch (error) {
+    return next(error);
+  }
   if (!student) return res.status(404).json({ error: "Student account not found." });
-  const record = db.prepare("SELECT payload FROM app_data WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").get(studentId);
   if (!record) return res.status(404).json({ error: "No saved exam history was found for this student." });
 
   try {
-    const store = JSON.parse(record.payload);
+    const store = typeof record.payload === "string" ? JSON.parse(record.payload) : record.payload;
     const dashboard = store?.[student.email];
     if (!dashboard) return res.status(404).json({ error: "No saved exam history was found for this student." });
     let updated = false;
     let updatedAttemptIndex = -1;
+    let wasReviewed = false;
     dashboard.attempts = (dashboard.attempts || []).map((attempt, attemptIndex) => {
       const essayResponses = (attempt.essayResponses || []).map((essay) => {
         if (essay.id !== essayId) return essay;
@@ -90,6 +109,7 @@ router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
       });
       if (!essayResponses.some((essay) => essay.id === essayId)) return attempt;
       updatedAttemptIndex = attemptIndex;
+      wasReviewed = attempt.status === "Reviewed" && !attempt.hasPendingEssays;
       return recalculateEssayAttempt({ ...attempt, essayResponses });
     });
     if (!updated) return res.status(404).json({ error: "Essay response not found." });
@@ -107,7 +127,20 @@ router.patch("/students/:studentId/essay-responses/:essayId", (req, res) => {
         hasPendingEssays: updatedAttempt.hasPendingEssays
       } : exam);
     }
-    db.prepare("UPDATE app_data SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND namespace='legacy' AND data_key='acet_dashboard_data'").run(JSON.stringify(store), studentId);
+    await pool.query("UPDATE app_data SET payload = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 AND namespace = $3 AND data_key = $4", [JSON.stringify(store), studentId, "legacy", "acet_dashboard_data"]);
+    // Notify once, only after every essay in this attempt has been finalized.
+    if (updatedAttempt?.status === "Reviewed" && !updatedAttempt.hasPendingEssays && !wasReviewed) {
+      await pool.query("INSERT INTO user_notifications (id,user_id,payload) VALUES ($1,$2,$3)", [
+        randomUUID(),
+        studentId,
+        JSON.stringify({
+          id: randomUUID(), userId: studentId, type: "essay_reviewed",
+          message: `Your essay for ${updatedAttempt.examTitle || "your mock exam"} has been reviewed. Your final result is ready.`,
+          isRead: false, timestamp: Date.now(),
+          metadata: { attemptId: updatedAttempt.id, examId: updatedAttempt.examId }
+        })
+      ]);
+    }
     res.json({ ok: true, attempt: updatedAttempt, dashboard });
   } catch (_error) {
     res.status(500).json({ error: "Could not update the saved exam score." });
@@ -135,9 +168,9 @@ function recalculateEssayAttempt(attempt) {
   return { ...attempt, itemDiagnostics: items, earnedPoints, totalPoints, finalPct, passed: finalPct >= Number(attempt.passingScore || 75), status: reviewed ? "Reviewed" : "Pending Review", hasPendingEssays: !reviewed };
 }
 
-router.patch("/students/:studentId", (req, res) => {
+router.patch("/students/:studentId", async (req, res) => {
   const studentId = Number(req.params.studentId);
-  const student = getDb().prepare("SELECT id FROM users WHERE id=? AND role='student'").get(studentId);
+  const student = (await pool.query("SELECT id FROM users WHERE id=$1 AND role='student'", [studentId])).rows[0];
   if (!student) return res.status(404).json({ error: "Student account not found." });
   const name = String(req.body?.name || "").trim();
   const nickname = String(req.body?.nickname || "").trim();
@@ -146,7 +179,7 @@ router.patch("/students/:studentId", (req, res) => {
   const recoveryEmail = String(req.body?.recoveryEmail || "").trim().toLowerCase();
   if (smsNumber && !/^\+?\d{10,15}$/.test(smsNumber.replace(/[\s()-]/g, ""))) return res.status(400).json({ error: "Enter a valid mobile number." });
   if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) return res.status(400).json({ error: "Enter a valid email address." });
-  const updatedUser = updateProfile(studentId, { name, nickname, school, phoneNumber: smsNumber, recoveryEmail });
+  const updatedUser = await updateProfile(studentId, { name, nickname, school, phoneNumber: smsNumber, recoveryEmail });
   res.json({ user: updatedUser });
 });
 
@@ -159,43 +192,53 @@ router.post("/students/:studentId/reset-password", async (req, res) => {
   }
 });
 
-router.delete("/students/:studentId", (req, res) => {
+router.delete("/students/:studentId", async (req, res, next) => {
   const studentId = Number(req.params.studentId);
-  const db = getDb();
-  const student = db.prepare("SELECT id FROM users WHERE id=? AND role='student'").get(studentId);
-  if (!student) return res.status(404).json({ error: "Student account not found." });
-  db.prepare("DELETE FROM student_profiles WHERE user_id=?").run(studentId);
-  db.prepare("DELETE FROM users WHERE id=?").run(studentId);
-  res.json({ ok: true });
+  try {
+    const student = (await pool.query("SELECT id FROM users WHERE id = $1 AND role = $2", [studentId, "student"])).rows[0];
+    if (!student) return res.status(404).json({ error: "Student account not found." });
+    await pool.query("DELETE FROM student_profiles WHERE user_id = $1", [studentId]);
+    await pool.query("DELETE FROM users WHERE id = $1", [studentId]);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.get("/essays/pending", (_req, res) => {
-  const rows = getDb().prepare(`
-    SELECT id, student_id AS studentId, exam_name AS examName, question_index AS questionIndex,
-      response, rubric, points, ai_score AS aiScore, final_score AS finalScore, status, created_at AS createdAt
+router.get("/essays/pending", async (_req, res, next) => {
+  try {
+    const rows = (await pool.query(`
+    SELECT id, student_id AS "studentId", exam_name AS "examName", question_index AS "questionIndex",
+      response, rubric, points, ai_score AS "aiScore", ai_rationale AS "aiRationale", final_score AS "finalScore", status, created_at AS "createdAt"
     FROM essay_responses WHERE status IN ('pending_review', 'ai_graded') ORDER BY created_at ASC
-  `).all();
-  res.json(rows);
+    `)).rows;
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.post("/essays/approve", (req, res) => {
+router.post("/essays/approve", async (req, res, next) => {
   const { id, decision = "approve", score } = req.body || {};
   if (!id) return res.status(400).json({ error: "Essay id is required." });
-  const db = getDb();
-  const essay = db.prepare("SELECT * FROM essay_responses WHERE id = ?").get(id);
-  if (!essay) return res.status(404).json({ error: "Essay response not found." });
-  if (decision === "reject") {
-    db.prepare("UPDATE essay_responses SET status = 'pending_review', final_score = NULL, reviewed_at = NULL WHERE id = ?").run(id);
-  } else {
-    const finalScore = Number.isFinite(Number(score)) ? Number(score) : Number(essay.ai_score);
-    if (!Number.isFinite(finalScore)) return res.status(400).json({ error: "A numeric score is required." });
-    db.prepare("UPDATE essay_responses SET status = 'approved', final_score = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?").run(finalScore, id);
-    if (essay.exam_log_id) {
-      const remaining = db.prepare("SELECT COUNT(*) AS total FROM essay_responses WHERE exam_log_id = ? AND status != 'approved'").get(essay.exam_log_id).total;
-      if (!remaining) db.prepare("UPDATE exam_logs SET status = 'Reviewed' WHERE id = ?").run(essay.exam_log_id);
+  try {
+    const essay = (await pool.query("SELECT * FROM essay_responses WHERE id = $1", [id])).rows[0];
+    if (!essay) return res.status(404).json({ error: "Essay response not found." });
+    if (decision === "reject") {
+      await pool.query("UPDATE essay_responses SET status = 'pending_review', final_score = NULL, reviewed_at = NULL WHERE id = $1", [id]);
+    } else {
+      const finalScore = Number.isFinite(Number(score)) ? Number(score) : Number(essay.ai_score);
+      if (!Number.isFinite(finalScore)) return res.status(400).json({ error: "A numeric score is required." });
+      await pool.query("UPDATE essay_responses SET status = 'approved', final_score = $1, reviewed_at = CURRENT_TIMESTAMP WHERE id = $2", [finalScore, id]);
+      if (essay.exam_log_id) {
+        const remaining = Number((await pool.query("SELECT COUNT(*) AS total FROM essay_responses WHERE exam_log_id = $1 AND status != 'approved'", [essay.exam_log_id])).rows[0].total);
+        if (!remaining) await pool.query("UPDATE exam_logs SET status = 'Reviewed' WHERE id = $1", [essay.exam_log_id]);
+      }
     }
+    res.json((await pool.query("SELECT * FROM essay_responses WHERE id = $1", [id])).rows[0]);
+  } catch (error) {
+    next(error);
   }
-  res.json(db.prepare("SELECT * FROM essay_responses WHERE id = ?").get(id));
 });
 
 module.exports = router;

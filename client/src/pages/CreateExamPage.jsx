@@ -11,6 +11,7 @@ import TinyMCEEditor from "../components/TinyMCEEditor";
 import {
   getExamBlueprints,
   getReviewerBlueprints,
+  hydrateAllFromServer,
   updateReviewerBlueprint,
   deleteReviewerBlueprint,
   publishExamBlueprint,
@@ -21,9 +22,8 @@ import {
   updateExamBlueprint
 } from "../services/storage";
 
-// ============================================
 // CONFIRMATION DIALOG COMPONENT (Built-in)
-// ============================================
+
 function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmText = "Delete", cancelText = "Cancel", isDanger = true }) {
   if (!isOpen) return null;
 
@@ -72,9 +72,9 @@ function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmText
   );
 }
 
-// ============================================
+
 // ACTION DROPDOWN COMPONENT
-// ============================================
+
 function ExamActionsDropdown({ blueprint, onEdit, onToggleVisibility, onDelete }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -203,9 +203,7 @@ function ReviewerActionsDropdown({ reviewer, onEdit, onDelete }) {
   );
 }
 
-// ============================================
 // MAIN COMPONENT
-// ============================================
 
 const emptyQuestion = {
   type: "multiple_choice",
@@ -265,10 +263,8 @@ function getOptionLabel(index) {
   return String.fromCharCode(65 + index); // A, B, C, D, ...
 }
 
-// ============================================
-// CSV BULK IMPORT HELPERS
-// ============================================
 
+// CSV BULK IMPORT HELPERS
 // Column layout expected in the uploaded CSV (header row required, order does not matter):
 // subject_category, time_minutes, question_type, question_text,
 // option_a, option_b, option_c, option_d, option_e, option_f,
@@ -474,6 +470,14 @@ export default function CreateExamPage() {
     setMode(routeMode);
   }, [searchParams]);
 
+  useEffect(() => {
+    let active = true;
+    hydrateAllFromServer().catch(() => false).then(() => {
+      if (active) setReviewers(getReviewerBlueprints());
+    });
+    return () => { active = false; };
+  }, []);
+
   // Helper function to show confirmation
   function showConfirm({ title, message, onConfirm, confirmText = "Delete", isDanger = true }) {
     setConfirmDialog({
@@ -533,10 +537,14 @@ export default function CreateExamPage() {
     showConfirm({ 
       title: "Delete Reviewer", 
       message: `Delete "${reviewer?.title || "this reviewer"}"?`, 
-      onConfirm: () => { 
-        deleteReviewerBlueprint(reviewerId); 
-        setReviewers(getReviewerBlueprints()); 
-        setMessage("Reviewer deleted successfully."); 
+      onConfirm: async () => { 
+        try {
+          await deleteReviewerBlueprint(reviewerId);
+          setReviewers(getReviewerBlueprints());
+          setMessage("Reviewer deleted successfully.");
+        } catch (error) {
+          setMessage(error.response?.data?.error || "Reviewer could not be deleted.");
+        }
       } 
     });
   }
@@ -546,18 +554,19 @@ export default function CreateExamPage() {
     showConfirm({
       title: "Delete Exam",
       message: `Delete "${exam?.title || 'this exam'}"?\n\nThis action cannot be undone.\nAll student attempts and data for this exam will also be removed.`,
-      onConfirm: () => {
-        deleteExamBlueprint(examId);
-        setBlueprints(getExamBlueprints());
-        setMessage("Exam deleted successfully.");
+      onConfirm: async () => {
+        try { await deleteExamBlueprint(examId); setBlueprints(getExamBlueprints()); setMessage("Exam deleted successfully."); }
+        catch (error) { setMessage(error.response?.data?.error || "Exam could not be deleted."); }
       }
     });
   }
 
-  function handleToggleVisibility(examId) {
-    const updated = toggleExamVisibility(examId);
-    setBlueprints(getExamBlueprints());
-    setMessage(updated.isHidden ? "Exam hidden from students." : "Exam is now visible to students.");
+  async function handleToggleVisibility(examId) {
+    try {
+      const updated = await toggleExamVisibility(examId);
+      setBlueprints(getExamBlueprints());
+      setMessage(updated.isHidden ? "Exam hidden from students." : "Exam is now visible to students.");
+    } catch (error) { setMessage(error.response?.data?.error || "Exam visibility could not be updated."); }
   }
 
   function updateSection(sectionIndex, updates) {
@@ -812,7 +821,7 @@ export default function CreateExamPage() {
     return "";
   }
 
-  function publishItem() {
+  async function publishItem() {
     if (mode === "exam") {
       const validationError = validateExamBlueprint();
       if (validationError) {
@@ -821,7 +830,7 @@ export default function CreateExamPage() {
       }
 
       if (editingExamId) {
-        const updated = updateExamBlueprint(editingExamId, {
+        const updated = await updateExamBlueprint(editingExamId, {
           ...examForm,
           accessType: examForm.accessType || "unlimited",
           maxAttempts: examForm.accessType === "once" ? 1 : examForm.accessType === "limited" ? (examForm.maxAttempts || 3) : 999
@@ -836,7 +845,7 @@ export default function CreateExamPage() {
         return;
       }
 
-      const published = publishExamBlueprint({
+      const published = await publishExamBlueprint({
         ...examForm,
         accessType: examForm.accessType || "unlimited",
         maxAttempts: examForm.accessType === "once" ? 1 : examForm.accessType === "limited" ? (examForm.maxAttempts || 3) : 999
@@ -856,21 +865,26 @@ export default function CreateExamPage() {
       return;
     }
 
-    if (editingReviewerId) {
-      const updated = updateReviewerBlueprint(editingReviewerId, reviewerForm);
+    try {
+      if (editingReviewerId) {
+        const updated = await updateReviewerBlueprint(editingReviewerId, reviewerForm);
+        setReviewers(getReviewerBlueprints());
+        setMessage(`"${updated.title}" was updated successfully!`);
+        setEditingReviewerId(null);
+        setReviewerForm(initialReviewerForm);
+        return;
+      }
+      const published = await publishReviewerBlueprint(reviewerForm);
       setReviewers(getReviewerBlueprints());
-      setMessage(`"${updated.title}" was updated successfully!`);
-      setEditingReviewerId(null);
-      setReviewerForm(initialReviewerForm);
-      return;
+      setMessage(`"${published.title}" was published successfully! Students can now access this reviewer.`);
+      setReviewerForm({
+        ...initialReviewerForm,
+        modules: [{ ...initialReviewerForm.modules[0], id: crypto.randomUUID() }]
+      });
+    } catch (error) {
+      const reason = error.response?.data?.error || error.message || "Unknown connection error";
+      setMessage(`Reviewer could not be saved: ${reason}. Please sign in again and retry.`);
     }
-    const published = publishReviewerBlueprint(reviewerForm);
-    setReviewers(getReviewerBlueprints());
-    setMessage(`"${published.title}" was published successfully! Students can now access this reviewer.`);
-    setReviewerForm({
-      ...initialReviewerForm,
-      modules: [{ ...initialReviewerForm.modules[0], id: crypto.randomUUID() }]
-    });
   }
 
   return (
@@ -1120,7 +1134,7 @@ export default function CreateExamPage() {
               </label>
 
               <label className="block">
-                <span className="text-xs font-bold text-slate-600">Passing Score <span className="text-rose-500">*</span></span>
+                <span className="text-xs font-bold text-slate-600">Passing Score % <span className="text-rose-500">*</span></span>
                 <input
                   type="number"
                   min="0"
@@ -1289,7 +1303,7 @@ export default function CreateExamPage() {
                     value={section.subjectTitle}
                     onChange={(event) => updateSection(sectionIndex, { subjectTitle: event.target.value })}
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
-                    placeholder="e.g., Mathematics, English, Science"
+                    placeholder="Mathematics, English, Science"
                   />
                 </label>
                 <label>
@@ -1529,7 +1543,7 @@ export default function CreateExamPage() {
                 value={question.diagnosticSubcategory || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSubcategory: event.target.value })}
                 className="mt-1 w-full rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
-                placeholder="e.g., Algebra, Grammar, Reading"
+                placeholder="Algebra, Grammar, Reading"
               />
             </label>
             <label>
@@ -1538,7 +1552,7 @@ export default function CreateExamPage() {
                 value={question.diagnosticSkillTag || ""}
                 onChange={(event) => updateQuestion(sectionIndex, questionIndex, { diagnosticSkillTag: event.target.value })}
                 className="mt-1 w-full rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-400"
-                placeholder="e.g., Addition, Theme Analysis, Vocabulary"
+                placeholder="Addition, Theme Analysis, Vocabulary"
               />
             </label>
           </div>
@@ -1573,7 +1587,7 @@ export default function CreateExamPage() {
                 value={reviewerForm.subjectCategory}
                 onChange={(event) => setReviewerForm((current) => ({ ...current, subjectCategory: event.target.value }))}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
-                placeholder="e.g., Mathematics, English, Science"
+                placeholder="Mathematics, English, Science"
               />
             </label>
           </div>
@@ -1607,7 +1621,7 @@ export default function CreateExamPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-bold text-slate-600">Time <span className="text-slate-400">(min)</span></span>
+                  <span className="text-xs font-bold text-slate-600">Estimated Time <span className="text-slate-400">(min)</span></span>
                   <input
                     type="number"
                     min="1"

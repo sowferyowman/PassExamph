@@ -20,7 +20,6 @@ import {
   getCurrentUser,
   getFreshLeaderboard,
   getForumThreads,
-  getLeaderboard,
   toggleForumReaction
 } from "../../services/storage";
 
@@ -78,7 +77,7 @@ export default function CommunityForumPage() {
   // Starts true so the forum opens on the category grid (matches the reference layout).
   const [browsingCategory, setBrowsingCategory] = useState(true);
 
-  const [leaderboard, setLeaderboard] = useState(() => getLeaderboard(user?.email));
+  const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardPage, setLeaderboardPage] = useState(1);
 
   const leaderboardTotalPages = Math.max(1, Math.ceil(leaderboard.length / LEADERBOARD_PER_PAGE));
@@ -113,13 +112,8 @@ export default function CommunityForumPage() {
     let cancelled = false;
     async function refreshCommunityData() {
       setThreads(getForumThreads());
-      try {
-        const freshLeaderboard = await getFreshLeaderboard(user?.email);
-        if (!cancelled) setLeaderboard(freshLeaderboard);
-      } catch (_error) {
-        // Preserve the local/offline fallback if the server is unavailable.
-        if (!cancelled) setLeaderboard(getLeaderboard(user?.email));
-      }
+      const freshLeaderboard = await getFreshLeaderboard(user?.email).catch(() => null);
+      if (!cancelled && freshLeaderboard) setLeaderboard(freshLeaderboard);
     }
 
     refreshCommunityData();
@@ -132,26 +126,26 @@ export default function CommunityForumPage() {
     };
   }, [user?.email]);
 
-  function submitTopic(event) {
+  async function submitTopic(event) {
     event.preventDefault();
     if (!topicForm.title.trim() || !topicForm.body.trim()) return;
-    createForumThread(user, topicForm);
+    await createForumThread(user, topicForm).catch(() => null);
     setThreads(getForumThreads());
     setTopicForm({ title: "", body: "", tag: "Share Knowledge" });
     setShowTopicForm(false);
   }
 
-  function submitReply(threadId) {
+  async function submitReply(threadId) {
     const body = replyDrafts[threadId];
     if (!body?.trim()) return;
-    addForumReply(user, threadId, body);
+    await addForumReply(user, threadId, body).catch(() => null);
     setThreads(getForumThreads());
     setReplyDrafts((current) => ({ ...current, [threadId]: "" }));
   }
 
-  function toggleReaction(threadId, reactionType) {
+  async function toggleReaction(threadId, reactionType) {
     if (!user?.id) return;
-    toggleForumReaction(threadId, reactionType, user.id);
+    await toggleForumReaction(threadId, reactionType, user.id).catch(() => null);
     setThreads(getForumThreads());
   }
 

@@ -1,4 +1,5 @@
 const GROQ_MODEL = "llama-3.3-70b-versatile";
+const MAX_PROMPT_DRILL_TOKENS = 110000;
 
 function getGroqClient() {
   if (!process.env.GROQ_API_KEY) {
@@ -14,6 +15,20 @@ function getGroqClient() {
   }
   const Groq = GroqModule.default || GroqModule;
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
+}
+
+function takeDrillsWithinTokenBudget(drills, tokenBudget) {
+  let usedTokens = 0;
+  const included = [];
+
+  for (const drill of drills) {
+    const estimatedTokens = Math.ceil(JSON.stringify(drill).length / 4);
+    if (usedTokens + estimatedTokens > tokenBudget) break;
+    included.push(drill);
+    usedTokens += estimatedTokens;
+  }
+
+  return included;
 }
 
 // This prompt is deliberately verbose and example-driven rather than a
@@ -82,7 +97,7 @@ BAD: "You can do it! Believe in yourself and never give up!" (empty hype, avoid 
 // fixes.
 const ADAPTIVE_GATE_SYSTEM_PROMPT = `You are the same warm, direct academic coach from the exam diagnostic — now looking at a student's history across several attempts to decide what they should drill next. You're talking directly to the student, not writing an internal report.
 
-Return ONLY a strict JSON object with exactly these keys: focus_subject, confidence, rationale, drill_subject_order, reviewer_focus_tags, exam_focus_tags.
+Return ONLY a strict JSON object with exactly these keys: focus_subject, confidence, rationale, drill_subject_order, recommended_drill_filters, reviewer_focus_tags, exam_focus_tags.
 
 - focus_subject (string): the single subject name to prioritize next.
 - confidence (number, 0-1): how clear-cut this call is given the data. Low weak-subject signal or very few attempts should mean lower confidence.
@@ -91,6 +106,7 @@ Return ONLY a strict JSON object with exactly these keys: focus_subject, confide
   BAD: "Your active review track has been programmatically updated based on cumulative tracking metrics." (jargon, not a sentence a coach would say)
   BAD: "This exam shows a weakness in Math." (wrong lens — this is about the trend across attempts, not a single exam)
 - drill_subject_order (array of strings): subjects ordered by priority, most urgent first.
+- recommended_drill_filters (array of 1-5 objects): select the weakness areas that will build the student's complete related-practice pool. Each object is { subject, subCategory, weaknessTag }; use exact values from availableDrills and use an empty string for a lower-level field when the whole broader area is relevant. For example, { "subject": "Mathematics", "subCategory": "Functions", "weaknessTag": "" } includes every Functions drill, while { "subject": "Mathematics", "subCategory": "", "weaknessTag": "" } includes all Mathematics drills. Evaluate semantic relevance across the full catalog yourself; it has not been pre-filtered. Do not select only a small sample of question IDs.
 - reviewer_focus_tags (array of strings): short topic labels, not full sentences.
 - exam_focus_tags (array of strings): short topic labels, not full sentences.
 
@@ -162,8 +178,8 @@ async function buildAdaptiveGate(payload) {
   const fallback = buildFallbackGate(payload);
 
   try {
-    // OPTIMIZATION FILTER START 
-    // Extract past metadata attempts to dramatically condense historical analytics arrays sent to the API.
+    // The client sends label-only drill metadata under its token budget. Keep
+    // an independent server budget so malformed payloads cannot inflate cost.
     const cleanHistory = Array.isArray(payload?.diagnosticHistory)
       ? payload.diagnosticHistory.slice(-3).map(attempt => {
           const subjectMastery = attempt.aiDiagnostic?.subject_mastery || attempt.subjectScores || [];
@@ -175,7 +191,21 @@ async function buildAdaptiveGate(payload) {
           };
         })
       : [];
-    // OPTIMIZATION FILTER END
+    const receivedDrills = Array.isArray(payload?.contentPools?.drills)
+      ? payload.contentPools.drills
+          .filter((drill) => drill && drill.id)
+          .map((drill) => ({
+            id: String(drill.id),
+            title: String(drill.title || "Untitled drill"),
+            subject: String(drill.subject || "General Practice"),
+            subCategory: String(drill.subCategory || ""),
+            weaknessTag: String(drill.weaknessTag || "")
+          }))
+      : [];
+    const availableDrills = takeDrillsWithinTokenBudget(receivedDrills, MAX_PROMPT_DRILL_TOKENS);
+    if (availableDrills.length < receivedDrills.length) {
+      console.warn(`Adaptive gate truncated drill catalog from ${receivedDrills.length} to ${availableDrills.length} entries to stay within the ${MAX_PROMPT_DRILL_TOKENS}-token budget.`);
+    }
 
     const groq = getGroqClient();
     const completion = await groq.chat.completions.create({
@@ -191,7 +221,9 @@ async function buildAdaptiveGate(payload) {
           role: "user",
           content: JSON.stringify({
             task: "Tell this student, in your own coaching voice, which subject to drill next based on their pattern across the attempts below — not just one exam. Ground every field in the actual data given.",
-            studentHistorySummary: cleanHistory
+            studentHistorySummary: cleanHistory,
+            availableDrills,
+            instruction: "Review the complete availableDrills catalog before choosing recommended_drill_filters. The catalog was not pre-filtered for this student, so determine the relevant practice areas yourself using exact catalog labels."
           })
         }
       ]
@@ -352,6 +384,7 @@ function buildFallbackGate(payload = {}) {
   });
 
   const focusSubject = [...weakCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "General Comprehensive Review";
+  const availableDrills = Array.isArray(payload?.contentPools?.drills) ? payload.contentPools.drills : [];
 
   const analyticalFallbackRationale = weakCounts.size
     ? `**${focusSubject}** keeps showing up as your softest spot across your recent attempts, so that's where the next block of practice will help most. Clearing this now gives you the biggest lift to your overall score before your next mock exam.`
@@ -362,6 +395,8 @@ function buildFallbackGate(payload = {}) {
     confidence: weakCounts.size ? 0.72 : 0.35,
     rationale: analyticalFallbackRationale,
     drill_subject_order: [focusSubject],
+    recommended_drill_filters: [{ subject: focusSubject, subCategory: "", weaknessTag: "" }],
+    available_drills: availableDrills,
     reviewer_focus_tags: [focusSubject],
     exam_focus_tags: [focusSubject],
     source: "local_fallback"
@@ -398,15 +433,81 @@ function normalizeDiagnostic(value, fallback) {
 }
 
 function normalizeGate(value, fallback) {
+  const catalog = Array.isArray(fallback.available_drills) ? fallback.available_drills : [];
+  const recommendedDrillFilters = normalizeDrillFilters(value.recommended_drill_filters, catalog, fallback.recommended_drill_filters);
   return {
     focus_subject: value.focus_subject || fallback.focus_subject,
     confidence: Number(value.confidence ?? fallback.confidence),
     rationale: value.rationale || fallback.rationale,
     drill_subject_order: Array.isArray(value.drill_subject_order) ? value.drill_subject_order : fallback.drill_subject_order,
+    recommended_drill_filters: recommendedDrillFilters,
     reviewer_focus_tags: Array.isArray(value.reviewer_focus_tags) ? value.reviewer_focus_tags : fallback.reviewer_focus_tags,
     exam_focus_tags: Array.isArray(value.exam_focus_tags) ? value.exam_focus_tags : fallback.exam_focus_tags,
     source: "groq"
   };
 }
 
-module.exports = { diagnoseExam, buildAdaptiveGate };
+function normalizeDrillFilters(filters, catalog, fallback) {
+  if (!Array.isArray(filters)) return fallback || [];
+  const exactValue = (value, field) => {
+    const requested = String(value || "").trim().toLowerCase();
+    if (!requested) return "";
+    return catalog.find((drill) => String(drill[field] || "").trim().toLowerCase() === requested)?.[field] || "";
+  };
+
+  const normalized = filters
+    .slice(0, 5)
+    .map((filter) => {
+      const subject = exactValue(filter?.subject, "subject");
+      const subCategory = exactValue(filter?.subCategory, "subCategory");
+      const weaknessTag = exactValue(filter?.weaknessTag, "weaknessTag");
+      if (!subject) return null;
+      return { subject, subCategory, weaknessTag };
+    })
+    .filter(Boolean)
+    .filter((filter) => catalog.some((drill) => (
+      drill.subject === filter.subject
+      && (!filter.subCategory || drill.subCategory === filter.subCategory)
+      && (!filter.weaknessTag || drill.weaknessTag === filter.weaknessTag)
+    )));
+  return normalized.length ? normalized : (fallback || []);
+}
+
+async function scoreEssay({ response, rubric, points }) {
+  const maxPoints = Math.max(1, Number(points || 1));
+  const submission = String(response || "").trim();
+  if (!submission) {
+    return { score: 0, rationale: "No written response was submitted.", status: "ai_graded", source: "local_validation" };
+  }
+
+  try {
+    const groq = getGroqClient();
+    const completion = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "You are a careful academic essay evaluator. Return ONLY JSON with exactly two keys: score (number) and rationale (string). Score only against the provided rubric, from 0 to the stated maximum. The rationale must be 2-4 concise sentences explaining the awarded score, naming at least one strength and one specific improvement where applicable. Do not claim the response says something it does not say."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ rubric: String(rubric || "Assess clarity, reasoning, evidence, organization, and relevance."), maxPoints, response: submission })
+        }
+      ]
+    });
+    const raw = completion.choices?.[0]?.message?.content || "{}";
+    const value = JSON.parse(raw);
+    const score = Number(value.score);
+    if (!Number.isFinite(score)) throw new Error("Groq returned no numeric essay score.");
+    const rationale = String(value.rationale || "").trim();
+    if (!rationale) throw new Error("Groq returned no essay rationale.");
+    return { score: Math.max(0, Math.min(maxPoints, score)), rationale, status: "ai_graded", source: "groq" };
+  } catch (error) {
+    console.error("Groq essay grading fallback:", error.message);
+    return { score: null, rationale: "Automatic essay grading is temporarily unavailable. This response remains pending administrator review.", status: "pending_review", source: "unavailable", warning: error.message };
+  }
+}
+
+module.exports = { diagnoseExam, buildAdaptiveGate, scoreEssay };

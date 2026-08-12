@@ -1,35 +1,23 @@
-# Environment variables
+# Environment configuration
 
-Copy the provided templates before setting secrets:
+Copy the safe templates; never commit `.env` files. The backend requires PostgreSQL and does not use a local SQLite path.
 
-```bash
-copy server\.env.example server\.env
-copy client\.env.example client\.env
-```
+| Server variable | Purpose |
+| --- | --- |
+| `NODE_ENV`, `PORT`, `HOST` | Runtime mode, Render-assigned port, and listener host. |
+| `DATABASE_URL`, `PG_SSL` | PostgreSQL connection string and optional explicit SSL enablement. Production enables SSL automatically. |
+| `CLIENT_ORIGIN`, `CLIENT_ORIGINS` | Exact allowed frontend origin, or a comma-separated allowlist for CORS. |
+| `COOKIE_SAME_SITE` | Cookie policy. Use `none` for a separately hosted Vercel frontend and HTTPS Render API. |
+| `JWT_SECRET` | Required signing secret; the server refuses to start without it. |
+| `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_USERNAME`, `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_PASSWORD` | Required administrator bootstrap values. |
+| `GROQ_API_KEY` | Optional Groq integration; AI endpoints use existing fallbacks when unavailable. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional email recovery. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Optional SMS recovery. |
+| `DEV_STUDENT_ID` | Development-only fallback; production rejects unauthenticated student context. |
 
-Never commit either `.env` file. Only variables prefixed with `VITE_` are exposed to browser code; never put credentials in `client/.env`.
+| Client variable | Purpose |
+| --- | --- |
+| `VITE_API_BASE_URL` | Required on Vercel: the public Render backend URL including `/api`. |
+| `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` | Local Vite development server and proxy settings. |
 
-## Server (`server/.env`)
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NODE_ENV` | Yes | `development` locally; `production` when deployed. |
-| `PORT` | Yes | Express API port; defaults to `4000`. |
-| `CLIENT_ORIGIN` | Yes in production | Exact client origin allowed by CORS, such as `https://app.example.com`. |
-| `SQLITE_PATH` | Recommended | Absolute production path for the SQLite database file. |
-| `DEFAULT_ADMIN_EMAIL` | Yes | Initial administrator account email. |
-| `DEFAULT_ADMIN_USERNAME` | Yes | Initial administrator username. |
-| `DEFAULT_ADMIN_NAME` | Yes | Initial administrator display name. |
-| `DEFAULT_ADMIN_PASSWORD` | Yes | Initial administrator password; use a secret manager in production. |
-| `JWT_SECRET` | Yes | Long, unique signing secret for session tokens. |
-| `GROQ_API_KEY` | Optional | Enables AI diagnostics. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional | Enables email password recovery. |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Optional | Enables SMS password recovery. |
-
-## Client (`client/.env`)
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `VITE_DEV_PORT` | Optional | Local Vite port; defaults to `5173`. |
-| `VITE_API_PROXY_TARGET` | Optional | Local API proxy target; defaults to `http://localhost:4000`. |
-| `VITE_API_BASE_URL` | Yes for separate frontend/API domains | API prefix used by Axios. Use `/api` behind one reverse proxy, or `https://api.example.com/api` for a separate API domain. |
+Only `VITE_*` values are exposed to the browser. Never put API keys, database URLs, or JWT secrets in the client environment.

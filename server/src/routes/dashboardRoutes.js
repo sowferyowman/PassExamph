@@ -1,9 +1,9 @@
 const router = require("express").Router();
 const { getDashboardSummary } = require("../services/dashboardService");
 
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const summary = getDashboardSummary(req.user.id);
+    const summary = await getDashboardSummary(req.user.id);
     res.json(summary);
   } catch (error) {
     console.error("Dashboard Service execution failure:", error);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-  import { useNavigate } from "react-router-dom";
+  import { useLocation, useNavigate } from "react-router-dom";
   import { 
     FaArrowLeft, FaBookOpen, FaClock, FaClipboardCheck, FaLayerGroup, 
     FaPlay, FaArrowUp, FaArrowDown, FaMinus, FaSearch
@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
     getCurrentUser,
     getExamBlueprints,
     getStudentDashboard,
-    hydrateDashboardStoreFromServer,
+    hydrateAllFromServer,
     saveExamAttemptForStudent,
     saveIncompleteExamAttemptForStudent,
     scoreBlueprintAttempt,
@@ -67,16 +67,35 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
     return getAttemptsUsedForExam(dashboard, exam) >= maxAttempts;
   }
 
+  function resultsFromReviewedAttempt(attempt) {
+    const items = Array.isArray(attempt?.itemDiagnostics) ? attempt.itemDiagnostics : [];
+    const subjectScores = Array.isArray(attempt?.subjectScores) ? attempt.subjectScores : [];
+    return {
+      finalPct: Number(attempt?.finalPct || 0),
+      correct: items.filter((item) => Number(item.earnedPoints || 0) > 0).length,
+      total: items.length,
+      passingScore: Number(attempt?.passingScore || 75),
+      passed: Boolean(attempt?.passed),
+      subjectScores,
+      weaknesses: subjectScores.filter((subject) => Number(subject.pct || 0) < 80).map((subject) => ({ ...subject, topicFocus: subject.title })),
+      itemDiagnostics: items,
+      hasEssays: false,
+      status: "Reviewed"
+    };
+  }
+
   export default function ExamPage({ historyOnly = false }) {
     const navigate = useNavigate();
+    const location = useLocation();
+    const reviewedAttempt = location.state?.reviewedAttempt;
     const [availableExams, setAvailableExams] = useState([]);
     const [sections, setSections] = useState([]);
     const [blueprint, setBlueprint] = useState(null);
     const [responses, setResponses] = useState([]);
     const [activeSection, setActiveSection] = useState(0);
     const [activeQuestion, setActiveQuestion] = useState(0);
-    const [phase, setPhase] = useState(historyOnly ? "history" : "loading");
-    const [results, setResults] = useState(null);
+    const [phase, setPhase] = useState(reviewedAttempt ? "results" : historyOnly ? "history" : "loading");
+    const [results, setResults] = useState(() => reviewedAttempt ? resultsFromReviewedAttempt(reviewedAttempt) : null);
     const [error, setError] = useState(null);
     const [startedAt, setStartedAt] = useState(null);
     const [questionMetrics, setQuestionMetrics] = useState([]);
@@ -99,20 +118,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
         try {
           const user = getCurrentUser();
           // Exam Records must use the server copy after an admin reviews an essay.
-          await hydrateDashboardStoreFromServer().catch(() => false);
+          await hydrateAllFromServer().catch(() => false);
           const dashboard = getStudentDashboard(user?.email);
           
           // Process exams with additional data
           const processedExams = (dashboard.exams || []).map((exam, index, arr) => {
             const prevExam = arr[index + 1];
             const durationSeconds = Number(exam.durationSeconds ?? dashboard.attempts?.[index]?.durationSeconds ?? 0);
+            const status = exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed");
+            const incomplete = Boolean(exam.incomplete || status === "Incomplete");
             return {
               ...exam,
-              status: exam.status || (exam.hasPendingEssays ? "Pending Review" : "Analyzed"),
+              status,
+              incomplete,
               durationSeconds,
               pointsEarned: exam.earnedPoints,
               passingScore: Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75,
-              passed: typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75),
+              passed: incomplete ? null : (typeof exam.passed === "boolean" ? exam.passed : exam.score >= (Number.isFinite(Number(exam.passingScore)) ? Number(exam.passingScore) : 75)),
               previousScore: prevExam?.score || null,
               examId: exam.examId || dashboard.attempts?.[index]?.examId
             };
@@ -313,27 +335,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
         setPhase("submitting");
         await flushProgress();
         if (sessionRef.current) await completeExamSession(sessionRef.current.id).then(applySession);
-        const user = getCurrentUser();
         const rawResults = scoreBlueprintAttempt(blueprint, responses, { questionMetrics: finalQuestionMetrics });
         const passingScore = Number.isFinite(Number(blueprint.passingScore)) ? Number(blueprint.passingScore) : 75;
-        const passed = rawResults.finalPct >= passingScore;
+        const passed = rawResults.hasEssays ? null : rawResults.finalPct >= passingScore;
         const scoredResults = {
           ...rawResults,
           passingScore,
           passed,
           // For a failed attempt, the next-attempt target is the exact score
           // required by this exam. Omit it after a pass so no stale target is shown.
-          ...(passed ? {} : { targetScore: passingScore })
+          ...(!rawResults.hasEssays && !passed ? { targetScore: passingScore } : {})
         };
         const durationSeconds = startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / 1000)) : 0;
-        const nextDashboard = saveExamAttemptForStudent(user, blueprint, responses, scoredResults, { durationSeconds, questionMetrics: finalQuestionMetrics });
+        const user = getCurrentUser();
+        const nextDashboard = await saveExamAttemptForStudent(user, blueprint, responses, scoredResults, { durationSeconds, questionMetrics: finalQuestionMetrics });
         const essays = nextDashboard.attempts?.[0]?.essayResponses || [];
         if (essays.length) {
           await Promise.all(essays.map(async (essay) => {
             try {
               const scored = await scoreEssay({ response: essay.response, rubric: essay.rubric, points: blueprint.sections[essay.sectionIndex].questions[essay.questionIndex].points || 1 });
               if (Number.isFinite(Number(scored.score))) {
-                updateLatestEssayReview(user.email, essay.id, { aiScore: Number(scored.score), status: "ai_graded" });
+                updateLatestEssayReview(user.email, essay.id, { aiScore: Number(scored.score), aiRationale: scored.rationale || "", status: "ai_graded" });
               }
             } catch (error) {
               console.warn("Essay AI scoring unavailable; kept pending review.", error);
@@ -552,7 +574,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
             <header className="border-b border-slate-200 pb-3">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">Choose an ACET Mock Exam</h1>
-              <p className="mt-1 text-sm text-slate-500">Browse all available admin-published exams, then open the preview screen for your selected test.</p>
             </header>
 
             {/* Compact grid — cards sit side by side instead of stacking full-width */}
@@ -578,14 +599,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
                         selectExam(exam);
                       }
                     }}
-                    className={`group flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 transition duration-200 ${unavailable ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-100 active:scale-[0.99]"}`}
+                    className={`group relative flex flex-col justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all duration-200 ${unavailable ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-md active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"}`}
                   >
                     <div className="min-w-0">
-                      <h2 className="line-clamp-2 break-words text-base font-extrabold leading-snug text-slate-900 transition-colors group-hover:text-blue-600">{exam.title}</h2>
-                      {exam.description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{exam.description}</p>}
+                      {unavailable && <span className="mb-1.5 inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Attempt limit reached</span>}
+                      <h2 className="line-clamp-2 break-words text-base font-semibold leading-snug text-gray-900 transition-colors group-hover:text-blue-600">{exam.title}</h2>
+                      {exam.description && <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-gray-500">{exam.description}</p>}
                     </div>
 
-                    <div className="flex items-stretch justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5">
+                    <div className="flex items-stretch justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                       <MiniFact label="Sections" value={exam.sections?.length || 0} />
                       <span className="w-px shrink-0 bg-slate-200" />
                       <MiniFact label="Items" value={questionCount} />
@@ -850,6 +872,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
                   exams.map((exam, index, arr) => {
                     const trend = getTrend(exam, index, arr);
                     const isPending = exam.status === "Pending Review";
+                    const isIncomplete = Boolean(exam.incomplete || exam.status === "Incomplete");
                     
                     return (
                       <tr 
@@ -866,7 +889,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
                         </td>
                         
                         <td className={`px-6 py-4 font-mono text-sm font-semibold tabular-nums ${dark ? "text-slate-200" : "text-slate-700"}`}>
-                          {exam.status === "Pending Review" ? "—" : `${exam.score}%`}
+                          {isPending || isIncomplete ? "—" : `${exam.score}%`}
                         </td>
                         
                         <td className={`px-6 py-4 font-semibold ${dark ? "text-white/70" : "text-slate-700"}`}>

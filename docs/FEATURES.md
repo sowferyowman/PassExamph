@@ -1,25 +1,14 @@
-# Features
+# Features and data ownership
 
-## Student experience
+Students use server-authenticated accounts, timed exams, results, reviewers, drills, a forum, and notifications. Administrators manage shared reviewer and exam catalogs, student/essay workflows, and drills.
 
-- Account registration, sign-in, sign-out, remembered sessions, and password recovery by email or SMS.
-- Settings for profile, Gmail address, school, and mobile number. Profile changes are shared with the admin dashboard.
-- Timed mock exams with question navigation, scoring, pending essay review, results, diagnostics, and exam records.
-- Learning Materials: administrator-published reviewers, lessons, readings, videos, completion tracking, and resume position.
-- Weakness drills based on performance data.
-- Study points earned from exams and completed learning modules.
-- Community forum with categories, replies, reactions, and a points-based leaderboard.
-- In-app notifications for new or changed learning content, forum replies, and forum reactions.
+| Data | Current owner |
+| --- | --- |
+| Exams and reviewers | `shared_content`; only admins may write through `/api/content`. |
+| Forum threads, replies, reactions | `shared_content`; any authenticated user may interact. |
+| Notifications | `user_notifications`, tied to a recipient. |
+| Auth and recovery | SQLite auth tables and HttpOnly cookies. |
+| Dashboard, reviewer progress, legacy drills | Per-user `app_data` blobs hydrated to browser storage. |
+| Sidebar state and reviewer scroll/resume | Browser-only local storage. |
 
-## Administrator experience
-
-- Student roster, profile viewing/editing, password resets, and exam submission access.
-- Essay review and final-score approval workflow.
-- Exam and reviewer creation, editing, publishing, and removal.
-- Drill-question authoring and import tools.
-- Admin account password and active-session controls.
-
-## Technical features
-
-- React 18, Vite, Tailwind CSS, React Router, Axios, Chart.js, TinyMCE, and KaTeX on the client.
-- Express API with HttpOnly session cookies, CORS controls, Helmet headers, local SQLite persistence, and optional Groq/SMTP/Twilio integrations.
+The client still uses `storage.js` as a cache and domain helper. See [MIGRATION.md](MIGRATION.md) for the boundary between live server records and legacy storage.

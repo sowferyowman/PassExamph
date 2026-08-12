@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { FaArrowRight, FaChartLine, FaExclamationTriangle } from "react-icons/fa";
 import { useDashboardData } from "../hooks/useDashboardData";
@@ -7,6 +7,7 @@ import { getCurrentUser, getNotificationsForUser, markNotificationsRead } from "
 
 export default function DashboardPage() {
   const { data, loading, error, retry } = useDashboardData();
+  const navigate = useNavigate();
   const user = getCurrentUser();
   const displayName = user?.nickname || user?.name || "Student";
   
@@ -38,10 +39,15 @@ export default function DashboardPage() {
     });
   }
 
-  function openNotification(notificationId) {
+  function openNotification(notification) {
     if (!user?.id) return;
-    setNotifications(markNotificationsRead(user.id, notificationId));
+    setNotifications(markNotificationsRead(user.id, notification.id));
     setNotificationsOpen(false);
+    if (notification.type === "essay_reviewed") {
+      const attempt = data?.attempts?.find((item) => item.id === notification.metadata?.attemptId);
+      if (attempt) navigate("/exam", { state: { reviewedAttempt: attempt } });
+      else navigate("/exam-log");
+    }
   }
 
   function formatNotificationTime(timestamp) {

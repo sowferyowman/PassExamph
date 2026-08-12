@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { DatabaseSync } = require("node:sqlite");
 const {
   aiInsight,
   dashboardMetrics,
@@ -19,6 +18,7 @@ let db;
 
 function getDb() {
   if (!db) {
+    const { DatabaseSync } = require("node:sqlite");
     fs.mkdirSync(dataDir, { recursive: true });
     db = new DatabaseSync(dbPath);
     db.exec("PRAGMA journal_mode = WAL");
@@ -121,6 +121,7 @@ function ensureDatabase() {
       rubric TEXT,
       points REAL NOT NULL DEFAULT 1,
       ai_score REAL,
+      ai_rationale TEXT,
       final_score REAL,
       status TEXT NOT NULL DEFAULT 'pending_review',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -189,8 +190,23 @@ function ensureDatabase() {
       PRIMARY KEY (user_id, namespace, data_key),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS shared_content (
+      content_key TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_by INTEGER NOT NULL,
+      FOREIGN KEY(updated_by) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS user_notifications (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
   addColumnIfMissing(database, "essay_responses", "points", "REAL NOT NULL DEFAULT 1");
+  addColumnIfMissing(database, "essay_responses", "ai_rationale", "TEXT");
   addColumnIfMissing(database, "password_reset_tokens", "is_phone", "INTEGER NOT NULL DEFAULT 0");
   database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_subject_student_name ON subjects(student_id, name)");
 

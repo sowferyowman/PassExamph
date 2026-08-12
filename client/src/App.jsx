@@ -31,7 +31,9 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
         </Route>
-        <Route path="/exam" element={<ExamPage />} />
+        <Route path="/exam" element={<DashboardLayout />}>
+          <Route index element={<ExamPage />} />
+        </Route>
         <Route path="/exam-log" element={<DashboardLayout />}>
           <Route index element={<ExamPage historyOnly />} />
         </Route>

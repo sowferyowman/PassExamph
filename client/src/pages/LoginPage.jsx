@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
 import { FaArrowLeft, FaArrowRight, FaEnvelope, FaGoogle, FaLock, FaUser, FaUserPlus } from "react-icons/fa";
-import { hydrateDashboardStoreFromServer, migrateLocalStorageToServer } from "../services/storage";
+import { hydrateAllFromServer, migrateLocalStorageToServer } from "../services/storage";
 
 const SUBMIT_BUTTON_CLASSES =
   "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 h-12 text-sm font-bold text-white hover:bg-white/20 transition-colors";
@@ -12,7 +12,7 @@ export default function LoginPage() {
   const { login, register } = useAuthContext();
   const [mode, setMode] = useState("signin");
   const [message, setMessage] = useState("");
-  const [signInForm, setSignInForm] = useState({ email: "", password: "" });
+  const [signInForm, setSignInForm] = useState({ identifier: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", email: "", username: "", password: "" });
 
@@ -28,12 +28,12 @@ export default function LoginPage() {
     event.preventDefault();
     setMessage("");
     try {
-      const user = await login(signInForm.email.trim(), signInForm.password, rememberMe);
-      const restoredDashboard = await hydrateDashboardStoreFromServer().catch(() => false);
+      const user = await login(signInForm.identifier.trim(), signInForm.password, rememberMe);
+      const restoredDashboard = await hydrateAllFromServer().catch(() => false);
       if (!restoredDashboard) await migrateLocalStorageToServer().catch(() => {});
       routeAfterAuth(user);
     }
-    catch (error) { setMessage(error.response?.data?.error || "Invalid email or password."); }
+    catch (error) { setMessage(error.response?.data?.error || "Invalid username, email, or password."); }
   }
 
   async function handleCreateAccount(event) {
@@ -113,7 +113,7 @@ export default function LoginPage() {
               {mode === "signin" ? "Welcome back" : "Create student account"}
             </h1>
             <p className="mt-1 text-sm text-white/60">
-              {mode === "signin" ? "Sign in with your username." : "Create your student account."}
+              {mode === "signin" ? "Sign in with your username or email." : "Create your student account."}
             </p>
           </div>
 
@@ -121,10 +121,10 @@ export default function LoginPage() {
           {mode === "signin" ? (
             <form onSubmit={handleSignIn} className="space-y-4 mt-8">
               <TextInput
-                label="Username"
-                value={signInForm.email}
-                onChange={(email) => setSignInForm((current) => ({ ...current, email }))}
-                placeholder="Enter your username"
+                label="Username or Email"
+                value={signInForm.identifier}
+                onChange={(identifier) => setSignInForm((current) => ({ ...current, identifier }))}
+                placeholder="Enter your username or email"
                 icon={<FaUser />}
               />
               <TextInput
