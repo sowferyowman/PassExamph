@@ -1,6 +1,4 @@
-# ACET Exam MVP
 
-React/Vite client, Express API, and PostgreSQL backend.
 
 ## Start here
 
@@ -9,7 +7,7 @@ React/Vite client, Express API, and PostgreSQL backend.
 - [Deployment](docs/DEPLOYMENT.md)
 - [PostgreSQL schema and seed](supabase/schema.sql), [seed](supabase/seed.sql)
 
-```powershell
+
 copy server\.env.example server\.env
 copy client\.env.example client\.env
 npm run install:all
