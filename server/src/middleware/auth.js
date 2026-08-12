@@ -16,6 +16,7 @@ async function authenticate(req, res, next) {
 
 async function resolveStudent(req, res, next) {
   if (req.headers.cookie?.includes("accessToken=")) return authenticate(req, res, next);
+  if (process.env.NODE_ENV === "production") return res.status(401).json({ error: "Authentication required." });
   const requestedStudentId = Number.parseInt(req.get("x-student-id") || process.env.DEV_STUDENT_ID || "2", 10);
   const studentId = Number.isInteger(requestedStudentId) && requestedStudentId > 0 ? requestedStudentId : 1;
   const student = (await pool.query("SELECT users.id,users.email,users.username,users.role,users.name,student_profiles.display_name AS \"displayName\",student_profiles.target_school AS \"targetSchool\" FROM users LEFT JOIN student_profiles ON student_profiles.user_id=users.id WHERE users.id=$1", [studentId])).rows[0];

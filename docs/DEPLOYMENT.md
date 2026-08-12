@@ -1,17 +1,39 @@
-# Deployment and security checklist
+# Vercel + Render deployment
 
-Deploy one persistent Express API and make every browser use it. The client uses `VITE_API_BASE_URL || "/api"` (`client/src/api/http.js:4`); SQLite uses `SQLITE_PATH` or `server/data/acet.sqlite` (`server/src/config/database.js:14`). SQLite is appropriate for one persistent API instance, not multiple writers/replicas.
+Do not deploy `server/.env` or client environment files. Configure all values in the Vercel and Render dashboards.
 
-## Before public deployment
+## PostgreSQL setup
 
-- [ ] Set a unique production `JWT_SECRET`. Current code: `const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";` (`server/src/services/authService.js:8`).
-- [ ] Set all `DEFAULT_ADMIN_*` values. Startup requires them (`authService.js:87-100`).
-- [ ] Use a secret manager; never deploy `server/.env`.
-- [ ] Set `NODE_ENV=production`, exact `CLIENT_ORIGIN`, HTTPS, and persistent storage.
-- [ ] Back up SQLite safely, including WAL when copied during writes.
-- [ ] Review `resolveStudent` in `server/src/middleware/auth.js:17-24`: it can use `DEV_STUDENT_ID` when no access cookie exists. Disable/remove this development fallback for sensitive production routes.
-- [ ] Test login/refresh, admin-only writes, notifications, recovery, and large reviewer saves.
+Apply the tracked SQL in this order to the production PostgreSQL/Supabase database:
+
+1. `supabase/schema.sql`
+2. `supabase/seed.sql`
+
+The seed creates or updates the required `exam_blueprint` row. Do not run `supabase/drop-orphaned-tables.sql` as part of normal deployment.
+
+## Render backend
+
+- Root directory: repository root
+- Build command: `npm install`
+- Start command: `npm run server:start`
+- Health check path: `/api/health`
+- Render supplies `PORT`; the server listens on `HOST` or `0.0.0.0`.
+
+Set `NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET`, all `DEFAULT_ADMIN_*` values, `CLIENT_ORIGIN` (or `CLIENT_ORIGINS`), and `COOKIE_SAME_SITE=none`. Set optional Groq, SMTP, and Twilio variables only when those integrations are configured.
+
+## Vercel frontend
+
+- Root directory: `client`
+- Build command: `npm run build`
+- Output directory: `dist` (Vite default)
+- Set `VITE_API_BASE_URL` to the public Render API URL including `/api`, for example `https://your-service.onrender.com/api`.
+
+## CORS and cookies
+
+The frontend uses HttpOnly access and refresh cookies with `withCredentials`. For separately hosted Vercel and Render domains, the backend must allow the exact Vercel origin through `CLIENT_ORIGIN`/`CLIENT_ORIGINS`, and production cookies use `Secure; SameSite=None`.
+
+Some browsers block third-party cookies even with `SameSite=None`; a Vercel `*.vercel.app` frontend and Render `*.onrender.com` API can therefore be unreliable for cookie authentication. Use custom frontend/API domains under the same registrable domain, or make an explicit token-based authentication redesign before public launch.
 
 ## AI without Groq
 
-`GROQ_API_KEY` is optional. `/diagnose-exam` and `/adaptive-gate` return local fallbacks from `aiService.js` when Groq is unavailable. `/score-essay` returns pending review (`score: null`) rather than a 500 (`aiRoutes.js:30-37`; `aiService.js:412-447`).
+`GROQ_API_KEY` is optional. Existing AI diagnostic endpoints fall back locally; essay scoring remains pending review when Groq is unavailable.

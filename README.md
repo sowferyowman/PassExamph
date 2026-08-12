@@ -1,14 +1,13 @@
 # ACET Exam MVP
 
-React/Vite client, Express API, and SQLite handoff.
+React/Vite client, Express API, and PostgreSQL backend.
 
 ## Start here
 
-- [Installation and demo packaging](docs/INSTALLATION.md)
+- [Installation](docs/INSTALLATION.md)
 - [Environment configuration](docs/ENVIRONMENT.md)
-- [Features and data ownership](docs/FEATURES.md)
-- [Deployment and security](docs/DEPLOYMENT.md)
-- [Data audit and migration path](docs/MIGRATION.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [PostgreSQL schema and seed](supabase/schema.sql), [seed](supabase/seed.sql)
 
 ```powershell
 copy server\.env.example server\.env
@@ -17,4 +16,4 @@ npm run install:all
 npm run dev
 ```
 
-The default database is `server/data/acet.sqlite`. Project copies are independent snapshots; cross-device sync requires every client to use the same deployed API/database.
+Local and deployed clients require `DATABASE_URL`; no active application route uses SQLite. Cross-device sync requires every client to use the same deployed API/database.

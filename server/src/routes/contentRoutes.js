@@ -1,108 +1,180 @@
 const router = require("express").Router();
-const { getDb } = require("../config/database");
+const { pool } = require("../config/database.pg");
 const { randomUUID } = require("crypto");
 
-function readContent(key) {
-  const row = getDb().prepare("SELECT payload FROM shared_content WHERE content_key=?").get(key);
+async function readContent(key) {
+  const row = (await pool.query("SELECT payload FROM shared_content WHERE content_key = $1", [key])).rows[0];
   if (!row) return null;
-  return JSON.parse(row.payload);
+  return typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
 }
 
-function writeContent(key, value, userId) {
-  getDb().prepare("INSERT INTO shared_content (content_key,payload,updated_at,updated_by) VALUES (?,?,CURRENT_TIMESTAMP,?) ON CONFLICT(content_key) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at,updated_by=excluded.updated_by").run(key, JSON.stringify(value), userId);
+async function writeContent(key, value, userId) {
+  await pool.query("INSERT INTO shared_content (content_key,payload,updated_at,updated_by) VALUES ($1,$2,CURRENT_TIMESTAMP,$3) ON CONFLICT(content_key) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at,updated_by=excluded.updated_by", [key, JSON.stringify(value), userId]);
 }
 
 function requireAdmin(req, res) { if (req.user.role !== "admin") { res.status(403).json({ error: "Administrator access is required." }); return false; } return true; }
+function userId(req) { return Number(req.user.id); }
 
-function notifyStudentsOfNewContent(type, items) {
+async function notifyStudentsOfNewContent(type, items) {
   if (!items.length) return;
-  const db = getDb();
-  const students = db.prepare("SELECT id FROM users WHERE role='student'").all();
-  const insert = db.prepare("INSERT INTO user_notifications (id,user_id,payload) VALUES (?,?,?)");
+  const students = (await pool.query("SELECT id FROM users WHERE role = $1", ["student"])).rows;
   const timestamp = Date.now();
 
   for (const item of items) {
     const label = type === "new_exam" ? "exam" : "reviewer";
     for (const student of students) {
-      insert.run(randomUUID(), student.id, JSON.stringify({
+      const studentId = Number(student.id);
+      await pool.query("INSERT INTO user_notifications (id,user_id,payload) VALUES ($1,$2,$3)", [randomUUID(), studentId, JSON.stringify({
         id: randomUUID(),
-        userId: student.id,
+        userId: studentId,
         type,
         message: `A new ${label} is available: ${item.title || "Untitled"}.`,
         isRead: false,
         timestamp,
         metadata: { contentId: item.id, contentType: label }
-      }));
+      })]);
     }
   }
 }
 
-function saveCatalogAndNotify(key, items, userId, notificationType) {
-  const previous = readContent(key) || [];
+async function saveCatalogAndNotify(key, items, userId, notificationType) {
+  const previous = await readContent(key) || [];
   const previousIds = new Set(previous.map((item) => item?.id).filter(Boolean));
   const newItems = items.filter((item) => item?.id && !previousIds.has(item.id) && item.status !== "draft");
-  writeContent(key, items, userId);
-  notifyStudentsOfNewContent(notificationType, newItems);
+  await writeContent(key, items, userId);
+  await notifyStudentsOfNewContent(notificationType, newItems);
 }
 
-router.get("/reviewers", (_req, res) => {
-  const record = getDb().prepare("SELECT payload FROM shared_content WHERE content_key='reviewers'").get();
-  if (!record) return res.json({ reviewers: null });
+router.get("/reviewers", async (_req, res, next) => {
   try {
-    const reviewers = JSON.parse(record.payload);
+    const record = (await pool.query("SELECT payload FROM shared_content WHERE content_key = $1", ["reviewers"])).rows[0];
+    if (!record) return res.json({ reviewers: null });
+    const reviewers = typeof record.payload === "string" ? JSON.parse(record.payload) : record.payload;
     res.json({ reviewers: Array.isArray(reviewers) ? reviewers : [] });
   } catch (_error) {
-    res.status(500).json({ error: "The shared reviewer catalog could not be read." });
+    if (_error instanceof SyntaxError) return res.status(500).json({ error: "The shared reviewer catalog could not be read." });
+    next(_error);
   }
 });
 
-router.put("/reviewers", (req, res) => {
+router.put("/reviewers", async (req, res, next) => {
   if (!requireAdmin(req, res)) return;
   const reviewers = req.body?.reviewers;
   if (!Array.isArray(reviewers)) return res.status(400).json({ error: "reviewers must be an array." });
-  saveCatalogAndNotify("reviewers", reviewers, req.user.id, "new_reviewer");
-  res.json({ reviewers });
+  try {
+    await saveCatalogAndNotify("reviewers", reviewers, userId(req), "new_reviewer");
+    res.json({ reviewers });
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.get("/exams", (_req, res) => res.json({ exams: readContent("exams") }));
-router.put("/exams", (req, res) => {
+router.get("/exams", async (_req, res, next) => {
+  try {
+    res.json({ exams: await readContent("exams") });
+  } catch (error) {
+    next(error);
+  }
+});
+router.put("/exams", async (req, res, next) => {
   if (!requireAdmin(req, res)) return;
   if (!Array.isArray(req.body?.exams)) return res.status(400).json({ error: "exams must be an array." });
-  saveCatalogAndNotify("exams", req.body.exams, req.user.id, "new_exam"); res.json({ exams: req.body.exams });
+  try {
+    await saveCatalogAndNotify("exams", req.body.exams, userId(req), "new_exam");
+    res.json({ exams: req.body.exams });
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.get("/forum", (_req, res) => res.json({ threads: readContent("forum") || [] }));
-router.post("/forum/threads", (req, res) => {
-  const threads = readContent("forum") || [];
-  const thread = { id: randomUUID(), title: String(req.body?.title || "").trim(), body: String(req.body?.body || "").trim(), tag: String(req.body?.tag || "Share Knowledge"), author: req.user.nickname || req.user.name || req.user.username || req.user.email, authorId: req.user.id, authorEmail: req.user.email, createdAt: new Date().toISOString(), replies: [], reactions: {} };
+router.get("/forum", async (_req, res, next) => {
+  try {
+    res.json({ threads: await readContent("forum") || [] });
+  } catch (error) {
+    next(error);
+  }
+});
+router.post("/forum/threads", async (req, res, next) => {
+  let threads;
+  try {
+    threads = await readContent("forum") || [];
+  } catch (error) {
+    return next(error);
+  }
+  const currentUserId = userId(req);
+  const thread = { id: randomUUID(), title: String(req.body?.title || "").trim(), body: String(req.body?.body || "").trim(), tag: String(req.body?.tag || "Share Knowledge"), author: req.user.nickname || req.user.name || req.user.username || req.user.email, authorId: currentUserId, authorEmail: req.user.email, createdAt: new Date().toISOString(), replies: [], reactions: {} };
   if (!thread.title || !thread.body) return res.status(400).json({ error: "A title and post body are required." });
-  writeContent("forum", [thread, ...threads], req.user.id); res.status(201).json({ thread, threads: [thread, ...threads] });
+  try {
+    await writeContent("forum", [thread, ...threads], currentUserId);
+    res.status(201).json({ thread, threads: [thread, ...threads] });
+  } catch (error) {
+    next(error);
+  }
 });
-router.post("/forum/threads/:id/replies", (req, res) => {
-  const threads = readContent("forum") || []; const body = String(req.body?.body || "").trim(); if (!body) return res.status(400).json({ error: "A reply is required." });
-  const reply = { id: randomUUID(), author: req.user.nickname || req.user.name || req.user.username || req.user.email, authorId: req.user.id, authorEmail: req.user.email, body, createdAt: new Date().toISOString() };
+router.post("/forum/threads/:id/replies", async (req, res, next) => {
+  let threads;
+  try {
+    threads = await readContent("forum") || [];
+  } catch (error) {
+    return next(error);
+  }
+  const body = String(req.body?.body || "").trim(); if (!body) return res.status(400).json({ error: "A reply is required." });
+  const currentUserId = userId(req);
+  const reply = { id: randomUUID(), author: req.user.nickname || req.user.name || req.user.username || req.user.email, authorId: currentUserId, authorEmail: req.user.email, body, createdAt: new Date().toISOString() };
   let ownerId = null; const updated = threads.map((thread) => { if (thread.id !== req.params.id) return thread; ownerId = thread.authorId; return { ...thread, replies: [...(thread.replies || []), reply] }; });
-  if (!ownerId) return res.status(404).json({ error: "Forum post not found." }); writeContent("forum", updated, req.user.id);
-  if (ownerId !== req.user.id) getDb().prepare("INSERT INTO user_notifications (id,user_id,payload) VALUES (?,?,?)").run(randomUUID(), ownerId, JSON.stringify({ id: randomUUID(), userId: ownerId, type: "new_reply", message: `${reply.author} replied to your post.`, isRead: false, timestamp: Date.now(), metadata: { threadId: req.params.id, replyId: reply.id } }));
-  res.json({ reply, threads: updated });
+  if (!ownerId) return res.status(404).json({ error: "Forum post not found." });
+  try {
+    await writeContent("forum", updated, currentUserId);
+    if (ownerId !== currentUserId) await pool.query("INSERT INTO user_notifications (id,user_id,payload) VALUES ($1,$2,$3)", [randomUUID(), ownerId, JSON.stringify({ id: randomUUID(), userId: ownerId, type: "new_reply", message: `${reply.author} replied to your post.`, isRead: false, timestamp: Date.now(), metadata: { threadId: req.params.id, replyId: reply.id } })]);
+    res.json({ reply, threads: updated });
+  } catch (error) {
+    next(error);
+  }
 });
-router.post("/forum/threads/:id/reactions", (req, res) => {
-  const threads = readContent("forum") || []; const type = String(req.body?.type || "like"); let ownerId = null; let active = false;
-  const updated = threads.map((thread) => { if (thread.id !== req.params.id) return thread; ownerId = thread.authorId; const current = thread.reactions?.[type]; const ids = new Set(Array.isArray(current) ? current : current?.userIds || []); active = !ids.has(req.user.id); active ? ids.add(req.user.id) : ids.delete(req.user.id); return { ...thread, reactions: { ...(thread.reactions || {}), [type]: { count: ids.size, userIds: [...ids] } } }; });
-  if (!ownerId) return res.status(404).json({ error: "Forum post not found." }); writeContent("forum", updated, req.user.id);
-  if (active && ownerId !== req.user.id) getDb().prepare("INSERT INTO user_notifications (id,user_id,payload) VALUES (?,?,?)").run(randomUUID(), ownerId, JSON.stringify({ id: randomUUID(), userId: ownerId, type: "post_reaction", message: "Someone reacted to your post.", isRead: false, timestamp: Date.now(), metadata: { threadId: req.params.id, reactionType: type } }));
-  res.json({ threads: updated });
+router.post("/forum/threads/:id/reactions", async (req, res, next) => {
+  let threads;
+  try {
+    threads = await readContent("forum") || [];
+  } catch (error) {
+    return next(error);
+  }
+  const currentUserId = userId(req);
+  const type = String(req.body?.type || "like"); let ownerId = null; let active = false;
+  const updated = threads.map((thread) => { if (thread.id !== req.params.id) return thread; ownerId = thread.authorId; const current = thread.reactions?.[type]; const ids = new Set(Array.isArray(current) ? current : current?.userIds || []); active = !ids.has(currentUserId); active ? ids.add(currentUserId) : ids.delete(currentUserId); return { ...thread, reactions: { ...(thread.reactions || {}), [type]: { count: ids.size, userIds: [...ids] } } }; });
+  if (!ownerId) return res.status(404).json({ error: "Forum post not found." });
+  try {
+    await writeContent("forum", updated, currentUserId);
+    if (active && ownerId !== currentUserId) await pool.query("INSERT INTO user_notifications (id,user_id,payload) VALUES ($1,$2,$3)", [randomUUID(), ownerId, JSON.stringify({ id: randomUUID(), userId: ownerId, type: "post_reaction", message: "Someone reacted to your post.", isRead: false, timestamp: Date.now(), metadata: { threadId: req.params.id, reactionType: type } })]);
+    res.json({ threads: updated });
+  } catch (error) {
+    next(error);
+  }
 });
-router.get("/notifications", (req, res) => { const rows = getDb().prepare("SELECT payload FROM user_notifications WHERE user_id=? ORDER BY created_at DESC").all(req.user.id); res.json({ notifications: rows.map((row) => ({ ...JSON.parse(row.payload), userId: req.user.id })) }); });
-router.patch("/notifications/read", (req, res) => {
+router.get("/notifications", async (req, res, next) => {
+  try {
+    const currentUserId = userId(req);
+    const rows = (await pool.query("SELECT payload FROM user_notifications WHERE user_id = $1 ORDER BY created_at DESC", [currentUserId])).rows;
+    res.json({ notifications: rows.map((row) => ({ ...(typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload), userId: currentUserId })) });
+  } catch (error) {
+    next(error);
+  }
+});
+router.patch("/notifications/read", async (req, res, next) => {
   const notificationId = req.body?.notificationId;
-  const db = getDb();
-  const rows = notificationId
-    ? db.prepare("SELECT id,payload FROM user_notifications WHERE user_id=?").all(req.user.id).filter((row) => JSON.parse(row.payload).id === notificationId)
-    : db.prepare("SELECT id,payload FROM user_notifications WHERE user_id=?").all(req.user.id);
-  const update = db.prepare("UPDATE user_notifications SET payload=? WHERE id=? AND user_id=?");
-  rows.forEach((row) => update.run(JSON.stringify({ ...JSON.parse(row.payload), userId: req.user.id, isRead: true }), row.id, req.user.id));
-  res.json({ updated: rows.length });
+  try {
+    const currentUserId = userId(req);
+    const allRows = (await pool.query("SELECT id,payload FROM user_notifications WHERE user_id = $1", [currentUserId])).rows;
+    const rows = notificationId
+      ? allRows.filter((row) => (typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload).id === notificationId)
+      : allRows;
+    for (const row of rows) {
+      const payload = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+      await pool.query("UPDATE user_notifications SET payload = $1 WHERE id = $2 AND user_id = $3", [JSON.stringify({ ...payload, userId: currentUserId, isRead: true }), row.id, currentUserId]);
+    }
+    res.json({ updated: rows.length });
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;

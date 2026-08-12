@@ -5,7 +5,8 @@ const { sendEmail } = require("./emailService");
 
 const ACCESS_TTL = 8 * 60 * 60 * 1000;
 const REFRESH_TTL = 7 * 24 * 60 * 60 * 1000;
-const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET is required in the environment.");
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
 const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL;
 const DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME;
@@ -86,7 +87,7 @@ async function publicUser(user) {
 
 async function ensureDefaultAdmin() {
   if (!DEFAULT_ADMIN_PASSWORD || !DEFAULT_ADMIN_EMAIL || !DEFAULT_ADMIN_USERNAME || !DEFAULT_ADMIN_NAME) {
-    throw new Error("DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_NAME, and DEFAULT_ADMIN_PASSWORD are required in server/.env");
+    throw new Error("DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_NAME, and DEFAULT_ADMIN_PASSWORD are required in the environment.");
   }
   const existing = (await pool.query("SELECT * FROM users WHERE email = $1", [DEFAULT_ADMIN_EMAIL])).rows[0];
   if (!existing) {

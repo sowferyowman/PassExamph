@@ -1,10 +1,10 @@
-# Data audit and migration path
+# PostgreSQL migration status
 
-This is an audit of the current codebase.
+The active backend uses PostgreSQL through `server/src/config/database.pg.js`. The legacy SQLite helper remains in `server/src/config/database.js` for historical reference only; no active route or service imports it.
 
 ## 1. Authentication
 
-Authentication is server-side. `server/src/services/authService.js` uses `users`, `sessions`, `login_history`, `password_reset_tokens`, and `email_verification_tokens`; their schema is created in `server/src/config/database.js:33-41` and `180-183`. Auth routes set HttpOnly cookies (`server/src/routes/authRoutes.js:16-32`), while `middleware/auth.js:8-14` verifies the access-token cookie and reloads the user from SQLite.
+Authentication is server-side. `server/src/services/authService.js` uses `users`, `sessions`, `login_history`, `password_reset_tokens`, and `email_verification_tokens`; their PostgreSQL schema is in `supabase/schema.sql`. Auth routes set HttpOnly cookies, while `middleware/auth.js` verifies the access-token cookie and reloads the user from PostgreSQL.
 
 The client does keep public UI snapshots in localStorage: `currentActiveUser` and `exams_ph_current_user` (`client/src/services/storage.js:3-4`, `453-454`). They are not the server authorization credential, but they are still used by UI helpers.
 
@@ -16,7 +16,7 @@ These tables are live, not seed-only. The client nevertheless primarily saves cu
 
 ## 3. Shared content
 
-`shared_content` stores shared reviewers, exams, and forum payloads (`database.js:193-199`). `user_notifications` stores recipient-scoped notifications (`database.js:200-206`). `/api/content` uses `authenticate` (`server.js:29`). `contentRoutes.js:15`, `59-72` restrict reviewer and exam catalog writes to admins. Forum thread/reply/reaction routes at `74-94` are available to authenticated users.
+`shared_content` stores shared reviewers, exams, and forum payloads. `user_notifications` stores recipient-scoped notifications. Both are PostgreSQL JSONB tables in `supabase/schema.sql`.
 
 ## 4. Generic blob store and live browser keys
 
@@ -41,15 +41,11 @@ The following names have zero current references in `client/src` and `server/src
 
 ## 5. Cross-device limit
 
-There is no built-in cloud sync. `http.js:4` uses `VITE_API_BASE_URL || "/api"`; `database.js:14` defaults to a local SQLite path. Devices share live data only when they call the same running/deployed API/database. Copying the repository copies a database snapshot.
+`VITE_API_BASE_URL` selects the deployed API base URL. Devices share live data when they call the same deployed API and PostgreSQL database.
 
-## 6. Supabase/Firebase migration sequence
+## 6. Deployment sequence
 
-1. Move identity/profile ownership to Supabase Auth + profiles or Firebase Auth + user documents.
-2. Replace `shared_content` with typed exam, reviewer, forum-thread, reply, and reaction tables/collections. Enforce admin writes with RLS/security rules.
-3. Move notifications to recipient rows/documents and use subscriptions for real-time badges.
-4. Replace `app_data` blobs with typed attempts, scores, reviewer progress, drill sessions, and dashboard projections.
-5. Choose one authoritative exam/dashboard model; retire or migrate duplicate `exam_logs`/`progression` paths deliberately.
-6. Replace `writeJson` fire-and-forget requests with explicit awaited repository/API calls.
-
-Run a backup, idempotent per-user migration, validation pass, and rollback plan before cutover.
+1. Apply `supabase/schema.sql`.
+2. Apply `supabase/seed.sql`.
+3. Configure Render with `DATABASE_URL` and server environment variables.
+4. Configure Vercel with `VITE_API_BASE_URL` pointing to the Render `/api` URL.

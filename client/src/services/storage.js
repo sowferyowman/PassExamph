@@ -1,4 +1,4 @@
-import http from "../api/http";
+import http, { apiUrl } from "../api/http";
 
 const SESSION_KEY = "exams_ph_current_user";
 const CURRENT_ACTIVE_USER_KEY = "currentActiveUser";
@@ -344,14 +344,14 @@ function readJson(key, fallback) {
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
   if (typeof window !== "undefined" && key !== REVIEWERS_KEY && !SERVER_AUTH_KEYS?.has?.(key)) {
-    fetch(`/api/data/legacy/${encodeURIComponent(key)}`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }).catch(() => {});
+    fetch(apiUrl(`/data/legacy/${encodeURIComponent(key)}`), { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }).catch(() => {});
   }
 }
 
 const SERVER_AUTH_KEYS = new Set([SESSION_KEY, CURRENT_ACTIVE_USER_KEY]);
 
 export async function hydrateAllFromServer() {
-  const response = await fetch("/api/data/legacy", { credentials: "include" });
+  const response = await fetch(apiUrl("/data/legacy"), { credentials: "include" });
   if (!response.ok) return false;
   const records = await response.json();
   if (!Array.isArray(records)) return false;
@@ -388,7 +388,7 @@ export async function migrateLocalStorageToServer() {
     if (value !== undefined) records.push({ namespace: "legacy", key, value });
   }
   if (!records.length) return { migrated: 0 };
-  const response = await fetch("/api/data/migrate", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records }) });
+  const response = await fetch(apiUrl("/data/migrate"), { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records }) });
   if (!response.ok) throw new Error("Data migration failed");
   localStorage.setItem(`acet_auth_migrated_${user.email}`, new Date().toISOString());
   return response.json();
@@ -1273,7 +1273,7 @@ function buildCommunityRewardSummary(email, dashboard) {
 // Use this when displaying global standings so every account is ranked against
 // the server's current, per-student records.
 export async function getFreshLeaderboard(currentEmail) {
-  const response = await fetch("/api/data/leaderboard", {
+  const response = await fetch(apiUrl("/data/leaderboard"), {
     credentials: "include",
     cache: "no-store"
   });

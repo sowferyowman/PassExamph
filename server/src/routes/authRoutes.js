@@ -13,7 +13,11 @@ function rateLimit(req, res, next) {
   next();
 }
 
-function cookieOptions(maxAge) { return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", ...(maxAge ? { maxAge } : {}), path: "/" }; }
+const isProduction = process.env.NODE_ENV === "production";
+const configuredSameSite = String(process.env.COOKIE_SAME_SITE || (isProduction ? "none" : "lax")).toLowerCase();
+const cookieSameSite = ["lax", "strict", "none"].includes(configuredSameSite) ? configuredSameSite : (isProduction ? "none" : "lax");
+function cookieOptions(maxAge) { return { httpOnly: true, secure: isProduction, sameSite: cookieSameSite, ...(maxAge ? { maxAge } : {}), path: "/" }; }
+function fallbackCookie(name, value, maxAge) { return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=${cookieSameSite[0].toUpperCase()}${cookieSameSite.slice(1)}; Path=/;${isProduction ? " Secure;" : ""}${maxAge === undefined ? "" : ` Max-Age=${maxAge};`}`; }
 function setSessionCookies(res, session, rememberMe = true) {
   const accessOptions = cookieOptions(rememberMe ? auth.ACCESS_TTL : undefined);
   const refreshOptions = cookieOptions(rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined);
@@ -23,13 +27,10 @@ function setSessionCookies(res, session, rememberMe = true) {
     if (rememberMe) res.cookie("rememberMe", "1", cookieOptions(7 * 24 * 60 * 60 * 1000));
     else res.clearCookie("rememberMe", cookieOptions());
   } else {
-    const persistent = rememberMe ? "; Max-Age=900" : "";
-    const persistentRefresh = rememberMe ? "; Max-Age=604800" : "";
-    const preference = rememberMe ? "rememberMe=1; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800" : "rememberMe=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0";
-    res.setHeader("Set-Cookie", [`accessToken=${encodeURIComponent(session.accessToken)}; HttpOnly; SameSite=Lax; Path=/${persistent}`, `refreshToken=${encodeURIComponent(session.refreshToken)}; HttpOnly; SameSite=Lax; Path=/${persistentRefresh}`, preference]);
+    res.setHeader("Set-Cookie", [fallbackCookie("accessToken", session.accessToken, rememberMe ? 900 : undefined), fallbackCookie("refreshToken", session.refreshToken, rememberMe ? 604800 : undefined), fallbackCookie("rememberMe", rememberMe ? "1" : "", rememberMe ? 604800 : 0)]);
   }
 }
-function clearCookies(res) { if (typeof res.clearCookie === "function") { res.clearCookie("accessToken", { httpOnly: true, sameSite: "lax", path: "/" }); res.clearCookie("refreshToken", { httpOnly: true, sameSite: "lax", path: "/" }); res.clearCookie("rememberMe", { httpOnly: true, sameSite: "lax", path: "/" }); } else res.setHeader("Set-Cookie", ["accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0", "refreshToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0", "rememberMe=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"]); }
+function clearCookies(res) { if (typeof res.clearCookie === "function") { res.clearCookie("accessToken", cookieOptions()); res.clearCookie("refreshToken", cookieOptions()); res.clearCookie("rememberMe", cookieOptions()); } else res.setHeader("Set-Cookie", [fallbackCookie("accessToken", "", 0), fallbackCookie("refreshToken", "", 0), fallbackCookie("rememberMe", "", 0)]); }
 function error(res, value) { return res.status(value.status || 400).json({ error: value.message }); }
 
 router.post("/register", async (req, res) => { try { const { email, username, password, name } = req.body || {}; if (!email || !username || !password || password.length < 8) return res.status(400).json({ error: "Email, username, and a password of at least 8 characters are required." }); const result = await auth.register({ email: email.trim(), username: username.trim(), password, name: String(name || username).trim() }, req); setSessionCookies(res, result); res.status(201).json({ user: result.user, verificationToken: process.env.NODE_ENV === "production" ? undefined : result.verificationToken, message: "Account created. Verify your email to activate it." }); } catch (e) { error(res, e); } });

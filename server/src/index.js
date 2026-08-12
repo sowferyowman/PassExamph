@@ -5,9 +5,10 @@ const app = require("./server");
 const { ensureDefaultAdmin } = require("./services/authService");
 
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || "0.0.0.0";
 
 ensureDefaultAdmin().catch((error) => console.error(`Auth bootstrap failed: ${error.message}`));
 
-app.listen(PORT, () => {
-  console.log(`ACET API listening on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`ACET API listening on http://${HOST}:${PORT}`);
 });
