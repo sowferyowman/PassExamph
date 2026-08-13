@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaAngleDoubleLeft, FaAngleDoubleRight, FaBookOpen, FaBullseye, FaClipboardList, FaCog, FaGraduationCap, FaSignOutAlt, FaTachometerAlt } from "react-icons/fa";
+import { FaAngleDoubleLeft, FaAngleDoubleRight, FaBars, FaBookOpen, FaBullseye, FaClipboardList, FaCog, FaGraduationCap, FaSignOutAlt, FaTachometerAlt, FaTimes } from "react-icons/fa";
 import { getCurrentUser, logoutUser } from "../services/storage";
 
 const SIDEBAR_PREFERENCE_KEY = "acetAdminSidebarCollapsed";
@@ -11,6 +11,15 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
   const displayName = user?.name || "Admin Workspace";
   const initials = getInitials(displayName);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navigationItems = [
+    ["dashboard", "Dashboard", FaTachometerAlt, () => navigate("/admin/dashboard")],
+    ["exam", "Create Exam", FaClipboardList, () => goToBuilder("exam")],
+    ["reviewer", "Create Reviewer", FaBookOpen, () => goToBuilder("reviewer")],
+    ["drill", "Create Drill", FaBullseye, () => navigate("/admin/drills")],
+    ["settings", "Settings", FaCog, () => navigate("/admin/settings")]
+  ];
 
   function toggleSidebar() {
     const newState = !sidebarCollapsed;
@@ -27,6 +36,20 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
     logoutUser();
     navigate("/login", { replace: true });
   }
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
 
   return (
     <>
@@ -99,19 +122,65 @@ export default function AdminSidebar({ active = "exam", onModeChange }) {
         }
       `}</style>
 
-      <nav className="sticky top-0 z-30 flex gap-1 overflow-x-auto border-b border-slate-200 bg-white p-2 shadow-sm md:hidden" aria-label="Admin navigation">
-        {[
-          ["dashboard", "Dashboard", FaTachometerAlt, () => navigate("/admin/dashboard")],
-          ["exam", "Exams", FaClipboardList, () => goToBuilder("exam")],
-          ["reviewer", "Materials", FaBookOpen, () => goToBuilder("reviewer")],
-          ["drill", "Drills", FaBullseye, () => navigate("/admin/drills")],
-          ["settings", "Settings", FaCog, () => navigate("/admin/settings")]
-        ].map(([key, label, Icon, onClick]) => (
-          <button key={key} type="button" onClick={onClick} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-black ${active === key ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>
-            <Icon /> {label}
-          </button>
-        ))}
-      </nav>
+      <header className="app-topbar md:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="rounded-lg border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+          aria-label="Open navigation menu"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="admin-mobile-navigation"
+        >
+          <FaBars />
+        </button>
+      </header>
+
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} aria-label="Close navigation menu" />
+          <aside id="admin-mobile-navigation" className="sidebar-gradient relative flex h-full w-[min(20rem,88vw)] flex-col text-white shadow-2xl" aria-label="Admin navigation">
+            <div className="flex items-center justify-between border-b border-white/5 p-5">
+              <div className="flex items-center gap-3 select-none">
+                <div className="rounded-xl border border-white/10 bg-white/10 p-2 text-white"><FaGraduationCap className="h-6 w-6" /></div>
+                <div>
+                  <p className="text-lg font-black leading-none tracking-tight">ACET</p>
+                  <p className="mt-1 text-[9px] font-black tracking-[0.25em] text-blue-400">ADMIN PANEL</p>
+                </div>
+              </div>
+              <button className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20" onClick={() => setMobileMenuOpen(false)} aria-label="Close navigation menu">
+                <FaTimes />
+              </button>
+            </div>
+
+            <nav className="flex-1 space-y-1.5 overflow-y-auto p-4">
+              {navigationItems.map(([key, label, Icon, onClick]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); onClick(); }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${active === key ? "border border-white/10 bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5 hover:text-white"}`}
+                >
+                  <Icon className="text-base" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="profile-container border-t border-white/5 p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 text-sm font-black text-white">{initials}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-white">{displayName}</p>
+                  <p className="truncate text-[11px] font-semibold text-blue-400">Admin Account</p>
+                </div>
+                <button onClick={logout} className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white" aria-label="Log out" title="Log out">
+                  <FaSignOutAlt />
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       <aside className={`sidebar-gradient hidden h-screen shrink-0 flex-col text-white shadow-xl border-r border-white/5 transition-[width] duration-200 md:flex ${sidebarCollapsed ? "w-20" : "w-64"}`}>
         
