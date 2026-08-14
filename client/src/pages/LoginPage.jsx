@@ -12,6 +12,7 @@ export default function LoginPage() {
   const { login, register } = useAuthContext();
   const [mode, setMode] = useState("signin");
   const [message, setMessage] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [signInForm, setSignInForm] = useState({ identifier: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", email: "", username: "", password: "" });
@@ -26,7 +27,9 @@ export default function LoginPage() {
 
   async function handleSignIn(event) {
     event.preventDefault();
+    if (isSigningIn) return;
     setMessage("");
+    setIsSigningIn(true);
     try {
       const user = await login(signInForm.identifier.trim(), signInForm.password, rememberMe);
       const restoredDashboard = await hydrateAllFromServer().catch(() => false);
@@ -34,6 +37,7 @@ export default function LoginPage() {
       routeAfterAuth(user);
     }
     catch (error) { setMessage(error.response?.data?.error || "Invalid username, email, or password."); }
+    finally { setIsSigningIn(false); }
   }
 
   async function handleCreateAccount(event) {
@@ -82,11 +86,33 @@ export default function LoginPage() {
         .blue-input::placeholder {
           color: #71717a !important;
         }
+
+        /* From Uiverse.io by gustavofusco */
+        .pencil { display: block; width: 7em; height: 7em; }
+        .pencil__body1, .pencil__body2, .pencil__body3, .pencil__eraser, .pencil__eraser-skew, .pencil__point, .pencil__rotate, .pencil__stroke { animation-duration: 3s; animation-timing-function: linear; animation-iteration-count: infinite; }
+        .pencil__body1, .pencil__body2, .pencil__body3 { transform: rotate(-90deg); }
+        .pencil__body1 { animation-name: pencilBody1; }
+        .pencil__body2 { animation-name: pencilBody2; }
+        .pencil__body3 { animation-name: pencilBody3; }
+        .pencil__eraser { animation-name: pencilEraser; transform: rotate(-90deg) translate(49px,0); }
+        .pencil__eraser-skew { animation-name: pencilEraserSkew; animation-timing-function: ease-in-out; }
+        .pencil__point { animation-name: pencilPoint; transform: rotate(-90deg) translate(49px,-30px); }
+        .pencil__rotate { animation-name: pencilRotate; }
+        .pencil__stroke { animation-name: pencilStroke; transform: translate(100px,100px) rotate(-113deg); }
+        @keyframes pencilBody1 { from, to { stroke-dashoffset: 351.86; transform: rotate(-90deg); } 50% { stroke-dashoffset: 150.8; transform: rotate(-225deg); } }
+        @keyframes pencilBody2 { from, to { stroke-dashoffset: 406.84; transform: rotate(-90deg); } 50% { stroke-dashoffset: 174.36; transform: rotate(-225deg); } }
+        @keyframes pencilBody3 { from, to { stroke-dashoffset: 296.88; transform: rotate(-90deg); } 50% { stroke-dashoffset: 127.23; transform: rotate(-225deg); } }
+        @keyframes pencilEraser { from, to { transform: rotate(-45deg) translate(49px,0); } 50% { transform: rotate(0deg) translate(49px,0); } }
+        @keyframes pencilEraserSkew { from, 32.5%, 67.5%, to { transform: skewX(0); } 35%, 65% { transform: skewX(-4deg); } 37.5%, 62.5% { transform: skewX(8deg); } 40%, 45%, 50%, 55%, 60% { transform: skewX(-15deg); } 42.5%, 47.5%, 52.5%, 57.5% { transform: skewX(15deg); } }
+        @keyframes pencilPoint { from, to { transform: rotate(-90deg) translate(49px,-30px); } 50% { transform: rotate(-225deg) translate(49px,-30px); } }
+        @keyframes pencilRotate { from { transform: translate(100px,100px) rotate(0); } to { transform: translate(100px,100px) rotate(720deg); } }
+        @keyframes pencilStroke { from { stroke-dashoffset: 439.82; transform: translate(100px,100px) rotate(-113deg); } 50% { stroke-dashoffset: 164.93; transform: translate(100px,100px) rotate(-113deg); } 75%, to { stroke-dashoffset: 439.82; transform: translate(100px,100px) rotate(112deg); } }
       `}</style>
 
       <main className="studio-background relative min-h-screen w-full overflow-hidden text-white flex items-center justify-center p-4">
         {/* Main Sign-In Card Container */}
         <div className="login-card relative w-full max-w-lg rounded-2xl glass-card p-8 shadow-2xl md:p-10">
+          {isSigningIn && <SignInLoader />}
 
           {/* ← Back Button */}
           <div className="absolute top-8 left-8 md:top-10 md:left-10">
@@ -119,7 +145,7 @@ export default function LoginPage() {
 
           {/* Render Active Forms */}
           {mode === "signin" ? (
-            <form onSubmit={handleSignIn} className="space-y-4 mt-8">
+            <form onSubmit={handleSignIn} className="space-y-4 mt-8" aria-busy={isSigningIn}>
               <TextInput
                 label="Username or Email"
                 value={signInForm.identifier}
@@ -139,8 +165,8 @@ export default function LoginPage() {
                 <label className="flex items-center gap-2 text-white/60"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded accent-sky-400" /> Remember Me</label>
                 <RecoveryLink onClick={() => navigate("/forgot-password-sms")} />
               </div>
-              <button type="submit" className={SUBMIT_BUTTON_CLASSES}>
-                Sign In
+              <button type="submit" disabled={isSigningIn} className={`${SUBMIT_BUTTON_CLASSES} disabled:cursor-wait disabled:opacity-70`}>
+                {isSigningIn ? "Signing in..." : "Sign In"}
               </button>
             </form>
           ) : (
@@ -216,6 +242,24 @@ export default function LoginPage() {
         </div>
       </main>
     </>
+  );
+}
+
+function SignInLoader() {
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#001529]/90 backdrop-blur-sm" role="status" aria-live="polite">
+      <svg className="pencil" viewBox="0 0 200 200" aria-hidden="true">
+        <g className="pencil__rotate">
+          <path className="pencil__body1" d="M100 20a80 80 0 0 1 0 160" fill="none" stroke="#facc15" strokeWidth="30" strokeDasharray="251.33 251.33" />
+          <path className="pencil__body2" d="M100 20a80 80 0 0 0 0 160" fill="none" stroke="#eab308" strokeWidth="30" strokeDasharray="251.33 251.33" />
+          <path className="pencil__body3" d="M100 35a65 65 0 0 1 0 130" fill="none" stroke="#fde047" strokeWidth="10" strokeDasharray="204.2 204.2" />
+          <g className="pencil__eraser"><g className="pencil__eraser-skew"><rect x="84" y="20" width="32" height="28" rx="5" fill="#fda4af" /></g></g>
+          <g className="pencil__point"><path d="M100 10 84 42h32Z" fill="#f5d0a9" /><path d="m100 10-5 10h10Z" fill="#1f2937" /></g>
+        </g>
+        <path className="pencil__stroke" d="M38 138c34 34 90 34 124 0" fill="none" stroke="#fff" strokeLinecap="round" strokeWidth="3" strokeDasharray="220 220" />
+      </svg>
+      <p className="mt-3 text-sm font-bold text-sky-200">Signing you in…</p>
+    </div>
   );
 }
 
