@@ -1031,7 +1031,6 @@ export default function ExamsLanding() {
           <div className="hero-grid"></div>
           <div className="hero-photo-wrap photo-frame">
             <img src="/images/image-hero.jpg" alt="Student preparing for entrance exams" />
-            <span className="photo-tag"><span className="rd">●</span>FIG. 00 — ACET</span>
           </div>
           <div className="eyebrow">
             PASSEXAMS.PH <span className="rd">·</span> ADAPTIVE DIAGNOSTIC ECOSYSTEM
@@ -1072,7 +1071,6 @@ export default function ExamsLanding() {
             </div>
             <div className="s1-photo-wrap photo-frame">
               <img src="/images/build-your-familiarity.jpg" alt="Building familiarity with the exam format" />
-              <span className="photo-tag"><span className="rd">●</span>FIG. 01 — PREP</span>
             </div>
             <div className="scene-content">
               <div className="scene-tag">
@@ -1144,7 +1142,6 @@ export default function ExamsLanding() {
             <div className="scene-bg"></div>
             <div className="s3-photo-wrap photo-frame">
               <img src="/images/measure-your-readiness.jpg" alt="Measuring exam readiness" />
-              <span className="photo-tag"><span className="rd">●</span>FIG. 03 — DIAGNOSTIC</span>
             </div>
             <div className="radar-wrap">
               <svg id="radar1" viewBox="0 0 300 300"></svg>
@@ -1191,7 +1188,6 @@ export default function ExamsLanding() {
             <div className="scene-bg"></div>
             <div className="s5-photo-wrap photo-frame">
               <img src="/images/unlimited-practice-tests.jpg" alt="Unlimited practice tests" />
-              <span className="photo-tag"><span className="rd">●</span>FIG. 05 — PRACTICE</span>
             </div>
             <div className="deck" id="deck">
               <div className="drill">
@@ -1441,7 +1437,7 @@ export default function ExamsLanding() {
         </section>
 
         <footer>
-          <span>PassExams.ph — Adaptive Diagnostic Intelligence</span>
+          <span>PassExams.ph — Adaptive Diagnostic Ecosystem</span>
           <span>© 2026 PassExams.ph</span>
         </footer>
       </div>
