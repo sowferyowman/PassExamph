@@ -5,6 +5,8 @@ const { sendEmail } = require("./emailService");
 
 const ACCESS_TTL = 8 * 60 * 60 * 1000;
 const REFRESH_TTL = 7 * 24 * 60 * 60 * 1000;
+const MAX_FAILED_LOGIN_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_TTL = 10 * 60 * 1000;
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET is required in the environment.");
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
@@ -44,7 +46,9 @@ function verifyToken(value) {
   const [header, body, signature] = String(value || "").split(".");
   if (!header || !body || !signature) throw Object.assign(new Error("Invalid token"), { status: 401 });
   const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${body}`).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ) throw Object.assign(new Error("Invalid token"), { status: 401 });
+  const suppliedSignature = Buffer.from(signature);
+  const expectedSignature = Buffer.from(expected);
+  if (suppliedSignature.length !== expectedSignature.length || !crypto.timingSafeEqual(suppliedSignature, expectedSignature)) throw Object.assign(new Error("Invalid token"), { status: 401 });
   let payload;
   try {
     payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
@@ -119,10 +123,10 @@ async function login(identifier, password, req) {
   if (user.locked_until && new Date(user.locked_until) > new Date()) throw Object.assign(new Error("Account temporarily locked. Try again later."), { status: 423 });
   if (!(await verifyPassword(password, user.password_hash, user.password_salt))) {
     const failures = Number(user.failed_login_attempts || 0) + 1;
-    const locked = failures >= 5 ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+    const locked = failures >= MAX_FAILED_LOGIN_ATTEMPTS ? new Date(Date.now() + LOGIN_LOCKOUT_TTL).toISOString() : null;
     await pool.query("UPDATE users SET failed_login_attempts=$1, locked_until=$2 WHERE id=$3", [failures, locked, user.id]);
     await recordLogin(user.id, user.email, req, "failure");
-    throw Object.assign(new Error(locked ? "Account temporarily locked for 30 minutes." : "Invalid credentials."), { status: 401 });
+    throw Object.assign(new Error(locked ? "Account temporarily locked for 10 minutes." : "Invalid credentials."), { status: 401 });
   }
   const meta = requestMeta(req);
   await pool.query("UPDATE users SET failed_login_attempts=0, locked_until=NULL,last_login_at=CURRENT_TIMESTAMP,last_login_ip=$1 WHERE id=$2", [meta.ip, user.id]);
@@ -141,10 +145,11 @@ async function createSession(user, meta) {
 async function refresh(refreshToken, req) {
   if (!refreshToken) throw Object.assign(new Error("Refresh token is missing."), { status: 401 });
   const payload = verifyToken(refreshToken);
-  const session = (await pool.query("SELECT * FROM sessions WHERE id=$1 AND refresh_token=$2 AND is_revoked=FALSE", [payload.sid, refreshToken])).rows[0];
+  if (payload.type !== "refresh") throw Object.assign(new Error("Invalid token"), { status: 401 });
+  const session = (await pool.query("UPDATE sessions SET is_revoked=TRUE WHERE id=$1 AND refresh_token=$2 AND is_revoked=FALSE AND expires_at > CURRENT_TIMESTAMP RETURNING *", [payload.sid, refreshToken])).rows[0];
   if (!session) throw Object.assign(new Error("Session expired or revoked."), { status: 401 });
-  await pool.query("UPDATE sessions SET is_revoked=TRUE WHERE id=$1", [session.id]);
   const user = (await pool.query("SELECT * FROM users WHERE id=$1 AND is_active=TRUE", [session.user_id])).rows[0];
+  if (!user) throw Object.assign(new Error("Session expired or revoked."), { status: 401 });
   return await createSession(user, requestMeta(req));
 }
 

@@ -5,8 +5,8 @@ const loginAttempts = new Map();
 function rateLimit(req, res, next) {
   const key = req.ip || req.socket?.remoteAddress || "unknown";
   const now = Date.now();
-  const list = (loginAttempts.get(key) || []).filter((time) => now - time < 15 * 60 * 1000);
-  if (list.length >= 5) return res.status(429).json({ error: "Too many login attempts. Try again later." });
+  const list = (loginAttempts.get(key) || []).filter((time) => now - time < 10 * 60 * 1000);
+  if (list.length >= 10) return res.status(429).json({ error: "Too many login attempts. Try again later." });
   list.push(now);
   loginAttempts.set(key, list);
   req.loginRateLimitKey = key;
