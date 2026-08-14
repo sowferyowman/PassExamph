@@ -88,7 +88,7 @@ export default function LoginPage() {
         }
 
         /* From Uiverse.io by gustavofusco */
-        .pencil { display: block; width: 7em; height: 7em; }
+        .pencil { display: block; width: 9em; height: 9em; color: #e0f2fe; }
         .pencil__body1, .pencil__body2, .pencil__body3, .pencil__eraser, .pencil__eraser-skew, .pencil__point, .pencil__rotate, .pencil__stroke { animation-duration: 3s; animation-timing-function: linear; animation-iteration-count: infinite; }
         .pencil__body1, .pencil__body2, .pencil__body3 { transform: rotate(-90deg); }
         .pencil__body1 { animation-name: pencilBody1; }
@@ -249,14 +249,33 @@ function SignInLoader() {
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#001529]/90 backdrop-blur-sm" role="status" aria-live="polite">
       <svg className="pencil" viewBox="0 0 200 200" aria-hidden="true">
-        <g className="pencil__rotate">
-          <path className="pencil__body1" d="M100 20a80 80 0 0 1 0 160" fill="none" stroke="#facc15" strokeWidth="30" strokeDasharray="251.33 251.33" />
-          <path className="pencil__body2" d="M100 20a80 80 0 0 0 0 160" fill="none" stroke="#eab308" strokeWidth="30" strokeDasharray="251.33 251.33" />
-          <path className="pencil__body3" d="M100 35a65 65 0 0 1 0 130" fill="none" stroke="#fde047" strokeWidth="10" strokeDasharray="204.2 204.2" />
-          <g className="pencil__eraser"><g className="pencil__eraser-skew"><rect x="84" y="20" width="32" height="28" rx="5" fill="#fda4af" /></g></g>
-          <g className="pencil__point"><path d="M100 10 84 42h32Z" fill="#f5d0a9" /><path d="m100 10-5 10h10Z" fill="#1f2937" /></g>
+        <defs>
+          <clipPath id="login-pencil-eraser"><rect rx="5" ry="5" width="30" height="30" /></clipPath>
+        </defs>
+        <circle className="pencil__stroke" r="70" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="439.82 439.82" strokeDashoffset="439.82" strokeLinecap="round" transform="rotate(-113,100,100)" />
+        <g className="pencil__rotate" transform="translate(100,100)">
+          <g fill="none">
+            <circle className="pencil__body1" r="64" stroke="hsl(223,90%,50%)" strokeWidth="30" strokeDasharray="402.12 402.12" strokeDashoffset="402" transform="rotate(-90)" />
+            <circle className="pencil__body2" r="74" stroke="hsl(223,90%,60%)" strokeWidth="10" strokeDasharray="464.96 464.96" strokeDashoffset="465" transform="rotate(-90)" />
+            <circle className="pencil__body3" r="54" stroke="hsl(223,90%,40%)" strokeWidth="10" strokeDasharray="339.29 339.29" strokeDashoffset="339" transform="rotate(-90)" />
+          </g>
+          <g className="pencil__eraser" transform="rotate(-90) translate(49,0)">
+            <g className="pencil__eraser-skew">
+              <rect fill="hsl(223,90%,70%)" rx="5" ry="5" width="30" height="30" />
+              <rect fill="hsl(223,90%,60%)" width="5" height="30" clipPath="url(#login-pencil-eraser)" />
+              <rect fill="hsl(223,10%,90%)" width="30" height="20" />
+              <rect fill="hsl(223,10%,70%)" width="15" height="20" />
+              <rect fill="hsl(223,10%,80%)" width="5" height="20" />
+              <rect fill="hsla(223,10%,10%,0.2)" y="6" width="30" height="2" />
+              <rect fill="hsla(223,10%,10%,0.2)" y="13" width="30" height="2" />
+            </g>
+          </g>
+          <g className="pencil__point" transform="rotate(-90) translate(49,-30)">
+            <polygon fill="hsl(33,90%,70%)" points="15 0,30 30,0 30" />
+            <polygon fill="hsl(33,90%,50%)" points="15 0,6 30,0 30" />
+            <polygon fill="hsl(223,10%,10%)" points="15 0,20 10,10 10" />
+          </g>
         </g>
-        <path className="pencil__stroke" d="M38 138c34 34 90 34 124 0" fill="none" stroke="#fff" strokeLinecap="round" strokeWidth="3" strokeDasharray="220 220" />
       </svg>
       <p className="mt-3 text-sm font-bold text-sky-200">Signing you in…</p>
     </div>
