@@ -947,19 +947,62 @@ export default function ExamsLanding() {
           #s5 .deck{height:280px;}
         }
 
+        /* ===================== MOBILE (<=860px) =====================
+           The desktop experience pins each .scene at 100vh via
+           position:sticky + overflow:hidden while its content animates
+           past underneath. On mobile the same scene has to stack a photo,
+           a heading, AND a visualization in one column — that's taller
+           than one screen, so the old rules were clipping content instead
+           of showing it. Below, scenes go back to normal document flow
+           (auto height, no sticky pin, no clipping) and just fade/slide
+           in as they scroll into view, which the existing JS already
+           drives via getBoundingClientRect — no JS changes needed. */
         @media (max-width: 860px){
-          .examsph-page .exam-card, .examsph-page .radar-wrap, .examsph-page .deck, .examsph-page .chart-wrap, .examsph-page .paper-stack{position:static; transform:none; width:100%; margin-top:34px;}
-          .examsph-page .scene-sticky{flex-direction:column; justify-content:center; padding-top:14vh; padding-bottom:6vh;}
-          .examsph-page .scene-content{display:flex; flex-direction:column;}
-          .examsph-page .lamp-glow, .examsph-page .clock{display:none;}
+          .examsph-page .scene{height:auto;}
+          .examsph-page .scene-sticky{
+            position:relative; top:auto; height:auto; min-height:0; overflow:visible;
+            display:flex; flex-direction:column; align-items:stretch; justify-content:flex-start;
+            padding:13vh 6vw 9vh;
+          }
+          .examsph-page .scene-content{display:flex; flex-direction:column; width:auto; padding:0;}
+          .examsph-page .scene h2{font-size:clamp(1.9rem, 8vw, 2.8rem); max-width:none;}
+
+          /* Desktop-only atmosphere that assumed a tall pinned viewport */
+          .examsph-page .lamp-glow,
+          .examsph-page .clock,
+          .examsph-page .motes,
+          .examsph-page .paper-stack{display:none;}
+
+          .examsph-page .exam-card,
+          .examsph-page .radar-wrap,
+          .examsph-page .deck,
+          .examsph-page .chart-wrap{
+            position:relative; inset:auto; right:auto; top:auto; transform:none;
+            width:100%; max-width:420px; margin:28px auto 0;
+          }
+          .examsph-page .deck{height:230px;}
+          .examsph-page .drill{width:92%; height:170px;}
+
           .examsph-page .wordmark, .examsph-page .scene-index, .examsph-page .rail, .examsph-page .cross-cursor{display:none;}
+
+          /* Hero: stop forcing a full viewport once a photo + copy stack in
+             one column — size to content instead, with an svh fallback for
+             mobile browser chrome. */
+          .examsph-page .hero{
+            min-height:100vh; min-height:100svh; height:auto;
+            justify-content:flex-start; padding:118px 6vw 56px;
+          }
+          .examsph-page .hero h1{font-size:clamp(2.3rem, 9vw, 3.4rem); max-width:none;}
+          .examsph-page .hero .eyebrow{order:1;}
+          .examsph-page .hero h1{order:2;}
+          .examsph-page .hero-sub{order:4;}
+          .examsph-page .scroll-cue{position:relative; left:auto; bottom:auto; order:5; margin-top:36px;}
 
           /* Mobile: photos stack in-flow instead of floating/overlapping */
           .examsph-page .hero-photo-wrap{
             position:relative; inset:auto; right:auto; top:auto; transform:rotate(-1.5deg);
-            width:64%; max-width:280px; margin:32px auto 0; z-index:1;
+            width:64%; max-width:280px; margin:28px auto 0; z-index:1; order:3;
           }
-          .examsph-page .hero{padding-bottom:64px;}
           .examsph-page .s1-photo-wrap,
           .examsph-page .s3-photo-wrap,
           .examsph-page .s5-photo-wrap{
@@ -970,7 +1013,27 @@ export default function ExamsLanding() {
           .examsph-page .s1-photo-wrap{ transform:rotate(-1.4deg); }
           .examsph-page .s3-photo-wrap{ transform:rotate(1.2deg); }
           .examsph-page .s5-photo-wrap{ transform:rotate(-1.1deg); }
+
+          /* Nav + footer breathing room on narrow screens */
+          .examsph-page .examsph-nav-inner{padding:14px 5vw;}
+          .examsph-page .examsph-nav-brand{font-size:15px;}
+          .examsph-page .examsph-nav-cta{padding:9px 16px; font-size:10px;}
+          .examsph-page footer{flex-direction:column; gap:8px; text-align:center; padding:28px 6vw;}
+
+          .examsph-page .exams-section{padding:9vh 6vw 12vh;}
+          .examsph-page .exams-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;}
+          .examsph-page .glass-card{padding:20px 18px;}
+
+          .examsph-page .close h2{font-size:clamp(2rem, 9vw, 3.2rem); max-width:none;}
+          .examsph-page .cta{padding:16px 26px; font-size:12px;}
         }
+
+        @media (max-width: 420px){
+          .examsph-page .exams-grid{grid-template-columns:1fr 1fr;}
+          .examsph-page .examsph-nav-brand{font-size:14px;}
+          .examsph-page .examsph-nav-cta{padding:8px 13px; font-size:9.5px;}
+        }
+
         @media (pointer:coarse){ .examsph-page .cross-cursor{display:none;} }
 
         @media (prefers-reduced-motion: reduce){
