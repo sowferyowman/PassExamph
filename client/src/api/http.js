@@ -11,7 +11,7 @@ const http = axios.create({
 let refreshing = null;
 http.interceptors.response.use((response) => response, async (error) => {
   const request = error.config;
-  if (error.response?.status === 401 && !request?._retry && !request?.url?.includes("/auth/refresh")) {
+  if (error.response?.status === 401 && !request?._retry && !request?.url?.includes("/auth/refresh") && !request?.url?.includes("/auth/login")) {
     request._retry = true;
     try {
       refreshing ||= http.post("/auth/refresh");
