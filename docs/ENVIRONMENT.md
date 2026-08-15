@@ -9,6 +9,7 @@ Copy the safe templates; never commit `.env` files. The backend requires Postgre
 | `CLIENT_ORIGIN`, `CLIENT_ORIGINS` | Exact allowed frontend origin, or a comma-separated allowlist for CORS. |
 | `COOKIE_SAME_SITE` | Cookie policy. Use `none` for a separately hosted Vercel frontend and HTTPS Render API. |
 | `JWT_SECRET` | Required signing secret; the server refuses to start without it. |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Required for the API to validate a Supabase Google OAuth session before it creates the normal PassExam session. |
 | `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_USERNAME`, `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_PASSWORD` | Required administrator bootstrap values. |
 | `GROQ_API_KEY` | Optional Groq integration; AI endpoints use existing fallbacks when unavailable. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional email recovery. |
@@ -18,6 +19,7 @@ Copy the safe templates; never commit `.env` files. The backend requires Postgre
 | Client variable | Purpose |
 | --- | --- |
 | `VITE_API_BASE_URL` | Required on Vercel: the public Render backend URL including `/api`. |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Public Supabase project URL and anon key used by the browser for Google OAuth. |
 | `VITE_DEV_PORT`, `VITE_API_PROXY_TARGET` | Local Vite development server and proxy settings. |
 
 Only `VITE_*` values are exposed to the browser. Never put API keys, database URLs, or JWT secrets in the client environment.

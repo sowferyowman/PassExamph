@@ -13,3 +13,4 @@ export const resetPasswordSms = (code, newPassword) => http.post("/auth/reset-pa
 export const requestEmailReset = (email) => http.post("/auth/forgot-password-email", { email }).then((response) => response.data);
 export const resetPasswordEmail = (code, newPassword) => http.post("/auth/reset-password-email", { code, newPassword }).then((response) => response.data);
 export const updateProfile = (payload) => http.patch("/auth/profile", payload).then((response) => response.data);
+export const loginWithSupabaseGoogle = (accessToken) => http.post("/auth/supabase-google", { accessToken }).then((response) => response.data);

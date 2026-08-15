@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
     "@tinymce/tinymce-react": "^6.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "axios": "^1.7.9",
