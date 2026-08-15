@@ -281,7 +281,7 @@ async function resetPasswordWithEmail(code, newPassword) {
   return { success: true };
 }
 
-async function updateProfile(userId, { name, nickname, school, phoneNumber, recoveryEmail }) {
+async function updateProfile(userId, { name, username, nickname, school, phoneNumber, recoveryEmail }) {
   const phone = normalizePhone(phoneNumber);
   if (phone && !/^\+?\d{10,15}$/.test(phone)) throw Object.assign(new Error("Enter a valid phone number."), { status: 400 });
   const profileName = String(name || "").trim();
@@ -291,11 +291,16 @@ async function updateProfile(userId, { name, nickname, school, phoneNumber, reco
   const targetSchool = String(school || "").trim();
   const currentUser = (await pool.query("SELECT * FROM users WHERE id=$1", [userId])).rows[0];
   if (!currentUser) throw Object.assign(new Error("Account not found."), { status: 404 });
+  const requestedUsername = String(username || "").trim();
+  if (requestedUsername) {
+    const usernameTaken = (await pool.query("SELECT id FROM users WHERE lower(username)=lower($1) AND id<>$2", [requestedUsername, userId])).rows[0];
+    if (usernameTaken) throw Object.assign(new Error("That username is already in use."), { status: 409 });
+  }
   const accountEmail = email || currentUser.email;
   const duplicate = (await pool.query("SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2", [accountEmail, userId])).rows[0];
   if (duplicate) throw Object.assign(new Error("That email address is already in use."), { status: 409 });
 
-  await pool.query("UPDATE users SET email=$1,name=CASE WHEN $2 <> '' THEN $3 ELSE name END,nickname=$4,phone_number=$5,sms_number=$6,recovery_email=$7,updated_at=CURRENT_TIMESTAMP WHERE id=$8", [accountEmail, profileName, profileName, displayNickname || null, phone || null, phone || null, accountEmail, userId]);
+  await pool.query("UPDATE users SET email=$1,username=CASE WHEN $2 <> '' THEN $2 ELSE username END,name=CASE WHEN $3 <> '' THEN $4 ELSE name END,nickname=$5,phone_number=$6,sms_number=$7,recovery_email=$8,updated_at=CURRENT_TIMESTAMP WHERE id=$9", [accountEmail, requestedUsername, profileName, profileName, displayNickname || null, phone || null, phone || null, accountEmail, userId]);
   const existingProfile = (await pool.query("SELECT user_id FROM student_profiles WHERE user_id=$1", [userId])).rows[0];
   if (existingProfile) await pool.query("UPDATE student_profiles SET display_name=CASE WHEN $1 <> '' THEN $2 ELSE display_name END,target_school=$3 WHERE user_id=$4", [profileName, profileName, targetSchool, userId]);
   else await pool.query("INSERT INTO student_profiles (user_id,display_name,target_school) VALUES ($1,$2,$3)", [userId, profileName || "Student", targetSchool]);
