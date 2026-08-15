@@ -17,6 +17,7 @@ import ReviewersPage from "./pages/ReviewersPage";
 import SettingsPage from "./pages/SettingsPage";
 import WeaknessDrillsPage from "./pages/WeaknessDrillsPage";
 import { AuthProvider } from "./context/AuthContext";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/forgot-password-sms" element={<ForgotPasswordSms />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
       <Route element={<ProtectedRoute allowedRole="student" />}>
         <Route path="/dashboard" element={<DashboardLayout />}>

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { login as loginRequest, logout as logoutRequest, me, register as registerRequest } from "../api/authApi";
+import { login as loginRequest, loginWithSupabaseGoogle as googleLoginRequest, logout as logoutRequest, me, register as registerRequest } from "../api/authApi";
 import { logoutUser, setAuthenticatedUser } from "../services/storage";
 
 const AuthContext = createContext(null);
@@ -25,6 +25,12 @@ export function AuthProvider({ children }) {
     },
     register: async (payload) => {
       const result = await registerRequest(payload);
+      setUser(result.user);
+      setAuthenticatedUser(result.user);
+      return result.user;
+    },
+    loginWithSupabaseGoogle: async (accessToken) => {
+      const result = await googleLoginRequest(accessToken);
       setUser(result.user);
       setAuthenticatedUser(result.user);
       return result.user;

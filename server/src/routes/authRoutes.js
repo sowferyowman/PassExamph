@@ -33,8 +33,32 @@ function setSessionCookies(res, session, rememberMe = true) {
 function clearCookies(res) { if (typeof res.clearCookie === "function") { res.clearCookie("accessToken", cookieOptions()); res.clearCookie("refreshToken", cookieOptions()); res.clearCookie("rememberMe", cookieOptions()); } else res.setHeader("Set-Cookie", [fallbackCookie("accessToken", "", 0), fallbackCookie("refreshToken", "", 0), fallbackCookie("rememberMe", "", 0)]); }
 function error(res, value) { return res.status(value.status || 400).json({ error: value.message }); }
 
+async function supabaseGoogleIdentity(accessToken) {
+  const url = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+  const anonKey = String(process.env.SUPABASE_ANON_KEY || "");
+  if (!url || !anonKey) throw Object.assign(new Error("Google sign-in is not configured on the server."), { status: 503 });
+  if (!accessToken || typeof accessToken !== "string") throw Object.assign(new Error("Google sign-in session is missing."), { status: 401 });
+  let response;
+  try {
+    response = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: `Bearer ${accessToken}`, apikey: anonKey } });
+  } catch (_error) {
+    throw Object.assign(new Error("Could not verify the Google sign-in session. Please try again."), { status: 503 });
+  }
+  if (!response.ok) throw Object.assign(new Error("Google sign-in session is invalid or expired. Please try again."), { status: 401 });
+  const user = await response.json();
+  const providers = Array.isArray(user.app_metadata?.providers) ? user.app_metadata.providers : [];
+  if (user.app_metadata?.provider !== "google" && !providers.includes("google")) throw Object.assign(new Error("This session is not a Google sign-in."), { status: 401 });
+  return {
+    id: user.id,
+    email: user.email,
+    emailConfirmed: Boolean(user.email_confirmed_at || user.confirmed_at),
+    name: user.user_metadata?.full_name || user.user_metadata?.name || ""
+  };
+}
+
 router.post("/register", async (req, res) => { try { const { email, username, password, name } = req.body || {}; if (!email || !username || !password || password.length < 8) return res.status(400).json({ error: "Email, username, and a password of at least 8 characters are required." }); const result = await auth.register({ email: email.trim(), username: username.trim(), password, name: String(name || username).trim() }, req); setSessionCookies(res, result); res.status(201).json({ user: result.user, verificationToken: process.env.NODE_ENV === "production" ? undefined : result.verificationToken, message: "Account created. Verify your email to activate it." }); } catch (e) { error(res, e); } });
 router.post("/login", rateLimit, async (req, res) => { try { const result = await auth.login(String(req.body?.identifier || req.body?.email || "").trim(), String(req.body?.password || ""), req); loginAttempts.delete(req.loginRateLimitKey); setSessionCookies(res, result, Boolean(req.body?.rememberMe)); res.json({ user: result.user }); } catch (e) { error(res, e); } });
+router.post("/supabase-google", async (req, res) => { try { const identity = await supabaseGoogleIdentity(req.body?.accessToken); const result = await auth.loginWithSupabaseGoogle(identity, req); setSessionCookies(res, result, true); res.json({ user: result.user }); } catch (e) { error(res, e); } });
 router.post("/refresh", async (req, res) => { try { const cookies = parseCookies(req); const result = await auth.refresh(cookies.refreshToken, req); setSessionCookies(res, result, cookies.rememberMe === "1"); res.json({ user: result.user }); } catch (e) { error(res, e); } });
 router.post("/logout", authenticate, async (req, res) => { await auth.revoke(req.auth.sid); clearCookies(res); res.json({ ok: true }); });
 router.post("/logout-all", authenticate, async (req, res) => { await auth.revokeAllExcept(req.user.id, req.auth.sid); res.json({ ok: true }); });

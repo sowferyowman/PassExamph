@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
 import { FaArrowLeft, FaArrowRight, FaEnvelope, FaGoogle, FaLock, FaUser, FaUserPlus } from "react-icons/fa";
 import { hydrateAllFromServer, migrateLocalStorageToServer } from "../services/storage";
+import { requireSupabase } from "../lib/supabase";
 
 const SUBMIT_BUTTON_CLASSES =
   "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 h-12 text-sm font-bold text-white hover:bg-white/20 transition-colors";
@@ -47,8 +48,17 @@ export default function LoginPage() {
     catch (error) { setMessage(error.response?.data?.error || "Could not create account."); }
   }
 
-  function handleGoogleSignIn() {
-    setMessage("Google sign-in is not available yet.");
+  async function handleGoogleSignIn() {
+    setMessage("");
+    try {
+      const { error } = await requireSupabase().auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` }
+      });
+      if (error) throw error;
+    } catch (error) {
+      setMessage(error.message || "Could not start Google sign-in.");
+    }
   }
 
   return (
@@ -214,7 +224,7 @@ export default function LoginPage() {
             </div>
             <button
               type="button"
-              onClick={mode === "signin" ? handleGoogleSignIn : undefined}
+              onClick={handleGoogleSignIn}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-white/10"
             >
               <FaGoogle className="text-lg text-sky-300" />

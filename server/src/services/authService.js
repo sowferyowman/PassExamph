@@ -142,6 +142,48 @@ async function createSession(user, meta) {
   return { user: await publicUser(user), accessToken, refreshToken };
 }
 
+async function availableGoogleUsername(email, providerId) {
+  const localPart = String(email || "student").split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "") || "student";
+  const suffix = String(providerId).replace(/[^a-z0-9]/gi, "").slice(-8).toLowerCase() || crypto.randomBytes(4).toString("hex");
+  const base = `${localPart.slice(0, 40)}_${suffix}`;
+  let candidate = base;
+  let attempt = 1;
+  while ((await pool.query("SELECT id FROM users WHERE lower(username)=lower($1)", [candidate])).rows[0]) {
+    attempt += 1;
+    candidate = `${base.slice(0, 55)}_${attempt}`;
+  }
+  return candidate;
+}
+
+async function loginWithSupabaseGoogle(identity, req) {
+  const providerId = String(identity?.id || "").trim();
+  const email = String(identity?.email || "").trim().toLowerCase();
+  if (!providerId || !email || !identity?.emailConfirmed) throw Object.assign(new Error("Google did not provide a verified email address."), { status: 401 });
+
+  let user = (await pool.query("SELECT * FROM users WHERE auth_provider='supabase-google' AND auth_provider_id=$1", [providerId])).rows[0];
+  if (!user) {
+    user = (await pool.query("SELECT * FROM users WHERE lower(email)=lower($1)", [email])).rows[0];
+    if (user) {
+      if (user.auth_provider_id && (user.auth_provider !== "supabase-google" || user.auth_provider_id !== providerId)) {
+        throw Object.assign(new Error("This PassExam account is already linked to another sign-in provider."), { status: 409 });
+      }
+      await pool.query("UPDATE users SET auth_provider='supabase-google',auth_provider_id=$1,is_verified=TRUE,updated_at=CURRENT_TIMESTAMP WHERE id=$2", [providerId, user.id]);
+      user = (await pool.query("SELECT * FROM users WHERE id=$1", [user.id])).rows[0];
+    } else {
+      const username = await availableGoogleUsername(email, providerId);
+      const name = String(identity.name || "").trim() || null;
+      const result = await pool.query(
+        "INSERT INTO users (email,username,password_hash,password_salt,role,name,is_verified,is_active,auth_provider,auth_provider_id,updated_at) VALUES ($1,$2,NULL,NULL,'student',$3,TRUE,TRUE,'supabase-google',$4,CURRENT_TIMESTAMP) RETURNING *",
+        [email, username, name, providerId]
+      );
+      user = result.rows[0];
+    }
+  }
+  if (!user.is_active) throw Object.assign(new Error("This account is inactive."), { status: 403 });
+  await recordLogin(user.id, user.email, req, "google_success");
+  return createSession(user, requestMeta(req));
+}
+
 async function refresh(refreshToken, req) {
   if (!refreshToken) throw Object.assign(new Error("Refresh token is missing."), { status: 401 });
   const payload = verifyToken(refreshToken);
@@ -291,4 +333,4 @@ async function resetStudentPasswordByAdmin(userId) {
 
 async function verifyEmail(value) { const row = (await pool.query("SELECT * FROM email_verification_tokens WHERE token=$1 AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP", [value])).rows[0]; if (!row) throw Object.assign(new Error("Verification token is invalid or expired."), { status: 400 }); await pool.query("UPDATE users SET is_verified=TRUE WHERE id=$1", [row.user_id]); await pool.query("UPDATE email_verification_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=$1", [row.id]); }
 
-module.exports = { ACCESS_TTL, ensureDefaultAdmin, register, login, refresh, verifyToken, publicUser, revoke, revokeAll, revokeAllExcept, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };
+module.exports = { ACCESS_TTL, ensureDefaultAdmin, register, login, loginWithSupabaseGoogle, refresh, verifyToken, publicUser, revoke, revokeAll, revokeAllExcept, sessions, changePassword, forgotPassword, resetPassword, verifyEmail, requestSmsReset, resetPasswordWithSms, requestEmailReset, resetPasswordWithEmail, updateProfile, resetStudentPasswordByAdmin };
