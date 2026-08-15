@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const currentUser = getCurrentUser();
   const [form, setForm] = useState({
     name: currentUser?.name || "",
+    username: currentUser?.username || "",
     nickname: currentUser?.nickname || "",
     school: currentUser?.school || "",
     smsNumber: currentUser?.smsNumber || "",
@@ -33,6 +34,7 @@ export default function SettingsPage() {
     event.preventDefault();
     const profile = { 
       name: form.name.trim(), 
+      username: form.username.trim(),
       nickname: form.nickname.trim(), 
       school: form.school.trim(), 
       smsNumber: form.smsNumber.trim(), 
@@ -88,9 +90,9 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
               <Field 
-                label="Name" 
+                label="Full Name" 
                 value={form.name} 
                 onChange={(name) => setForm((current) => ({ ...current, name }))} 
                 placeholder="Full name" 
@@ -103,6 +105,14 @@ export default function SettingsPage() {
                 onChange={(nickname) => setForm((current) => ({ ...current, nickname }))} 
                 placeholder="Name shown in the app" 
                 required
+              />
+              <Field
+                label="Username"
+                value={form.username}
+                onChange={(username) => setForm((current) => ({ ...current, username }))}
+                placeholder="Choose a unique username"
+                autoComplete="username"
+                helper="Used when signing in with a username and password."
               />
               <Field 
                 label="School / Institution" 
