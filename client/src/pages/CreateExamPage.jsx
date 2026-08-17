@@ -1516,11 +1516,12 @@ export default function CreateExamPage() {
           <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
             <label className="block">
               <span className="text-xs font-bold text-slate-600">Sample Answer / Rubric <span className="text-slate-400">(optional)</span></span>
-              <textarea
+              <TinyMCEEditor
                 value={question.rubric || ""}
-                onChange={(event) => updateQuestion(sectionIndex, questionIndex, { rubric: event.target.value })}
-                className="mt-1 min-h-28 w-full resize-y rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
+                onChange={(value) => updateQuestion(sectionIndex, questionIndex, { rubric: value })}
                 placeholder="Describe the key points the AI should look for..."
+                minHeightClass="min-h-40"
+                height={220}
               />
             </label>
           </div>
