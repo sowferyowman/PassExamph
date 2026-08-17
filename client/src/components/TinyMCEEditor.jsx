@@ -7,8 +7,12 @@ import tinymce from "tinymce/tinymce";
 import "tinymce/icons/default";
 import "tinymce/models/dom";
 import "tinymce/themes/silver";
-import "tinymce/skins/ui/oxide/skin.css";
-import "tinymce/skins/content/default/content.css";
+// TinyMCE 8 registers its toolbar and menu UI through these skin modules.
+// Importing their CSS alone renders the iframe and status bar but leaves the
+// toolbar header empty in bundled Vite production builds.
+import "tinymce/skins/ui/oxide/skin";
+import "tinymce/skins/ui/oxide/content";
+import "tinymce/skins/content/default/content";
 import "tinymce/plugins/advlist";
 import "tinymce/plugins/anchor";
 import "tinymce/plugins/autolink";
