@@ -45,18 +45,43 @@ const fontFamilies = [
 
 const fontFamilyFormats = fontFamilies.map(([label, stack]) => `${label}=${stack}`).join(";");
 
-export default function TinyMCEEditor({ value = "", onChange, placeholder, minHeightClass = "min-h-44" }) {
+export default function TinyMCEEditor({ value = "", onChange, placeholder, minHeightClass = "min-h-44", height = 280 }) {
   const [formulaPreview, setFormulaPreview] = useState("");
 
   return (
     <div className="mt-2">
-      <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 ${minHeightClass}`}>
+      {/*
+        Keep TinyMCE's chrome visible. The authoring pages place this editor in
+        overflow-constrained panels; without these rules, the TinyMCE 8 header
+        can collapse in production while the editable iframe and status bar
+        remain visible.
+      */}
+      <style>{`
+        .acet-rich-text .tox .tox-editor-header,
+        .acet-rich-text .tox .tox-menubar,
+        .acet-rich-text .tox .tox-toolbar-overlord,
+        .acet-rich-text .tox .tox-toolbar {
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+        }
+        .acet-rich-text .tox .tox-menubar,
+        .acet-rich-text .tox .tox-toolbar {
+          display: flex !important;
+        }
+        .acet-rich-text .tox .tox-editor-header {
+          position: relative !important;
+          z-index: 1;
+          min-height: 76px;
+        }
+      `}</style>
+      <div className={`acet-rich-text overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 ${minHeightClass}`}>
         <Editor
         value={value}
         onEditorChange={onChange}
         licenseKey="gpl"
         init={{
-          height: minHeightClass.includes("72") ? 432 : 280,
+          height,
           menubar: "file edit view insert format table tools",
           plugins,
           toolbar_mode: "wrap",

@@ -180,7 +180,7 @@ export default function CreateDrill() {
     if (usesOptions(draft.questionType) && (draft.choiceOpts.length < 2 || draft.choiceOpts.some((option) => !option.trim()))) return "Add at least 2 completed options.";
     if (draft.questionType === "checkboxes" && !draft.correctAnswers.length) return "Checkbox questions need at least one correct answer.";
     if (draft.questionType === "short_answer" && !draft.correctText.trim()) return "Short Answer needs a correct answer.";
-    if (draft.questionType === "paragraph" && !draft.gradingPlaceholder.trim()) return "Long Paragraph needs a grading rubric.";
+    if (draft.questionType === "paragraph" && !stripHtml(draft.gradingPlaceholder)) return "Long Paragraph needs a grading rubric.";
     if (!draft.subjectTitle.trim()) return "Subject category is required.";
     if (!draft.diagnosticSubcategory.trim()) return "Sub-category is required.";
     if (!draft.diagnosticSkillTag.trim()) return "Specific weakness tag is required.";
@@ -374,11 +374,12 @@ export default function CreateDrill() {
       <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
         <label className="block">
           <span className="text-xs font-bold text-slate-600">Sample Answer / Rubric <span className="text-rose-500">*</span></span>
-          <textarea
+          <TinyMCEEditor
             value={form.gradingPlaceholder}
-            onChange={(event) => setForm((current) => ({ ...current, gradingPlaceholder: event.target.value }))}
-            className="mt-1.5 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            onChange={(value) => setForm((current) => ({ ...current, gradingPlaceholder: value }))}
             placeholder="Describe the key points the AI should look for..."
+            minHeightClass="min-h-40"
+            height={220}
           />
         </label>
       </div>
@@ -519,11 +520,12 @@ export default function CreateDrill() {
 
                 <label className="block">
                   <span className="text-xs font-bold text-slate-600">Explanation <span className="text-slate-400">(optional)</span></span>
-                  <textarea
+                  <TinyMCEEditor
                     value={form.explanation}
-                    onChange={(event) => setForm((current) => ({ ...current, explanation: event.target.value }))}
-                    className="mt-1.5 min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    onChange={(value) => setForm((current) => ({ ...current, explanation: value }))}
                     placeholder="Explain why the answer is correct (shown to students after answering)."
+                    minHeightClass="min-h-40"
+                    height={220}
                   />
                 </label>
               </div>
